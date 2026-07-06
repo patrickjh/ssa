@@ -92,4 +92,4 @@ with the smallest models.
 
 ## License
 
-TBD.
+MIT — see [LICENSE](LICENSE).

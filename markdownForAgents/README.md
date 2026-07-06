@@ -91,4 +91,4 @@ Run `ssa -h` for full usage (source: `HELP_TEXT` in [libexec/ssa/ssa.sh](../libe
 
 ## License
 
-TBD.
+MIT — see [LICENSE](../LICENSE).
