@@ -15,9 +15,6 @@ export SSA_SESSION_FOLDER=""  # temp folder with per-run session state
 export SSA_MODEL_CALLS=0  # model-call index; updated each loop iteration
 
 # --- private ---
-SSA_MAX_SCRIPT_OUTPUT_BYTES=50000
-ULIMIT_BYTES_PER_BLOCK=512
-ULIMIT_BLOCK_ROUNDING=511
 SSA_MAX_MODEL_CALLS="${SSA_MAX_MODEL_CALLS:-20}"
 SSA_MODEL_RUNNER="${SSA_MODEL_RUNNER:-}"
 SSA_SCRIPT_RUNNER="${SSA_SCRIPT_RUNNER:-}"
@@ -498,30 +495,14 @@ run_model_script() {
     printf '\n[USER]\nOutput from running the script:\n\n' \
         >>"$SSA_SESSION_TRANSCRIPT_FILE" ||
         util_die "cannot append to transcript"
-    run_script_in_subshell_to_limit_output
+    (
+        cat "$SSA_PARSED_SCRIPT_FILE" | invoke_script_runner 2>&1
+        echo $? >"$SSA_EXIT_CODE_FILE" ||
+            util_die "cannot write script exit code"
+    ) | tee -a "$SSA_SESSION_TRANSCRIPT_FILE"
     printf '\n\nScript exit code: %s\n' "$(cat "$SSA_EXIT_CODE_FILE")" \
         >>"$SSA_SESSION_TRANSCRIPT_FILE" ||
         util_die "cannot append to transcript"
-}
-
-run_script_in_subshell_to_limit_output() {
-    (
-        use_ulimit_to_limit_output
-        (
-            cat "$SSA_PARSED_SCRIPT_FILE" | invoke_script_runner 2>&1
-            echo $? >"$SSA_EXIT_CODE_FILE" ||
-                util_die "cannot write script exit code"
-        ) | tee -a "$SSA_SESSION_TRANSCRIPT_FILE"
-    )
-}
-
-use_ulimit_to_limit_output() {
-    ULIMIT_MAX_SCRIPT_OUTPUT_BLOCKS=$(( \
-        (SSA_MAX_SCRIPT_OUTPUT_BYTES + ULIMIT_BLOCK_ROUNDING) \
-        / ULIMIT_BYTES_PER_BLOCK \
-    ))
-    ulimit -f "$ULIMIT_MAX_SCRIPT_OUTPUT_BLOCKS" ||
-        util_die "ulimit failed to limit output"
 }
 
 invoke_script_runner() {
