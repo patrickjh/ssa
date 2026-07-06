@@ -53,11 +53,11 @@ check_openai_model_set() {
 
 check_openai_url() {
     [ -n "$OPENAI_URL" ] ||
-        util_die 'OPENAI_URL not set; set full https://…/chat/completions URL ' \
+        util_die 'OPENAI_URL not set; set full http(s)://…/chat/completions URL ' \
             '(e.g. https://api.openai.com/v1/chat/completions); ssa -h for help'
     printf '%s' "$OPENAI_URL" |
-        grep -Eq '^https://[^[:space:]]+/chat/completions$' ||
-        util_die "OPENAI_URL must be full https://…/chat/completions URL " \
+        grep -Eq '^https?://[^[:space:]]+/chat/completions$' ||
+        util_die "OPENAI_URL must be full http(s)://…/chat/completions URL " \
             "(got $OPENAI_URL); ssa -h for help"
 }
 
