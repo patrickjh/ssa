@@ -57,10 +57,11 @@ By default, `ssa` runs model-generated shell commands **as your user**, with
 Treat it like handing your terminal to the model.
 
 You can apply sandboxing using `--script-runner` or `SSA_SCRIPT_RUNNER`.
-These take a "Script Runner" file which will be passed the script the AI model
-wants to run on stdin. These files are supposed to apply sandboxing, run the
+These take a file path to a "Script Runner".
+That Script Runner file will be executed and passed the script the AI model wants to run on stdin.
+These Script Runner files are supposed to apply sandboxing, run the
 script the model sent, and then send the stdout and stderr from running that
-script back to the AI agent harness (it will be sent to the terminal and model)
+script back to the AI agent harness to be sent to the terminal and model.
 
 Two "Script Runners" that apply simple sandboxing are included:
 
