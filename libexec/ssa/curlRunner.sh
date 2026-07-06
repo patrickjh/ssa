@@ -14,6 +14,7 @@ SSA_MAX_CURL_CALLS="${SSA_MAX_CURL_CALLS:-5}"
 SSA_CURL_ARGS="${SSA_CURL_ARGS:-}"
 PROMPT_FILE=""
 REQUEST_FILE=""
+URL_FILE=""
 HEADERS_FILE=""
 RESPONSE_FILE=""
 HTTP_CODE_FILE=""
@@ -21,6 +22,7 @@ CURL_EXIT_FILE=""
 
 main() {
     check_can_run
+    setup_url_log
     setup_prompt_file
     build_json_request
     send_json_request_with_retries
@@ -64,6 +66,14 @@ check_openai_url() {
 check_runner_tool_on_path() {
     command -v "$1" >/dev/null 2>&1 ||
         util_die "$1 not found on PATH"
+}
+
+setup_url_log() {
+    URL_FILE="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}CurlUrl.txt"
+    util_create_file_no_overwrite "$URL_FILE" ||
+        util_die "temp file not available: $URL_FILE"
+    printf '%s' "$OPENAI_URL" >"$URL_FILE" ||
+        util_die "cannot write session log: $URL_FILE"
 }
 
 setup_prompt_file() {

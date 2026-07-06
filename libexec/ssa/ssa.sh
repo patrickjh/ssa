@@ -45,6 +45,7 @@ Inspired by mini-swe-agent.
 
 Give the agent a task on the command line or pipe the task on stdin.
 Requires a model runner (see --model-runner).
+Enables sandboxing agent scripts (see sandboxing section)
 Options can be set via command line or environment variables.
 
 The agent loop
@@ -116,7 +117,7 @@ Files:
           latestParsedScript.txt, latestScriptExitCode.txt.
 
 Sandboxing:
-  By default we run scripts the AI model sends us with using plain sh.
+  By default we run scripts the AI model sends us using plain sh.
   This runs the scripts in the current directory as the current user.
   This default is like giving the AI model control of your terminal.
   For obvious reasons you might want to restrict what that AI model can do.
@@ -141,23 +142,33 @@ Sandboxing:
   This is simple Unix user sandboxing.
   You have to set up a sandbox user to use this.
 
+  Serious usage of ssa may benefit from a more advanced Script Runner
+
+Models
+  Because this agent harness is so simple, model choice makes a big difference.
+  The smallest AI models may not work too well.
+  Bigger AI models seem to have fewer problems.
+  If you are having trouble with a smaller model, try a larger one.
+
 Exit status:
   0       Task complete; prints a one-line status on stderr.
   1       Failure (bad arguments, harness failure, or max model calls).
 
 Examples:
-  export PATH=/path/to/ssa/bin:$PATH
-  ssa "Summarize this repo" # once needed environment variables are set
-  ssa -m gpt-4o-mini summarize this repo # choose a model
+  Simplest usage once needed environment variables are set:
+  ssa Summarize this repo
 
-  Using libexec/ssa/curlRunner.sh:
+  You can easily switch model per prompt if you want:
+  ssa -m gpt-4o-mini summarize this repo
+
+  Setting required variables to use libexec/ssa/curlRunner.sh:
   OPENAI_API_KEY={{your key here}}
   OPENAI_URL=https://api.openai.com/v1/chat/completions
   SSA_MODEL_RUNNER=/path/to/ssa/libexec/ssa/curlRunner.sh
   SSA_MODEL=gpt-4o-mini
   ssa summarize this repo
 
-  Using libexec/ssa/llamaCppRunner.sh:
+  Setting required variables to use libexec/ssa/llamaCppRunner.sh:
   LLAMA_CPP_ARGS="--context 8192 --temp 0.7"
   SSA_MODEL_RUNNER=/path/to/ssa/libexec/ssa/llamaCppRunner.sh
   SSA_MODEL=~/models/model.gguf
