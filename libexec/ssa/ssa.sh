@@ -242,11 +242,11 @@ parse_arguments() {
         case $1 in
             -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
             --) shift; SSA_TASK=$*; return ;;
-            --model-runner) set_model_runner; shift 2 ;;
-            --script-runner) set_script_runner; shift 2 ;;
-            -m|--model) set_model; shift 2 ;;
+            --model-runner) set_model_runner "$2"; shift 2 ;;
+            --script-runner) set_script_runner "$2"; shift 2 ;;
+            -m|--model) set_model "$2"; shift 2 ;;
             --keep-session) SSA_KEEP_SESSION=1; shift ;;
-            --max-model-calls) set_max_model_calls; shift 2 ;;
+            --max-model-calls) set_max_model_calls "$2"; shift 2 ;;
             -*) util_die "bad option: $1; try ssa --help" ;;
             *) SSA_TASK=$*; return ;;
         esac
@@ -254,27 +254,27 @@ parse_arguments() {
 }
 
 set_model_runner() {
-    [ -n "${2-}" ] ||
+    [ -n "${1-}" ] ||
         util_die "--model-runner found with empty value"
-    SSA_MODEL_RUNNER=$2
+    SSA_MODEL_RUNNER=$1
 }
 
 set_script_runner() {
-    [ -n "${2-}" ] ||
+    [ -n "${1-}" ] ||
         util_die "--script-runner found with empty value"
-    SSA_SCRIPT_RUNNER=$2
+    SSA_SCRIPT_RUNNER=$1
 }
 
 set_model() {
-    [ -n "${2-}" ] ||
+    [ -n "${1-}" ] ||
         util_die "-m / --model found with empty value"
-    SSA_MODEL=$2
+    SSA_MODEL=$1
 }
 
 set_max_model_calls() {
-    [ -n "${2-}" ] ||
+    [ -n "${1-}" ] ||
         util_die "--max-model-calls found with empty value"
-    SSA_MAX_MODEL_CALLS=$2
+    SSA_MAX_MODEL_CALLS=$1
 }
 
 read_task_from_stdin_if_needed() {

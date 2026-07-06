@@ -161,6 +161,7 @@ exit_if_insufficient_quota() {
     if [ "$(cat "$HTTP_CODE_FILE")" = 429 ]; then
         if jq -e '.error.code == "insufficient_quota"' "$RESPONSE_FILE" \
             >/dev/null 2>&1; then
+            print_api_error_on_stderr
             util_die "quota exceeded; retry will not help; " \
                 "check OPENAI_API_KEY and API billing"
         fi
@@ -170,16 +171,34 @@ exit_if_insufficient_quota() {
 exit_if_http_code_not_retryable() {
     case $(cat "$HTTP_CODE_FILE") in
     429|408|500|502|503|504) return ;;
-    *) util_die "HTTP $(cat "$HTTP_CODE_FILE") not retryable; " \
-        "check OPENAI_API_KEY, OPENAI_URL (full …/chat/completions URL), " \
-        "and SSA_MODEL" ;;
+    *)
+        print_api_error_on_stderr
+        util_die "HTTP $(cat "$HTTP_CODE_FILE") not retryable; " \
+            "check OPENAI_API_KEY, OPENAI_URL (full …/chat/completions URL), " \
+            "and SSA_MODEL" ;;
     esac
 }
 
 exit_if_too_many_retries() {
-    [ "$HTTP_ATTEMPT" -lt "$SSA_MAX_CURL_CALLS" ] ||
+    if [ "$HTTP_ATTEMPT" -ge "$SSA_MAX_CURL_CALLS" ]; then
+        print_api_error_on_stderr
         util_die "curl calls exhausted after $SSA_MAX_CURL_CALLS attempts; " \
-        "raise SSA_MAX_CURL_CALLS to allow more"
+            "raise SSA_MAX_CURL_CALLS to allow more"
+    fi
+}
+
+print_api_error_on_stderr() {
+    if [ -s "$RESPONSE_FILE" ]; then
+        API_ERROR=$(jq -r '.error.message // empty' "$RESPONSE_FILE" \
+            2>/dev/null)
+        if [ -n "$API_ERROR" ]; then
+            printf 'API error: %s\n' "$API_ERROR" >&2
+        else
+            printf 'API response:\n' >&2
+            cat "$RESPONSE_FILE" >&2
+            printf '\n' >&2
+        fi
+    fi
 }
 
 sleep_before_retry() {
