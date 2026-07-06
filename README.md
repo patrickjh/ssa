@@ -53,10 +53,10 @@ this is called "Mostly POSIX `sh`". POSIX `sh` except getting model results.
 ## Safety
 
 By default, `ssa` runs model-generated shell commands **as your user**, with
-your environment, in whatever directory you started it from. Treat it like
-handing your terminal to the model.
+**your environment**, in whatever directory you run it from.
+Treat it like handing your terminal to the model.
 
-You can apply sandboxing using `--script-runner` or `SSA_SCRIPT_RUNNER`
+You can apply sandboxing using `--script-runner` or `SSA_SCRIPT_RUNNER`.
 These take a "Script Runner" file which will be passed the script the AI model
 wants to run on stdin. These files are supposed to apply sandboxing, run the
 script the model sent, and then send the stdout and stderr from running that
