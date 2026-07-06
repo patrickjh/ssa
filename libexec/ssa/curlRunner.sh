@@ -9,8 +9,7 @@ CURL_EXIT_OK=0
 IS_TRUE=0
 IS_FALSE=1
 DEFAULT_RETRY_SLEEP_SECONDS=5
-OPENAI_KEY="${OPENAI_API_KEY:-${OPENAI_KEY:-}}"
-OPENAI_URL="${OPENAI_URL:-https://api.openai.com/v1}"
+OPENAI_URL="${OPENAI_URL:-}"
 SSA_MAX_CURL_CALLS="${SSA_MAX_CURL_CALLS:-5}"
 SSA_CURL_ARGS="${SSA_CURL_ARGS:-}"
 CHAT_COMPLETIONS_URL=""
@@ -22,37 +21,27 @@ HTTP_CODE_FILE=""
 CURL_EXIT_FILE=""
 
 main() {
-    setup_chat_completions_url
     check_can_run
+    setup_chat_completions_url
     setup_prompt_file
     build_json_request
     send_json_request_with_retries
     print_model_reply
 }
 
-setup_chat_completions_url() {
-    OPENAI_URL=${OPENAI_URL%/}
-    if [ "${OPENAI_URL%/chat/completions}" != "$OPENAI_URL" ]; then
-        CHAT_COMPLETIONS_URL="$OPENAI_URL"
-    else
-        CHAT_COMPLETIONS_URL="${OPENAI_URL}/chat/completions"
-    fi
-}
-
 check_can_run() {
     util_check_session_folder
     check_max_curl_calls
     check_openai_model_set
+    check_openai_url_set
     check_runner_tool_on_path curl
     check_runner_tool_on_path jq
 }
 
 check_max_curl_calls() {
     case $SSA_MAX_CURL_CALLS in
-    *[!0-9]*)
-        util_die "SSA_MAX_CURL_CALLS must be a positive integer " \
-            "(got $SSA_MAX_CURL_CALLS)"
-        ;;
+    *[!0-9]*) util_die "SSA_MAX_CURL_CALLS must be a positive integer " \
+        "(got $SSA_MAX_CURL_CALLS)" ;;
     esac
     [ "$SSA_MAX_CURL_CALLS" -ge 1 ] ||
         util_die "SSA_MAX_CURL_CALLS must be at least 1 " \
@@ -64,9 +53,23 @@ check_openai_model_set() {
         util_die 'model not set; use ssa -m / --model or SSA_MODEL'
 }
 
+check_openai_url_set() {
+    [ -n "$OPENAI_URL" ] ||
+        util_die 'OPENAI_URL not set; set OPENAI_URL. ssa -h for help'
+}
+
 check_runner_tool_on_path() {
     command -v "$1" >/dev/null 2>&1 ||
         util_die "$1 not found on PATH"
+}
+
+setup_chat_completions_url() {
+    OPENAI_URL=${OPENAI_URL%/}
+    if [ "${OPENAI_URL%/chat/completions}" != "$OPENAI_URL" ]; then
+        CHAT_COMPLETIONS_URL="$OPENAI_URL"
+    else
+        CHAT_COMPLETIONS_URL="${OPENAI_URL}/chat/completions"
+    fi
 }
 
 setup_prompt_file() {
@@ -98,11 +101,11 @@ send_json_request_with_retries() {
 }
 
 setup_attempt_logs() {
-    LOG_PREFIX="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}"
-    HEADERS_FILE="${LOG_PREFIX}CurlHeaders${HTTP_ATTEMPT}.txt"
-    RESPONSE_FILE="${LOG_PREFIX}CurlResponse${HTTP_ATTEMPT}.txt"
-    HTTP_CODE_FILE="${LOG_PREFIX}CurlHttpCode${HTTP_ATTEMPT}.txt"
-    CURL_EXIT_FILE="${LOG_PREFIX}CurlExit${HTTP_ATTEMPT}.txt"
+    PATH_PREFIX="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}"
+    HEADERS_FILE="${PATH_PREFIX}CurlHeaders${HTTP_ATTEMPT}.txt"
+    RESPONSE_FILE="${PATH_PREFIX}CurlResponse${HTTP_ATTEMPT}.txt"
+    HTTP_CODE_FILE="${PATH_PREFIX}CurlHttpCode${HTTP_ATTEMPT}.txt"
+    CURL_EXIT_FILE="${PATH_PREFIX}CurlExit${HTTP_ATTEMPT}.txt"
     util_create_file_no_overwrite "$HEADERS_FILE" ||
         util_die "temp file not available: $HEADERS_FILE"
     util_create_file_no_overwrite "$RESPONSE_FILE" ||
@@ -117,7 +120,7 @@ send_json_request() {
     # shellcheck disable=SC2086
     curl -sS \
         -H "Content-Type: application/json" \
-        ${OPENAI_KEY:+-H "Authorization: Bearer $OPENAI_KEY"} \
+        ${OPENAI_API_KEY:+-H "Authorization: Bearer $OPENAI_API_KEY"} \
         -D "$HEADERS_FILE" -o "$RESPONSE_FILE" -w '%{http_code}' \
         $SSA_CURL_ARGS \
         -d @"$REQUEST_FILE" \
@@ -154,8 +157,8 @@ exit_if_insufficient_quota() {
     if [ "$(cat "$HTTP_CODE_FILE")" = 429 ]; then
         if jq -e '.error.code == "insufficient_quota"' "$RESPONSE_FILE" \
             >/dev/null 2>&1; then
-			util_die "quota exceeded; retry will not help; " \
-				"check OPENAI_API_KEY or OPENAI_KEY and API billing"
+            util_die "quota exceeded; retry will not help; " \
+                "check OPENAI_API_KEY and API billing"
         fi
     fi
 }
@@ -163,8 +166,8 @@ exit_if_insufficient_quota() {
 exit_if_http_code_not_retryable() {
     case $(cat "$HTTP_CODE_FILE") in
     429|408|500|502|503|504) return ;;
-	*) util_die "HTTP $(cat "$HTTP_CODE_FILE") not retryable; " \
-		"check OPENAI_API_KEY or OPENAI_KEY, OPENAI_URL, and SSA_MODEL" ;;
+    *) util_die "HTTP $(cat "$HTTP_CODE_FILE") not retryable; " \
+        "check OPENAI_API_KEY, OPENAI_URL, and SSA_MODEL" ;;
     esac
 }
 

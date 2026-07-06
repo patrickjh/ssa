@@ -124,13 +124,13 @@ Use `UPPER_CASE` for any shell variable. Keep locals inside the function that us
 - **Prefer `if`** over `[ test ] && command` when a test selects among several actions or branches. A single action may use one line: `if [ test ]; then command; fi`.
 - **Guard + `util_die`** — when the only action on failure is `util_die`, use `||`: `[ -n "$VAR" ] || util_die "…"`, `command || util_die "…"`. Sequential steps that must all succeed may use `&&` ending in `|| util_die`.
 - Keep `||` on **`read`** loops and similar idioms where it is not action selection.
-- **CLI `case` arms** — pattern on one line, action on the next: `pattern)` then `action ;;` on the following line.
+- **`case` arms** — prefer one line: `pattern) action ;;`. Split across lines only when the arm would exceed 80 columns (wrap the action with `\` or adjacent quoted parts as elsewhere).
 
 ## Static strings
 
 Long static text (prompts, help, errors) lives in **top-level variables**, not inside functions.
 
-Short **sed** / **grep** patterns and literals used in one function may live as named locals there. Use one top-level name when two or more functions share the same pattern; otherwise inline short literals at the comparison.
+Short **grep** patterns and literals used in one function may live as named locals there; inline short literals at the comparison when they read clearly. **sed** programs are hard to scan — always give them a named local (or top-level name when shared) so the call site states intent; do not inline sed program strings in the `sed` command.
 
 Split fully static text from parts that need substitution. Functions that use those strings should be thin glue: `printf`, swap-in, little else. No big heredocs inside functions when the text is mostly fixed.
 
@@ -153,7 +153,7 @@ SSA_LOOP_STATUS="done"
 
 Leave **unquoted**:
 
-- **Numeric constants and status codes** — `SSA_LOOP_AGAIN=0`, `return $SSA_TRY_AGAIN`, `SSA_KEEP_SESSION=$SSA_NO_KEEP_SESSION`
+- **Numeric constants and status codes** — `SSA_LOOP_AGAIN=0`, `return $SSA_TRY_AGAIN`, `SSA_KEEP_SESSION=1`
 - **`case` patterns** — CLI flags (`-h|--help)`), interactive answers (`y|Y|yes|YES)`)
 - **Signal names in `trap`** — `trap '…' EXIT INT TERM USR1` (USR1 for `util_die`; INT/TERM for external cancel)
 
@@ -207,4 +207,4 @@ When reviewing changes to `libexec/ssa/ssa.sh`, ask: *could the user do this wit
 
 **User-provided paths** (`SSA_MODEL_RUNNER`, `SSA_SCRIPT_RUNNER`, etc.): the agent does not create parent directories or otherwise prepare those files for you. Create directories and ensure paths are writable before you run the agent.
 
-For how to run the agent, CLI flags, env settings, and error handling, see `ssa -h`, [DESIGN.md](DESIGN.md), and [README.md](../README.md).
+For how to run the agent, CLI flags, env settings, and error handling, see `ssa -h`, [DESIGN.md](DESIGN.md), and [README.md](README.md).

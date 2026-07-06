@@ -29,14 +29,16 @@ check_can_run() {
 }
 
 setup_prompt_file() {
-    PROMPT_FILE="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}LlamaCppPrompt.txt"
+    PROMPT_FILE="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}\
+LlamaCppPrompt.txt"
     util_create_file_no_overwrite "$PROMPT_FILE" ||
         util_die "temp file not available: $PROMPT_FILE"
     cat >"$PROMPT_FILE" || util_die 'cannot read prompt from stdin'
 }
 
 setup_output_file() {
-    OUTPUT_FILE="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}LlamaCppOutput.txt"
+    OUTPUT_FILE="${SSA_SESSION_FOLDER}/prompt${SSA_MODEL_CALLS}\
+LlamaCppOutput.txt"
     util_create_file_no_overwrite "$OUTPUT_FILE" ||
         util_die "temp file not available: $OUTPUT_FILE"
 }
@@ -58,8 +60,8 @@ run_llama_completion() {
 }
 
 print_model_output() {
-    SED_TRIM_LLAMACPP_END='$ s/[[:space:]]*\[end of text\][[:space:]]*$//'
-    sed "$SED_TRIM_LLAMACPP_END" "$OUTPUT_FILE"
+    SED_TRIM_END_TOKEN='$ s/[[:space:]]*\[end of text\][[:space:]]*$//'
+    sed "$SED_TRIM_END_TOKEN" "$OUTPUT_FILE"
 }
 
 main "$@"

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Public entry: add this file's directory to PATH as ssa.
 LIB_DIR=$(CDPATH= cd -- "$(dirname "$0")/../libexec/ssa" && pwd) || {
-	printf 'error: could not find libexec/ssa at %s/../libexec/ssa\n' \
-		"$(dirname "$0")" >&2
-	exit 1
+    printf 'error: could not find libexec/ssa at %s/../libexec/ssa\n' \
+        "$(dirname "$0")" >&2
+    exit 1
 }
 exec "$LIB_DIR/ssa.sh" "$@"

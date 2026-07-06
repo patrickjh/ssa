@@ -1,6 +1,6 @@
 #!/bin/sh
 # ssa.sh — Simple Shell Agent main file (POSIX sh).
-# See ../README.md and ../markdownForAgents/DESIGN.md.
+# See ../README.md and ../markdownForAgents/*.md for details.
 # Usage: ssa [options] task words...
 # Options and environment: run ssa -h (HELP_TEXT in this file).
 
@@ -8,13 +8,13 @@ set -u
 # bring utility functions into scope
 . "$(dirname "$0")/utils.sh"
 
-# --- exported (inherited by model runners, script runners, and model scripts) ---
+# --- exported to model runners, script runners, and model scripts ---
 export SSA_PID=$$  # agent pid; util_die sends SIGUSR1 here
 export SSA_MODEL="${SSA_MODEL:-}"  # model name or GGUF path
 export SSA_SESSION_FOLDER=""  # temp folder with per-run session state
 export SSA_MODEL_CALLS=0  # model-call index; updated each loop iteration
-# --- private ---
 
+# --- private ---
 SSA_MAX_SCRIPT_OUTPUT_BYTES=50000
 ULIMIT_BYTES_PER_BLOCK=512
 ULIMIT_BLOCK_ROUNDING=511
@@ -26,9 +26,7 @@ SSA_SESSION_TRANSCRIPT_FILE=""
 SSA_MODEL_RESPONSE_FILE=""
 SSA_PARSED_SCRIPT_FILE=""
 SSA_EXIT_CODE_FILE=""
-SSA_YES_KEEP_SESSION=1
-SSA_NO_KEEP_SESSION=0
-SSA_KEEP_SESSION="${SSA_KEEP_SESSION:-$SSA_NO_KEEP_SESSION}"
+SSA_KEEP_SESSION="${SSA_KEEP_SESSION:-0}"
 SSA_LOOP_STATUS="stopped"
 SSA_LOOP_AGAIN=0
 SSA_TASK_DONE=1
@@ -91,17 +89,6 @@ Options:
   --max-model-calls N
           Stop after N model calls (0 = no limit, default is 20).
           Sets SSA_MAX_MODEL_CALLS to N.
-  --system-prompt VALUE
-          Custom system prompt. Can be a string or a path
-          to a file (read with cat). At startup, ssa replaces
-          //SSA_TASK_TOKEN// in the new system prompt with the task
-          from the user. If you use a custom system prompt,
-          include that token where the user task should go.
-          Sets SSA_SYSTEM_PROMPT.
-  --format-error VALUE
-          Custom error message sent if the model replies in the wrong
-          format. Can be a string or a path to a file (read with cat).
-          Sets SSA_FORMAT_ERROR.
 
 Environment:
   SSA_MODEL_RUNNER              See --model-runner.
@@ -109,14 +96,10 @@ Environment:
   SSA_MODEL                     See -m / --model.
   SSA_MAX_MODEL_CALLS           See --max-model-calls.
   SSA_KEEP_SESSION              See --keep-session (1 = keep).
-  SSA_SYSTEM_PROMPT             See --system-prompt.
-  SSA_FORMAT_ERROR              See --format-error.
 
   With libexec/ssa/curlRunner.sh:
   OPENAI_API_KEY                Bearer token (optional for local servers).
-                                Falls back to OPENAI_KEY when unset.
-  OPENAI_KEY                    Bearer token if OPENAI_API_KEY is unset.
-  OPENAI_URL                    API base (default https://api.openai.com/v1).
+  OPENAI_URL                    API base URL (required).
   SSA_CURL_ARGS                 Extra curl flags; unquoted word-split.
   SSA_MAX_CURL_CALLS            Max HTTP attempts per model call (default 5).
 
@@ -155,18 +138,19 @@ Examples:
 
   Using libexec/ssa/curlRunner.sh:
   OPENAI_API_KEY={{your key here}}
+  OPENAI_URL=https://api.openai.com/v1
   SSA_MODEL_RUNNER=/path/to/ssa/libexec/ssa/curlRunner.sh
   SSA_MODEL=gpt-4o-mini
   ssa summarize this repo
 
   Using libexec/ssa/llamaCppRunner.sh:
-  LLAMA_CPP_ARGS="--context 8192 --temp 0.7 --top_p 0.95 --repeat_penalty 1.18"
+  LLAMA_CPP_ARGS="--context 8192 --temp 0.7"
   SSA_MODEL_RUNNER=/path/to/ssa/libexec/ssa/llamaCppRunner.sh
   SSA_MODEL=~/models/model.gguf
   ssa summarize this repo
 '
 
-SSA_SYSTEM_PROMPT_DEFAULT='
+SSA_SYSTEM_PROMPT='
 [SYSTEM]
 You help users solve tasks with POSIX sh. Each turn you get a transcript of
 prior commands and their output. Continue from this transcript; earlier steps
@@ -188,17 +172,14 @@ echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
 Do this task:
 
 //SSA_TASK_TOKEN//
-
-[ASSISTANT]
-THOUGHT: Check the starting directory for this task.
+'
+SSA_FAKE_MODEL_RESPONSE='THOUGHT: Confirm the agent is starting.
 
 ```ssa_script
-pwd
+echo starting the agent
 ```
 '
-SSA_SYSTEM_PROMPT="${SSA_SYSTEM_PROMPT:-$SSA_SYSTEM_PROMPT_DEFAULT}"
-
-SSA_FORMAT_ERROR_DEFAULT='
+SSA_FORMAT_ERROR='
 [USER]
 Format error: your last reply did not match the required format. In order for
 us to parse and then run your POSIX sh scripts, your reply must be in the
@@ -214,8 +195,6 @@ echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
 ```
 '
 
-SSA_FORMAT_ERROR="${SSA_FORMAT_ERROR:-$SSA_FORMAT_ERROR_DEFAULT}"
-
 main() {
     trap handle_util_die_signal USR1
     parse_arguments "$@"
@@ -226,59 +205,51 @@ main() {
     finish_agent_loop
 }
 
+handle_util_die_signal() {
+    if [ "$SSA_KEEP_SESSION" = 0 ]; then
+        cleanup_session_folder
+    fi
+    exit 1
+}
+
 parse_arguments() {
     while [ $# -gt 0 ]; do
         case $1 in
-            -h|--help) show_help_and_exit ;;
+            -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
             --) shift; SSA_TASK=$*; return ;;
-            --model-runner)
-                require_option_argument; SSA_MODEL_RUNNER=$2; shift 2 ;;
-            --script-runner)
-                require_option_argument; SSA_SCRIPT_RUNNER=$2; shift 2 ;;
-            -m|--model)
-                require_option_argument; SSA_MODEL=$2; shift 2 ;;
-            --keep-session) SSA_KEEP_SESSION=$SSA_YES_KEEP_SESSION; shift ;;
-            --max-model-calls)
-                require_option_argument; SSA_MAX_MODEL_CALLS=$2; shift 2 ;;
-            --system-prompt)
-                require_option_argument; capture_system_prompt "$2"; shift 2 ;;
-            --format-error)
-                require_option_argument; capture_format_error_message "$2"; shift 2 ;;
+            --model-runner) set_model_runner; shift 2 ;;
+            --script-runner) set_script_runner; shift 2 ;;
+            -m|--model) set_model; shift 2 ;;
+            --keep-session) SSA_KEEP_SESSION=1; shift ;;
+            --max-model-calls) set_max_model_calls; shift 2 ;;
             -*) util_die "bad option: $1; try ssa --help" ;;
             *) SSA_TASK=$*; return ;;
         esac
     done
 }
 
-show_help_and_exit() {
-    printf '%s\n' "$HELP_TEXT"
-    exit 0
-}
-
-
-require_option_argument() {
+set_model_runner() {
     [ -n "${2-}" ] ||
-        util_die "option $1 requires an argument; try ssa --help"
+        util_die "--model-runner found with empty value"
+    SSA_MODEL_RUNNER=$2
 }
 
-capture_system_prompt() {
-    if [ -f "$1" ]; then
-        SSA_SYSTEM_PROMPT=$(cat "$1") ||
-            util_die "cannot read system prompt file: $1; " \
-            "use --system-prompt or SSA_SYSTEM_PROMPT"
-    else
-        SSA_SYSTEM_PROMPT=$1
-    fi
+set_script_runner() {
+    [ -n "${2-}" ] ||
+        util_die "--script-runner found with empty value"
+    SSA_SCRIPT_RUNNER=$2
 }
 
-capture_format_error_message() {
-    if [ -f "$1" ]; then
-        SSA_FORMAT_ERROR=$(cat "$1") ||
-            util_die "cannot read format error file: $1; " \
-            "use --format-error or SSA_FORMAT_ERROR"
-    else
-        SSA_FORMAT_ERROR=$1
-    fi
+set_model() {
+    [ -n "${2-}" ] ||
+        util_die "-m / --model found with empty value"
+    SSA_MODEL=$2
+}
+
+set_max_model_calls() {
+    [ -n "${2-}" ] ||
+        util_die "--max-model-calls found with empty value"
+    SSA_MAX_MODEL_CALLS=$2
 }
 
 read_task_from_stdin_if_needed() {
@@ -322,8 +293,9 @@ check_model_runner() {
     [ -f "$SSA_MODEL_RUNNER" ] ||
         util_die "model runner not found: $SSA_MODEL_RUNNER; " \
         "use --model-runner or SSA_MODEL_RUNNER"
-    if [ -x "$SSA_MODEL_RUNNER" ]; then return; fi
-    if [ -r "$SSA_MODEL_RUNNER" ]; then return; fi
+    if [ -x "$SSA_MODEL_RUNNER" ] || [ -r "$SSA_MODEL_RUNNER" ]; then
+        return
+    fi
     util_die "model runner not executable or readable: $SSA_MODEL_RUNNER; " \
         "use --model-runner or SSA_MODEL_RUNNER"
 }
@@ -333,8 +305,9 @@ check_script_runner() {
     [ -f "$SSA_SCRIPT_RUNNER" ] ||
         util_die "script runner not found: $SSA_SCRIPT_RUNNER; " \
         "use --script-runner or SSA_SCRIPT_RUNNER"
-    if [ -x "$SSA_SCRIPT_RUNNER" ]; then return; fi
-    if [ -r "$SSA_SCRIPT_RUNNER" ]; then return; fi
+    if [ -x "$SSA_SCRIPT_RUNNER" ] || [ -r "$SSA_SCRIPT_RUNNER" ]; then
+        return
+    fi
     util_die "script runner not executable or readable: $SSA_SCRIPT_RUNNER; " \
         "use --script-runner or SSA_SCRIPT_RUNNER"
 }
@@ -355,7 +328,7 @@ setup_session_folder() {
     SSA_MODEL_RESPONSE_FILE="${SSA_SESSION_FOLDER}/latestModelResponse.txt"
     SSA_PARSED_SCRIPT_FILE="${SSA_SESSION_FOLDER}/latestParsedScript.txt"
     SSA_EXIT_CODE_FILE="${SSA_SESSION_FOLDER}/latestScriptExitCode.txt"
-    if [ "$SSA_KEEP_SESSION" = "$SSA_NO_KEEP_SESSION" ]; then
+    if [ "$SSA_KEEP_SESSION" = 0 ]; then
         trap cleanup_session_folder EXIT
         trap 'cleanup_session_folder; exit 130' INT
         trap 'cleanup_session_folder; exit 143' TERM
@@ -366,23 +339,20 @@ cleanup_session_folder() {
     if [ -n "$SSA_SESSION_FOLDER" ]; then rm -rf "$SSA_SESSION_FOLDER"; fi
 }
 
-handle_util_die_signal() {
-    if [ "$SSA_KEEP_SESSION" = "$SSA_NO_KEEP_SESSION" ]; then
-        cleanup_session_folder
-    fi
-    exit 1
-}
-
 setup_transcript_file() {
     printf '%s\n' "$SSA_SYSTEM_PROMPT" >"$SSA_SESSION_TRANSCRIPT_FILE" ||
         util_die "cannot write transcript"
-    if [ "$SSA_SYSTEM_PROMPT" = "$SSA_SYSTEM_PROMPT_DEFAULT" ]; then
-        SSA_MODEL_CALLS=1
-        printf 'pwd\n' >"$SSA_PARSED_SCRIPT_FILE" ||
-            util_die "cannot write seed script"
-        run_model_script
-    fi
+    run_fake_first_turn
     substitute_tokens_in_transcript
+}
+
+run_fake_first_turn() {
+    printf '%s\n' "$SSA_FAKE_MODEL_RESPONSE" >"$SSA_MODEL_RESPONSE_FILE" ||
+        util_die "cannot write fake first turn response"
+    parse_model_result
+    [ $? -eq "$SSA_PARSE_OK" ] || \
+        util_die "internal error: fake first turn response failed to parse"
+    run_model_script
 }
 
 substitute_tokens_in_transcript() {
@@ -390,7 +360,7 @@ substitute_tokens_in_transcript() {
     if [ "$(grep -cF '//SSA_TASK_TOKEN//' \
         "$SSA_SESSION_TRANSCRIPT_FILE")" -ne 1 ]; then
         util_die "system prompt must contain exactly one //SSA_TASK_TOKEN//; " \
-            "include it in --system-prompt or SSA_SYSTEM_PROMPT"
+            "edit SSA_SYSTEM_PROMPT in libexec/ssa/ssa.sh"
     fi
     : >"$TRANSCRIPT_TEMP_FILE" || util_die "cannot write transcript"
     while IFS= read -r LINE || [ -n "$LINE" ]; do
@@ -434,7 +404,9 @@ call_model_then_run_script() {
 
 over_model_call_limit() {
     if [ "$SSA_MAX_MODEL_CALLS" -le 0 ]; then return $IS_FALSE; fi
-    if [ "$SSA_MODEL_CALLS" -gt "$SSA_MAX_MODEL_CALLS" ]; then return $IS_TRUE; fi
+    if [ "$SSA_MODEL_CALLS" -gt "$SSA_MAX_MODEL_CALLS" ]; then
+        return $IS_TRUE
+    fi
     return $IS_FALSE
 }
 
@@ -467,17 +439,16 @@ parse_model_result() {
     return $SSA_PARSE_OK
 }
 
-append_format_error_to_transcript() {
-    printf '%s' "$SSA_FORMAT_ERROR" >>"$SSA_SESSION_TRANSCRIPT_FILE" ||
-        util_die "cannot append to transcript"
-}
-
 reply_has_single_script_block() {
     OPEN_COUNT=0
     CLOSE_COUNT=0
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        if [ "$LINE" = '```ssa_script' ]; then OPEN_COUNT=$((OPEN_COUNT + 1)); fi
-        if [ "$LINE" = '```' ]; then CLOSE_COUNT=$((CLOSE_COUNT + 1)); fi
+        if [ "$LINE" = '```ssa_script' ]; then
+            OPEN_COUNT=$((OPEN_COUNT + 1))
+        fi
+        if [ "$LINE" = '```' ]; then
+            CLOSE_COUNT=$((CLOSE_COUNT + 1))
+        fi
     done <"$SSA_MODEL_RESPONSE_FILE"
     if [ "$OPEN_COUNT" -ne 1 ]; then return $IS_FALSE; fi
     if [ "$CLOSE_COUNT" -ne 1 ]; then return $IS_FALSE; fi
@@ -495,6 +466,11 @@ extract_script_to_file() {
         printf '%s\n' "$LINE" >>"$SSA_PARSED_SCRIPT_FILE" ||
             util_die "file error while extracting script"
     done <"$SSA_MODEL_RESPONSE_FILE"
+}
+
+append_format_error_to_transcript() {
+    printf '%s' "$SSA_FORMAT_ERROR" >>"$SSA_SESSION_TRANSCRIPT_FILE" ||
+        util_die "cannot append to transcript"
 }
 
 agent_is_done() {
@@ -540,12 +516,12 @@ invoke_script_runner() {
         sh
         return
     fi
-    if [ -x "$SSA_SCRIPT_RUNNER" ]; then
-        "$SSA_SCRIPT_RUNNER"
-        return
-    fi
-    if [ -r "$SSA_SCRIPT_RUNNER" ]; then
-        sh "$SSA_SCRIPT_RUNNER"
+    if [ -x "$SSA_SCRIPT_RUNNER" ] || [ -r "$SSA_SCRIPT_RUNNER" ]; then
+        if [ -x "$SSA_SCRIPT_RUNNER" ]; then
+            "$SSA_SCRIPT_RUNNER"
+        else
+            sh "$SSA_SCRIPT_RUNNER"
+        fi
         return
     fi
     util_die "script runner not executable or readable: $SSA_SCRIPT_RUNNER; " \
@@ -554,14 +530,10 @@ invoke_script_runner() {
 
 finish_agent_loop() {
     case $SSA_LOOP_STATUS in
-    done)
-        printf 'done: task complete after %s model calls\n' \
-            "$SSA_MODEL_CALLS" >&2
-        exit 0 ;;
-    hit\ max)
-        printf 'hit max: stopped after SSA_MAX_MODEL_CALLS (%s)\n' \
-            "$SSA_MAX_MODEL_CALLS" >&2
-        exit 1 ;;
+    done) printf 'done: task complete after %s model calls\n' \
+        "$SSA_MODEL_CALLS" >&2; exit 0 ;;
+    hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_CALLS (%s)\n' \
+        "$SSA_MAX_MODEL_CALLS" >&2; exit 1 ;;
     *) util_die "unknown loop status $SSA_LOOP_STATUS" ;;
     esac
 }

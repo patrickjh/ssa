@@ -1,92 +1,98 @@
-# Simple Shell Agent (ssa)
+# ssa — Simple Shell Agent
 
-Simple Shell Agent (`ssa`) is a simple AI coding agent written in mostly POSIX `sh`. Inspired by [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent): give the model **only shell**, run each step in a **fresh process**, keep a **simple loop**.
+A small AI coding agent written in less than 1,000 lines of mostly 
+POSIX `sh` shell scripts. You give it a task in plain
+English; it asks a model what shell commands to run, runs them, shows the
+model the output, and repeats until the job is done.
 
-**Models.** Inference is pluggable via "model runners": executable files or `sh` scripts that read the full prompt on `stdin`, send it to a backend, and write the model response as plain text on `stdout`. Two bundled runners live in [libexec/ssa/](libexec/ssa/): OpenAI-compatible HTTP ([curlRunner.sh](libexec/ssa/curlRunner.sh)) and local llama.cpp ([llamaCppRunner.sh](libexec/ssa/llamaCppRunner.sh)). Set `--model-runner` or `SSA_MODEL_RUNNER` to the full path of one of those scripts, or to your own runner. Runners should use `stderr` only for errors, not model text. Exit `0` on success. Exit non-zero to retry the same prompt and conversation transcript after a transient error. Call `util_die` (SIGUSR1 to `ssa`) to stop the agent on unrecoverable errors. Set `-m` or `SSA_MODEL` to identify which model to use; each runner interprets `SSA_MODEL` for its backend (`SSA_MODEL` is a GGUF path for llamaCppRunner, a model name for curlRunner).
+Inspired by [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent):
+**shell only**, **fresh process each step**, **simple loop**.
 
-**Unix-shaped.** Invoke `ssa` like `curl` or `make`: handle `cd`, env, redirects and so on with the shell. `ssa` just runs shell scripts sent by the AI model in the current working directory using an agent loop. Output from running these shell scripts is streamed live to **stdout** (stdout and stderr interleaved) and copied into the transcript for the model in the same order. `ssa` messages (errors, final status) go to **stderr**. Errors from prompting the models also go to stderr.
+## Quick start
 
-**Script runners.** By default model scripts run in a fresh subshell as your user, which can be unsafe. Point `--script-runner` or `SSA_SCRIPT_RUNNER` at a helper file to control how scripts run. Bundled script runners in [libexec/ssa/](libexec/ssa/): ask the user first ([askUserSandbox.sh](libexec/ssa/askUserSandbox.sh)) and Unix-user isolation ([switchUserSandbox.sh](libexec/ssa/switchUserSandbox.sh)). You can use your own script or binary. Script runners receive the model's script on stdin and run it with separate stdout and stderr; the harness merges both for the transcript. Runner diagnostics may go to stderr.
-
-**Command name.** Add [bin/](bin/) to your `PATH` and run `ssa` ([bin/ssa](bin/ssa) execs [libexec/ssa/ssa.sh](libexec/ssa/ssa.sh)). Set `SSA_MODEL_RUNNER` to the full path of a runner under `libexec/ssa/` (or your own path). Harness settings use the `SSA_` prefix. On some HPE server installs, `ssa` may already mean HPE Smart Storage Administrator; run `command -v ssa` before adding this project to your `PATH`, or invoke by full path.
-
-**Session logs.** We write extensive logs under `${TMPDIR:-/tmp}/ssa-$LOGNAME-<timestamp>/`. For speed, point `TMPDIR` at a tmpfs (e.g. `/dev/shm` on Linux). For durability and debugging, point `TMPDIR` at durable storage and pass `--keep-session` or set `SSA_KEEP_SESSION=1` to keep the folder after exit. See [DESIGN.md](markdownForAgents/DESIGN.md) for file names.
-
-## Layout
-
-```
-ssa/
-├── bin/
-│   └── ssa                      # add this directory to PATH
-├── libexec/
-│   └── ssa/                     # implementation (not on PATH)
-│       ├── ssa.sh               # agent harness
-│       ├── utils.sh             # shared helpers
-│       ├── curlRunner.sh        # OpenAI-compatible HTTP API
-│       ├── llamaCppRunner.sh    # local llama.cpp
-│       ├── askUserSandbox.sh    # show script on stderr, approve on /dev/tty
-│       └── switchUserSandbox.sh # run scripts as another Unix user
-├── README.md
-└── markdownForAgents/           # design and style docs for contributors
-    ├── DESIGN.md
-    └── STYLE.md
-```
-
-## Try it
-
-Add `bin/` to your `PATH` (adjust to where you cloned or downloaded the repo):
+Clone the repo, set some environment variables and you're good to go:
 
 ```sh
 export PATH="/path/to/ssa/bin:$PATH"
-```
 
-### curlRunner (OpenAI-compatible HTTP)
-
-Using environment variables:
-
-```sh
 export OPENAI_API_KEY="sk-..."
-export OPENAI_URL="https://api.openai.com/v1"   # optional; this is the default
+export OPENAI_URL="https://openrouter.ai/api/v1"      # any OpenAI-compatible API
 export SSA_MODEL_RUNNER="/path/to/ssa/libexec/ssa/curlRunner.sh"
-export SSA_MODEL=gpt-4o-mini
+export SSA_MODEL="openrouter/auto"
+
+cd /path/to/your/project
 ssa summarize this repo
 ```
 
-Using CLI flags (runner env still required for the API key):
+Run `ssa -h` for all options.
 
-```sh
-export OPENAI_API_KEY="sk-..."
-# OPENAI_URL defaults to https://api.openai.com/v1
-ssa --model-runner "/path/to/ssa/libexec/ssa/curlRunner.sh" \
-  -m gpt-4o-mini summarize this repo
-```
+## Dependencies
 
-### llamaCppRunner (local llama.cpp)
+The core agent loop is written in pure POSIX `sh`
+This core code only uses POSIX `sh`, `date`, `grep`, `sed`, and `tee`.
+But to get replies from a model you need some non POSIX tools:
 
-Using environment variables:
+The bundled HTTP runner (`curlRunner.sh`) queries OpenAI compatible APIs
+This depends on `curl` and `jq`
 
-```sh
-export SSA_MODEL_RUNNER="/path/to/ssa/libexec/ssa/llamaCppRunner.sh"
-export SSA_MODEL=/path/to/model.gguf
-export LLAMA_CPP_ARGS="--context 8192 --temp 0.7"   # optional
-ssa summarize this repo
-```
+The bundled local AI runner (`llamaCppRunner.sh`) uses [llama.cpp](https://github.com/ggml-org/llama.cpp)
+Their `llama-completion` tool must be on your PATH
 
-Using CLI flags:
+Those tools should all work fine on Linux, macOS, and BSD, but that is why
+this is called "Mostly POSIX `sh`". POSIX `sh` except getting model results.
 
-```sh
-ssa --model-runner "/path/to/ssa/libexec/ssa/llamaCppRunner.sh" \
-  -m /path/to/model.gguf summarize this repo
-```
+## How the agent works (short version)
 
-Task on stdin instead of argv:
+1. You pass a task on the command line (or pipe it on stdin).
+2. The agent sends a transcript with the task to your model.
+3. The model replies with a small shell script to help with the task.
+4. The agent runs that script in your current directory
+5. The agent feeds the output from that command back to the model.
+5. Repeat until the model signals it is done.
 
-```sh
-echo "summarize this repo" | ssa \
-  --model-runner "/path/to/ssa/libexec/ssa/curlRunner.sh" -m gpt-4o-mini
-```
+To change the system prompt or format-error message, edit `SSA_SYSTEM_PROMPT`
+and `SSA_FORMAT_ERROR` at the top of `libexec/ssa/ssa.sh`. Be aware that we
+append a fake turn to help the model respond in the right format so you may
+want to edit the code that does that as well.
 
-Run `ssa -h` for full usage (source: `HELP_TEXT` in [libexec/ssa/ssa.sh](libexec/ssa/ssa.sh)). How it works and project rules: [DESIGN.md](markdownForAgents/DESIGN.md). Coding style: [STYLE.md](markdownForAgents/STYLE.md).
+## Safety
+
+By default, `ssa` runs model-generated shell commands **as your user**, with
+your environment, in whatever directory you started it from. Treat it like
+handing your terminal to the model.
+
+You can apply sandboxing using `--script-runner` or `SSA_SCRIPT_RUNNER`
+These take a "Script Runner" file which will be passed the script the AI model
+wants to run on stdin. These files are supposed to apply sandboxing, run the
+script the model sent, and then send the stdout and stderr from running that
+script back to the AI agent harness (it will be sent to the terminal and model)
+
+Two "Script Runners" that apply simple sandboxing are included:
+
+`libexec/ssa/askUserSandbox.sh` — ask the user before running each script
+`libexec/ssa/switchUserSandbox.sh` — run scripts as another Unix user
+
+Serious usage may want to create more complex sandboxes for the scripts
+the AI model wants to run using seccomp / namespaces / pledge() / jails etc.
+
+## Debugging
+
+Session files are written under `$TMPDIR/ssa-$LOGNAME-<timestamp>/`. Pass
+`--keep-session` to keep them after exit. We try to log a lot of the files
+created by the agent harness and sandbox so you can debug the various steps.
+A good starting point is sessionTranscript.txt which shows the run of the agent
+harness from the view of the model.
+
+## Models
+
+The smallest AI models can struggle to use this as they do not really respond
+with answers that can be parsed by our simple parsing logic. Specifically,
+I failed to get usable results when doing some simple tests with Qwen 2.5 - 1.5B
+and Qwen 2.5 - 3B models. However, models such as Qwen 2.5 - 7B and Qwen 2.5 - 32B
+were able to produce results that could be parsed into runnable shell scripts
+for very simple "hello world" type tasks. So just be aware this might not work
+with the smallest models.
+
 
 ## License
 
