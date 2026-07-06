@@ -177,6 +177,7 @@ SSA_SYSTEM_PROMPT='
 You help users solve tasks with POSIX sh. Each turn you get a transcript of
 prior commands and their output. Continue from this transcript; earlier steps
 may already be there. Reply with one POSIX sh script that is a good next step.
+Try to reply with shell scripts that will not hang and will time out eventually.
 We will run the script and append the results to the transcript. Each reply
 must be in a precise format for us to parse and run your shell script. Replies
 that do not match this exact format will cause a format error. Following is an
