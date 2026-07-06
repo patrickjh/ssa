@@ -1,6 +1,6 @@
 # ssa — Simple Shell Agent
 
-A small AI coding agent written in less than 1,000 lines of mostly 
+A simple AI coding agent written in less than 1,000 lines of mostly 
 POSIX `sh` shell scripts. You give it a task in plain
 English; it asks a model what shell commands to run, runs them, shows the
 model the output, and repeats until the job is done.
