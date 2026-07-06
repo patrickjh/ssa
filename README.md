@@ -50,11 +50,6 @@ this is called "Mostly POSIX `sh`". POSIX `sh` except getting model results.
 5. The agent feeds the output from that command back to the model.
 5. Repeat until the model signals it is done.
 
-To change the system prompt or format-error message, edit `SSA_SYSTEM_PROMPT`
-and `SSA_FORMAT_ERROR` at the top of `libexec/ssa/ssa.sh`. Be aware that we
-append a fake turn to help the model respond in the right format so you may
-want to edit the code that does that as well.
-
 ## Safety
 
 By default, `ssa` runs model-generated shell commands **as your user**, with
