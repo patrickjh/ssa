@@ -53,16 +53,6 @@ The model replies with a shell script.
 The agent runs the script and shows the model the results.
 Repeat until model signals the task is done or --max-model-calls is hit
 
-Sandboxing
-By default, model scripts run using sh with the current user and directory.
-This is not that safe and you may want to sandbox the scripts.
-To sandbox use --script-runner or SSA_SCRIPT_RUNNER to set a script runner.
-Script runners are scripts or binaries that are sent the script AI wants
-to run on stdin. Script runners are expected to apply sandbox tools or other
-customizations, run the script the AI has sent them, and let the script output
-show on stdout and stderr. You can include output of why a script was rejected
-to let the AI adjust and try again. See libexec/ssa/ for simple script runners.
-
 Options:
   -h, --help
           Show this help and exit.
@@ -78,10 +68,8 @@ Options:
           See libexec/ssa/ for bundled model runners.
           Sets SSA_MODEL_RUNNER.
   --script-runner PATH
-          File to run scripts the AI creates.
-          Is sent the script returned by the AI model on stdin.
-          Runs the script and writes output to stdout and stderr.
-          See libexec/ssa/ for script runners that do basic sandboxing
+          File to sandbox and run scripts the AI creates.
+          See Sandboxing section below for details.
           Sets SSA_SCRIPT_RUNNER.
   --keep-session
           Keep per-run temp files after exit. Useful for debugging.
@@ -99,14 +87,14 @@ Environment:
 
   With libexec/ssa/curlRunner.sh:
   OPENAI_API_KEY                Bearer token (optional for local servers).
-  OPENAI_URL                    API base URL (required).
+  OPENAI_URL                    Full …/chat/completions URL (required).
   SSA_CURL_ARGS                 Extra curl flags; unquoted word-split.
   SSA_MAX_CURL_CALLS            Max HTTP attempts per model call (default 5).
 
   With libexec/ssa/llamaCppRunner.sh:
   LLAMA_CPP_ARGS                Extra llama-completion flags; word-split.
 
-  With libexec/ssa/switchUserSandbox.sh:
+  With libexec/ssa/switchUserSandbox.sh: (See Sandboxing below)
   SSA_SANDBOX_USER              Login user to run scripts as (required).
 
   Exported at run time to model runners, script runners, and model scripts
@@ -127,6 +115,32 @@ Files:
           sessionTranscript.txt, latestModelResponse.txt,
           latestParsedScript.txt, latestScriptExitCode.txt.
 
+Sandboxing:
+  By default we run scripts the AI model sends us with using plain sh.
+  This runs the scripts in the current directory as the current user.
+  This default is like giving the AI model control of your terminal.
+  For obvious reasons you might want to restrict what that AI model can do.
+
+  To apply sandboxing, ssa supports the idea of a Script Runner.
+  A Script Runner is any shell script or binary that will run the AIs scripts.
+  You set the path to this file with --script-runner or SSA_SCRIPT_RUNNER.
+  Our code will send the script from the AI into the Script Runner on stdin.
+  We expect Script Runners to run the script with normal stdout and stderr.
+  So Script Runners should apply any sandboxing then run the AIs script.
+  Use this to apply sandboxing tools like containers / pledge / jails etc.
+
+  We include two simple Script Runners.
+
+  libexec/ssa/askUserSandbox.sh:
+  Shows the scripts the AI creates on the terminal.
+  Asks the user if the user wants to run that script.
+  Only runs the script if the user chooses Yes.
+
+  libexec/ssa/switchUserSandbox.sh:
+  Uses sudo or doas to switch to another user before running the scripts.
+  This is simple Unix user sandboxing.
+  You have to set up a sandbox user to use this.
+
 Exit status:
   0       Task complete; prints a one-line status on stderr.
   1       Failure (bad arguments, harness failure, or max model calls).
@@ -138,7 +152,7 @@ Examples:
 
   Using libexec/ssa/curlRunner.sh:
   OPENAI_API_KEY={{your key here}}
-  OPENAI_URL=https://api.openai.com/v1
+  OPENAI_URL=https://api.openai.com/v1/chat/completions
   SSA_MODEL_RUNNER=/path/to/ssa/libexec/ssa/curlRunner.sh
   SSA_MODEL=gpt-4o-mini
   ssa summarize this repo
@@ -293,11 +307,9 @@ check_model_runner() {
     [ -f "$SSA_MODEL_RUNNER" ] ||
         util_die "model runner not found: $SSA_MODEL_RUNNER; " \
         "use --model-runner or SSA_MODEL_RUNNER"
-    if [ -x "$SSA_MODEL_RUNNER" ] || [ -r "$SSA_MODEL_RUNNER" ]; then
-        return
-    fi
-    util_die "model runner not executable or readable: $SSA_MODEL_RUNNER; " \
-        "use --model-runner or SSA_MODEL_RUNNER"
+    [ -x "$SSA_MODEL_RUNNER" ] ||
+        util_die "model runner not executable: $SSA_MODEL_RUNNER; " \
+        "chmod +x, or use --model-runner or SSA_MODEL_RUNNER"
 }
 
 check_script_runner() {
@@ -305,11 +317,9 @@ check_script_runner() {
     [ -f "$SSA_SCRIPT_RUNNER" ] ||
         util_die "script runner not found: $SSA_SCRIPT_RUNNER; " \
         "use --script-runner or SSA_SCRIPT_RUNNER"
-    if [ -x "$SSA_SCRIPT_RUNNER" ] || [ -r "$SSA_SCRIPT_RUNNER" ]; then
-        return
-    fi
-    util_die "script runner not executable or readable: $SSA_SCRIPT_RUNNER; " \
-        "use --script-runner or SSA_SCRIPT_RUNNER"
+    [ -x "$SSA_SCRIPT_RUNNER" ] ||
+        util_die "script runner not executable: $SSA_SCRIPT_RUNNER; " \
+        "chmod +x, or use --script-runner or SSA_SCRIPT_RUNNER"
 }
 
 setup_agent_loop() {
@@ -392,7 +402,7 @@ run_agent_loop() {
 call_model_then_run_script() {
     if over_model_call_limit; then return $SSA_HIT_MAX; fi
     cat "$SSA_SESSION_TRANSCRIPT_FILE" |
-        invoke_model_runner >"$SSA_MODEL_RESPONSE_FILE"
+        "$SSA_MODEL_RUNNER" >"$SSA_MODEL_RESPONSE_FILE"
     if [ $? -ne 0 ]; then return $SSA_LOOP_AGAIN; fi
     parse_model_result
     if [ $? -ne "$SSA_PARSE_OK" ]; then return $SSA_LOOP_AGAIN; fi
@@ -408,14 +418,6 @@ over_model_call_limit() {
         return $IS_TRUE
     fi
     return $IS_FALSE
-}
-
-invoke_model_runner() {
-    if [ -x "$SSA_MODEL_RUNNER" ]; then
-        "$SSA_MODEL_RUNNER"
-    else
-        sh "$SSA_MODEL_RUNNER"
-    fi
 }
 
 parse_model_result() {
@@ -514,18 +516,9 @@ use_ulimit_to_limit_output() {
 invoke_script_runner() {
     if [ -z "$SSA_SCRIPT_RUNNER" ]; then
         sh
-        return
+    else
+        "$SSA_SCRIPT_RUNNER"
     fi
-    if [ -x "$SSA_SCRIPT_RUNNER" ] || [ -r "$SSA_SCRIPT_RUNNER" ]; then
-        if [ -x "$SSA_SCRIPT_RUNNER" ]; then
-            "$SSA_SCRIPT_RUNNER"
-        else
-            sh "$SSA_SCRIPT_RUNNER"
-        fi
-        return
-    fi
-    util_die "script runner not executable or readable: $SSA_SCRIPT_RUNNER; " \
-        "use --script-runner or SSA_SCRIPT_RUNNER"
 }
 
 finish_agent_loop() {

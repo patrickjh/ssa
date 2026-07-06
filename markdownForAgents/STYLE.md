@@ -37,7 +37,7 @@ Names should be **clear and readable**: full words, favoring 1–2 syllables per
 |--------|--------|
 | `_FILE` | A file |
 | `_FOLDER` | A folder |
-| `_SCRIPT` | Path to an executable or script file (run with `sh` when not executable) |
+| `_SCRIPT` | Path to an executable file |
 
 Do not use `_FILE` for a folder.
 
@@ -83,8 +83,8 @@ Harness and helpers use `util_die` from [utils.sh](../libexec/ssa/utils.sh) on s
 **Message layout.** For `util_die` and similar diagnostics, the opening quote starts on the **same line** as the command — not on a continuation line after `\`. Wrap long messages at **80 columns** using adjacent quoted parts; the first `"` stays on the command line. Use `\` at end of line when the wrapped parts must stay one command:
 
 ```sh
-util_die "model runner not executable or readable: $SSA_MODEL_RUNNER; " \
-    "use --model-runner or SSA_MODEL_RUNNER"
+util_die "model runner not executable: $SSA_MODEL_RUNNER; " \
+    "chmod +x, or use --model-runner or SSA_MODEL_RUNNER"
 ```
 
 Short messages stay on one line:

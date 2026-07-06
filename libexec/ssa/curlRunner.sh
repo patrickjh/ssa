@@ -12,7 +12,6 @@ DEFAULT_RETRY_SLEEP_SECONDS=5
 OPENAI_URL="${OPENAI_URL:-}"
 SSA_MAX_CURL_CALLS="${SSA_MAX_CURL_CALLS:-5}"
 SSA_CURL_ARGS="${SSA_CURL_ARGS:-}"
-CHAT_COMPLETIONS_URL=""
 PROMPT_FILE=""
 REQUEST_FILE=""
 HEADERS_FILE=""
@@ -22,7 +21,6 @@ CURL_EXIT_FILE=""
 
 main() {
     check_can_run
-    setup_chat_completions_url
     setup_prompt_file
     build_json_request
     send_json_request_with_retries
@@ -33,7 +31,7 @@ check_can_run() {
     util_check_session_folder
     check_max_curl_calls
     check_openai_model_set
-    check_openai_url_set
+    check_openai_url
     check_runner_tool_on_path curl
     check_runner_tool_on_path jq
 }
@@ -53,23 +51,19 @@ check_openai_model_set() {
         util_die 'model not set; use ssa -m / --model or SSA_MODEL'
 }
 
-check_openai_url_set() {
+check_openai_url() {
     [ -n "$OPENAI_URL" ] ||
-        util_die 'OPENAI_URL not set; set OPENAI_URL. ssa -h for help'
+        util_die 'OPENAI_URL not set; set full https://…/chat/completions URL ' \
+            '(e.g. https://api.openai.com/v1/chat/completions); ssa -h for help'
+    printf '%s' "$OPENAI_URL" |
+        grep -Eq '^https://[^[:space:]]+/chat/completions$' ||
+        util_die "OPENAI_URL must be full https://…/chat/completions URL " \
+            "(got $OPENAI_URL); ssa -h for help"
 }
 
 check_runner_tool_on_path() {
     command -v "$1" >/dev/null 2>&1 ||
         util_die "$1 not found on PATH"
-}
-
-setup_chat_completions_url() {
-    OPENAI_URL=${OPENAI_URL%/}
-    if [ "${OPENAI_URL%/chat/completions}" != "$OPENAI_URL" ]; then
-        CHAT_COMPLETIONS_URL="$OPENAI_URL"
-    else
-        CHAT_COMPLETIONS_URL="${OPENAI_URL}/chat/completions"
-    fi
 }
 
 setup_prompt_file() {
@@ -124,7 +118,7 @@ send_json_request() {
         -D "$HEADERS_FILE" -o "$RESPONSE_FILE" -w '%{http_code}' \
         $SSA_CURL_ARGS \
         -d @"$REQUEST_FILE" \
-        "$CHAT_COMPLETIONS_URL" >"$HTTP_CODE_FILE"
+        "$OPENAI_URL" >"$HTTP_CODE_FILE"
     printf '%s' "$?" >"$CURL_EXIT_FILE" ||
         util_die "cannot write session log: $CURL_EXIT_FILE"
 }
@@ -167,7 +161,8 @@ exit_if_http_code_not_retryable() {
     case $(cat "$HTTP_CODE_FILE") in
     429|408|500|502|503|504) return ;;
     *) util_die "HTTP $(cat "$HTTP_CODE_FILE") not retryable; " \
-        "check OPENAI_API_KEY, OPENAI_URL, and SSA_MODEL" ;;
+        "check OPENAI_API_KEY, OPENAI_URL (full …/chat/completions URL), " \
+        "and SSA_MODEL" ;;
     esac
 }
 

@@ -40,7 +40,7 @@ At startup, `ssa` **exports** `SSA_PID`, `SSA_MODEL`, `SSA_SESSION_FOLDER`, and 
 
 No tool-calling APIs or JSON. The model writes plain text plus exactly one ` ```ssa_script ` … ` ``` ` script block per reply.
 
-**Model runner contract** (Unix filter; executable or script):
+**Model runner contract** (Unix filter; executable):
 
 - **stdin** — full prompt text (`sessionTranscript.txt`: `[SYSTEM]` block, then `[USER]` / `[ASSISTANT]` turns)
 - **stdout** — plain-text model reply
@@ -49,12 +49,12 @@ No tool-calling APIs or JSON. The model writes plain text plus exactly one ` ```
 
 **Parse failures** (bad or missing fence) append a `[USER]` error to the transcript, then retry.
 
-**Required:** set `SSA_MODEL_RUNNER` or pass `--model-runner` (executable or script path). If unset, the agent exits at startup (`util_die`). Executables run directly; non-executable paths run with `sh`.
+**Required:** set `SSA_MODEL_RUNNER` or pass `--model-runner` (executable path). If unset, the agent exits at startup (`util_die`).
 
 **Bundled model runners** (in [`libexec/ssa/`](../libexec/ssa/)):
 
 - [llamaCppRunner.sh](../libexec/ssa/llamaCppRunner.sh) — spools stdin to `promptNLlamaCppPrompt.txt` (fails if that path exists), runs `llama-completion -f` on it, writes raw output to `promptNLlamaCppOutput.txt`, prints trimmed reply on stdout. Requires `SSA_SESSION_FOLDER` and `SSA_MODEL_CALLS` from `ssa`. Requires `SSA_MODEL` as a GGUF path (from `-m`, `--model`, or env). Checks the file and `llama-completion` on `PATH`; validation lives in the helper, not the agent.
-- [curlRunner.sh](../libexec/ssa/curlRunner.sh) — spools stdin to `promptNCurlPrompt.txt` (fails if that path exists), builds JSON in `promptNCurlRequest.txt`, POSTs to an OpenAI-compatible `/chat/completions` endpoint via `curl`. Each HTTP attempt writes `promptNCurlHeadersA.txt`, `promptNCurlResponseA.txt`, `promptNCurlHttpCodeA.txt`, and `promptNCurlExitA.txt` (A = attempt number). Requires `SSA_SESSION_FOLDER` and `SSA_MODEL_CALLS` from `ssa`. Requires `SSA_MODEL` as an API model name (from `-m`, `--model`, or env). Uses `OPENAI_API_KEY`, `OPENAI_URL` (required), optional `SSA_CURL_ARGS`, and optional `SSA_MAX_CURL_CALLS` (default 5; see `ssa -h`). Sends the transcript as one `user` message; HTTP `429` with insufficient quota is fatal; other transient HTTP errors retry in the runner (Retry-After header when present, else 5 seconds, up to `SSA_MAX_CURL_CALLS` attempts), then exit fatal if retries are exhausted.
+- [curlRunner.sh](../libexec/ssa/curlRunner.sh) — spools stdin to `promptNCurlPrompt.txt` (fails if that path exists), builds JSON in `promptNCurlRequest.txt`, POSTs to an OpenAI-compatible `/chat/completions` endpoint via `curl`. Each HTTP attempt writes `promptNCurlHeadersA.txt`, `promptNCurlResponseA.txt`, `promptNCurlHttpCodeA.txt`, and `promptNCurlExitA.txt` (A = attempt number). Requires `SSA_SESSION_FOLDER` and `SSA_MODEL_CALLS` from `ssa`. Requires `SSA_MODEL` as an API model name (from `-m`, `--model`, or env). Uses `OPENAI_API_KEY`, `OPENAI_URL` (required full `https://…/chat/completions` URL), optional `SSA_CURL_ARGS`, and optional `SSA_MAX_CURL_CALLS` (default 5; see `ssa -h`). Sends the transcript as one `user` message; HTTP `429` with insufficient quota is fatal; other transient HTTP errors retry in the runner (Retry-After header when present, else 5 seconds, up to `SSA_MAX_CURL_CALLS` attempts), then exit fatal if retries are exhausted.
 
 Each runner interprets `SSA_MODEL` for its backend (file path vs API name).
 
@@ -64,7 +64,7 @@ The agent appends `[USER]` / `[ASSISTANT]` sections to the transcript between mo
 
 Each approved model script is piped to a **script runner** (Unix filter; parallel to the model runner).
 
-**Script runner contract** (executable or script):
+**Script runner contract** (executable):
 
 - **stdin** — script text (extracted from the model reply)
 - **stdout** — model script stdout; runner messages meant for the model (e.g. rejection text)
@@ -76,7 +76,7 @@ The harness caps captured output (~`SSA_MAX_SCRIPT_OUTPUT_BYTES` via `ulimit -f`
 
 **Default:** built-in path in `invoke_script_runner` — fresh `sh` reading the script from stdin. Inherits exported `SSA_*` env.
 
-**Override:** set `SSA_SCRIPT_RUNNER` to your own executable or script (e.g. seccomp, pledge, `sudo`). Script on stdin; strip or replace env in the runner if you want isolation. Executables run directly; non-executable paths run with `sh`.
+**Override:** set `SSA_SCRIPT_RUNNER` to your own executable (e.g. seccomp, pledge, `sudo`). Script on stdin; strip or replace env in the runner if you want isolation.
 
 **Bundled script runners** (in [`libexec/ssa/`](../libexec/ssa/)):
 

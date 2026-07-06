@@ -16,7 +16,7 @@ Clone the repo, set some environment variables and you're good to go:
 export PATH="/path/to/ssa/bin:$PATH"
 
 export OPENAI_API_KEY="sk-..."
-export OPENAI_URL="https://openrouter.ai/api/v1"      # any OpenAI-compatible API
+export OPENAI_URL="https://openrouter.ai/api/v1/chat/completions"
 export SSA_MODEL_RUNNER="/path/to/ssa/libexec/ssa/curlRunner.sh"
 export SSA_MODEL="openrouter/auto"
 
