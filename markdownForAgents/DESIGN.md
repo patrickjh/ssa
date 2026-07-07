@@ -69,7 +69,7 @@ Each approved model script is piped to a **script runner** (Unix filter; paralle
 - **stdin** — script text (extracted from the model reply)
 - **stdout** — model script stdout; runner messages meant for the model (e.g. rejection text)
 - **stderr** — model script stderr and runner diagnostics (prompts, notices); the harness merges stdout and stderr for the transcript
-- **exit code** — model script result (captured in the transcript; loop continues); unrecoverable errors use `util_die` (SIGTERM to `ssa`)
+- **exit code** — model script result (captured in the transcript; loop continues); unrecoverable errors use `util_die` (SIGUSR1 to `ssa`)
 - **Bad script-runner path** — fatal (`util_die` at startup, like the model runner)
 
 The harness does not cap script output. Use a custom script runner to truncate, log, or limit output if needed.
