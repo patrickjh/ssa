@@ -114,14 +114,26 @@ expect_stdout_has() {
 }
 
 expect_stdout_lacks() {
-    grep -qF -- "$1" "$RUN_STDOUT_FILE" &&
+    if grep -qF -- "$1" "$RUN_STDOUT_FILE"; then
         fail "stdout should not contain: $1"
+        return 1
+    fi
     return 0
 }
 
 expect_stderr_has() {
     grep -qF -- "$1" "$RUN_STDERR_FILE" ||
         fail "stderr missing: $1"
+}
+
+# Assert the kept session transcript contains a string. Requires the run
+# to have used --keep-session so the session folder survives.
+expect_transcript_has() {
+    TRANSCRIPT=$(find "$CASE_TMPDIR" -name sessionTranscript.txt \
+        2>/dev/null | head -n 1)
+    [ -n "$TRANSCRIPT" ] || { fail 'no kept transcript found'; return 1; }
+    grep -qF -- "$1" "$TRANSCRIPT" ||
+        { fail "transcript missing: $1"; return 1; }
 }
 
 # run_test NAME FUNCTION — run one test, print PASS/FAIL, track totals.
@@ -230,23 +242,28 @@ test_max_model_calls() {
         'hit max: stopped after SSA_MAX_MODEL_CALLS (1)' || return 1
 }
 
-# (5a) Task from argv.
+# (5a) Task from argv. Keep the session and grep the transcript for the
+# argv words, so the test verifies the task actually routed into the
+# prompt (not just that any run reached the done status).
 test_task_from_argv() {
     write_done_reply "$REPLIES_FOLDER/reply1.txt"
-    run_ssa a task passed on argv
+    run_ssa --keep-session task-words-came-from-argv
     expect_exit 0 || return 1
     expect_stderr_has 'done: task complete' || return 1
+    expect_transcript_has 'task-words-came-from-argv' || return 1
 }
 
-# (5b) Task piped on stdin.
+# (5b) Task piped on stdin. Same transcript check as argv, proving the
+# stdin task text reached the prompt.
 test_task_from_stdin() {
     write_done_reply "$REPLIES_FOLDER/reply1.txt"
-    printf 'a task piped on stdin\n' >"$CASE_FOLDER/task.txt"
+    printf 'task-words-came-from-stdin\n' >"$CASE_FOLDER/task.txt"
     RUN_STDIN_FILE="$CASE_FOLDER/task.txt"
-    run_ssa
+    run_ssa --keep-session
     RUN_STDIN_FILE=""
     expect_exit 0 || return 1
     expect_stderr_has 'done: task complete' || return 1
+    expect_transcript_has 'task-words-came-from-stdin' || return 1
 }
 
 # (6) Missing model runner fails at startup via util_die with exit 1.
