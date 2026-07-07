@@ -26,7 +26,8 @@ ssa/
 │       ├── curlRunner.sh        # OpenAI-compatible HTTP API
 │       ├── llamaCppRunner.sh    # local llama.cpp
 │       ├── askUserSandbox.sh    # show script on stderr, approve on /dev/tty
-│       └── switchUserSandbox.sh # run scripts as another Unix user
+│       ├── switchUserSandbox.sh # run scripts as another Unix user
+│       └── community/tests/     # offline sanity tests (outside line budget)
 └── markdownForAgents/           # design and style docs for contributors
     ├── README.md                # this file
     ├── DESIGN.md
