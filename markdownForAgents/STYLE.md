@@ -148,7 +148,7 @@ Quote **string literals** in assignments and in `[ ]` / `=` comparisons:
 
 ```sh
 SSA_LOOP_STATUS="done"
-[ "$(cat "$SSA_PARSED_SCRIPT_FILE")" = "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" ]
+[ "$(sed "$SSA_FIRST_LINE_SED" "$SSA_PARSED_SCRIPT_FILE")" = "$SSA_DONE_SENTINEL" ]
 ```
 
 Leave **unquoted**:

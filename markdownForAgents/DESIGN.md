@@ -85,7 +85,7 @@ The harness does not cap script output. Use a custom script runner to truncate, 
 
 ## Done
 
-When the parsed script is exactly `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`, the harness stops without running it (see built-in prompts). All other scripts go through the script runner.
+When the parsed script's first non-empty line, with leading and trailing whitespace trimmed, is `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`, the harness stops without running it (see built-in prompts). Trailing whitespace, leading blank lines, and surrounding indentation are tolerated, matching the Stop rule in Program flow. All other scripts go through the script runner.
 
 ## Settings and streams
 

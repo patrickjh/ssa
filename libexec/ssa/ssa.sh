@@ -33,6 +33,12 @@ SSA_PARSE_OK=0
 IS_TRUE=0
 IS_FALSE=1
 
+# Sentinel the model sends when it judges the task complete (see prompts).
+SSA_DONE_SENTINEL="echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+# sed program: drop blank/whitespace-only lines, then trim the first
+# non-empty line's leading and trailing whitespace and quit.
+SSA_FIRST_LINE_SED='/^[[:space:]]*$/d; s/^[[:space:]]*//; s/[[:space:]]*$//; q'
+
 HELP_TEXT='Usage: ssa [options] task
        ssa -h | --help
 
@@ -485,8 +491,8 @@ append_format_error_to_transcript() {
 }
 
 agent_is_done() {
-    if [ "$(cat "$SSA_PARSED_SCRIPT_FILE")" = \
-        "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" ]; then
+    if [ "$(sed "$SSA_FIRST_LINE_SED" "$SSA_PARSED_SCRIPT_FILE")" = \
+        "$SSA_DONE_SENTINEL" ]; then
         return $IS_TRUE
     fi
     return $IS_FALSE
