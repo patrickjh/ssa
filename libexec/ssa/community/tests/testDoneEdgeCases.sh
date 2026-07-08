@@ -1,3 +1,4 @@
+#!/bin/sh
 # testDoneEdgeCases.sh — done detection edge cases.
 #
 # The code on main (agent_is_done in ssa.sh) treats a script as done only
@@ -6,6 +7,11 @@
 # compare with no trimming, so a sentinel with leading/trailing
 # whitespace or surrounding blank lines is NOT treated as done — it runs
 # as an ordinary script. This test pins that actual contract.
+
+set -u
+COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
+    "$(dirname "$0")/.." && pwd)}
+. "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_done_edge_cases() {
     # A sentinel wrapped in blank lines and padded with spaces must NOT
@@ -24,3 +30,5 @@ test_done_edge_cases() {
 
 run_test 'done detection edge cases (exact-match contract)' \
     test_done_edge_cases
+
+finish_if_standalone

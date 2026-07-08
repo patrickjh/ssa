@@ -1,9 +1,15 @@
+#!/bin/sh
 # testFormatErrorsRetry.sh — parse / format errors.
 #
 # A reply with no ssa_script fence, one with two fences, and one with an
 # empty script each append a format error and retry. A fourth, valid done
 # reply then ends the run. The run keeps the session so the transcript
 # can be inspected: it must hold exactly three "Format error" feedbacks.
+
+set -u
+COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
+    "$(dirname "$0")/.." && pwd)}
+. "$COMMUNITY_FOLDER/testUtils.sh"
 
 # Write the three bad replies (no fence, two fences, empty script) plus a
 # final done reply into REPLIES_FOLDER.
@@ -38,3 +44,5 @@ test_format_errors_retry() {
 
 run_test 'parse/format errors append feedback and retry' \
     test_format_errors_retry
+
+finish_if_standalone

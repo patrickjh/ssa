@@ -1,6 +1,12 @@
+#!/bin/sh
 # testMissingModelRunner.sh — missing model runner fails at startup via
 # util_die with exit 1. This test does not use run_ssa because it must
 # run the harness with SSA_MODEL_RUNNER unset.
+
+set -u
+COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
+    "$(dirname "$0")/.." && pwd)}
+. "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_missing_model_runner() {
     write_done_reply "$REPLIES_FOLDER/reply1.txt"
@@ -16,3 +22,5 @@ test_missing_model_runner() {
 
 run_test 'missing model runner fails at startup' \
     test_missing_model_runner
+
+finish_if_standalone

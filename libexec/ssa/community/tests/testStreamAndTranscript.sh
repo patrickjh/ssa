@@ -1,8 +1,14 @@
+#!/bin/sh
 # testStreamAndTranscript.sh — script output is streamed to stdout and
 # appears in the transcript when run with --keep-session. Also proves the
 # configured script runner (SSA_SCRIPT_RUNNER) is on the path by checking
 # for its marker. This test sets its own SSA_SCRIPT_RUNNER, so it does not
 # use run_ssa.
+
+set -u
+COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
+    "$(dirname "$0")/.." && pwd)}
+. "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_stream_and_transcript() {
     write_script_reply "$REPLIES_FOLDER/reply1.txt" \
@@ -27,3 +33,5 @@ test_stream_and_transcript() {
 
 run_test 'script output streamed and in transcript' \
     test_stream_and_transcript
+
+finish_if_standalone

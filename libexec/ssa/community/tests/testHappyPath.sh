@@ -1,5 +1,11 @@
+#!/bin/sh
 # testHappyPath.sh — happy path: one scripted turn, then the done
 # sentinel exits 0 with the done status on stderr.
+
+set -u
+COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
+    "$(dirname "$0")/.." && pwd)}
+. "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_happy_path() {
     write_script_reply "$REPLIES_FOLDER/reply1.txt" \
@@ -12,3 +18,5 @@ test_happy_path() {
 }
 
 run_test 'happy path: scripted turn then done sentinel' test_happy_path
+
+finish_if_standalone

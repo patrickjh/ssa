@@ -1,8 +1,11 @@
 # testUtils.sh — shared helpers for the ssa offline sanity tests.
 #
-# Sourced by runTests.sh and by each test case file. Not executable on
-# its own. POSIX sh only, no non-POSIX utilities (e.g. no mktemp), so the
-# suite runs anywhere the real harness runs.
+# Sourced by runTests.sh and directly by each test case file. Not
+# executable on its own. POSIX sh only, no non-POSIX utilities (e.g. no
+# mktemp), so the suite runs anywhere the real harness runs.
+#
+# The sourcing file must set COMMUNITY_FOLDER to the absolute path of the
+# community folder (the folder holding this file) before sourcing.
 #
 # Provides:
 #   - locations of the harness and stub runners
@@ -15,13 +18,16 @@
 # run_test with them. State is shared through the variables below.
 
 # --- locations -------------------------------------------------------
-TESTS_FOLDER=$(CDPATH= cd -- "$(dirname "$0")" && pwd) ||
-    { printf 'cannot resolve tests folder\n' >&2; exit 1; }
-REPO_FOLDER=$(CDPATH= cd -- "$TESTS_FOLDER/../../../.." && pwd) ||
+# COMMUNITY_FOLDER is set by whoever sources this file (runTests.sh, or a
+# test case run standalone). Everything else is derived from it, so this
+# file works whether it is sourced by the runner or by a single test.
+[ -n "${COMMUNITY_FOLDER:-}" ] ||
+    { printf 'testUtils.sh: COMMUNITY_FOLDER not set\n' >&2; exit 1; }
+REPO_FOLDER=$(CDPATH= cd -- "$COMMUNITY_FOLDER/../../.." && pwd) ||
     { printf 'cannot resolve repo folder\n' >&2; exit 1; }
 SSA_SCRIPT="$REPO_FOLDER/libexec/ssa/ssa.sh"
-STUB_MODEL_RUNNER="$TESTS_FOLDER/stubModelRunner.sh"
-STUB_SCRIPT_RUNNER="$TESTS_FOLDER/stubScriptRunner.sh"
+STUB_MODEL_RUNNER="$COMMUNITY_FOLDER/stubModelRunner.sh"
+STUB_SCRIPT_RUNNER="$COMMUNITY_FOLDER/stubScriptRunner.sh"
 
 [ -f "$SSA_SCRIPT" ] || { printf 'not found: %s\n' "$SSA_SCRIPT" >&2
     exit 1; }
@@ -100,8 +106,14 @@ run_ssa() {
 }
 
 # --- assertions ------------------------------------------------------
-TESTS_RUN=0
-TESTS_FAILED=0
+# Totals persist across re-sourcing: each test file sources this helper,
+# and the runner sources several test files into one shell, so guard the
+# counters against being reset back to 0 on a second source.
+if [ -z "${TESTS_UTILS_LOADED:-}" ]; then
+    TESTS_UTILS_LOADED=1
+    TESTS_RUN=0
+    TESTS_FAILED=0
+fi
 FAIL_REASON=""
 
 fail() {
@@ -140,6 +152,17 @@ expect_transcript_has() {
     [ -n "$TRANSCRIPT" ] || { fail 'no kept transcript found'; return 1; }
     grep -qF -- "$1" "$TRANSCRIPT" ||
         { fail "transcript missing: $1"; return 1; }
+}
+
+# finish_if_standalone — when a test file is run on its own (not sourced
+# by runTests.sh), print the summary line and exit non-zero if it failed.
+# When the runner is active (SSA_TEST_RUNNER_ACTIVE set), this is a no-op
+# so the runner owns the summary and exit. Each test file calls this last.
+finish_if_standalone() {
+    [ -z "${SSA_TEST_RUNNER_ACTIVE:-}" ] || return 0
+    printf '\n%s of %s tests passed\n' \
+        "$((TESTS_RUN - TESTS_FAILED))" "$TESTS_RUN"
+    [ "$TESTS_FAILED" = 0 ] || exit 1
 }
 
 # run_test TITLE FUNCTION — run one test in a fresh case folder, print
