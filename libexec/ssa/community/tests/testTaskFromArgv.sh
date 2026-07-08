@@ -9,7 +9,7 @@ COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
 . "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_task_from_argv() {
-    write_done_reply "$REPLIES_FOLDER/reply1.txt"
+    write_script_reply "$REPLIES_FOLDER/reply1.txt" "$DONE_SENTINEL"
     run_ssa --keep-session task-words-came-from-argv
     expect_exit 0 || return 1
     expect_stderr_has 'done: task complete' || return 1

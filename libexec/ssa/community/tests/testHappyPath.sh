@@ -10,7 +10,7 @@ COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
 test_happy_path() {
     write_script_reply "$REPLIES_FOLDER/reply1.txt" \
         'printf happy-path-output\n'
-    write_done_reply "$REPLIES_FOLDER/reply2.txt"
+    write_script_reply "$REPLIES_FOLDER/reply2.txt" "$DONE_SENTINEL"
     run_ssa complete the happy path
     expect_exit 0 || return 1
     expect_stdout_has 'happy-path-output' || return 1

@@ -9,7 +9,7 @@ COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
 . "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_missing_model_runner() {
-    write_done_reply "$REPLIES_FOLDER/reply1.txt"
+    write_script_reply "$REPLIES_FOLDER/reply1.txt" "$DONE_SENTINEL"
     env TMPDIR="$CASE_TMPDIR" \
         SSA_STUB_REPLIES_FOLDER="$REPLIES_FOLDER" \
         SSA_MODEL="stubModel" SSA_MODEL_CALLS=0 SSA_KEEP_SESSION=0 \

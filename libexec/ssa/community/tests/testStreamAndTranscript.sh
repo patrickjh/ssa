@@ -13,7 +13,7 @@ COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
 test_stream_and_transcript() {
     write_script_reply "$REPLIES_FOLDER/reply1.txt" \
         'printf streamed-marker-line\n'
-    write_done_reply "$REPLIES_FOLDER/reply2.txt"
+    write_script_reply "$REPLIES_FOLDER/reply2.txt" "$DONE_SENTINEL"
     env TMPDIR="$CASE_TMPDIR" \
         SSA_STUB_REPLIES_FOLDER="$REPLIES_FOLDER" \
         SSA_MODEL_RUNNER="$STUB_MODEL_RUNNER" \

@@ -1,12 +1,11 @@
 #!/bin/sh
 # testDoneEdgeCases.sh — done detection edge cases.
 #
-# The code on main (agent_is_done in ssa.sh) treats a script as done only
-# when it matches the sentinel string EXACTLY. DESIGN.md describes
-# trimming the first non-empty line, but the code does a full-string
-# compare with no trimming, so a sentinel with leading/trailing
-# whitespace or surrounding blank lines is NOT treated as done — it runs
-# as an ordinary script. This test pins that actual contract.
+# agent_is_done in ssa.sh treats a script as done only when it matches
+# the sentinel string EXACTLY (a full-string compare, no trimming), as
+# documented in DESIGN.md. So a sentinel with leading/trailing whitespace
+# or surrounding blank lines is NOT treated as done — it runs as an
+# ordinary script. This test pins that contract.
 
 set -u
 COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
@@ -19,7 +18,7 @@ test_done_edge_cases() {
     # the loop continues to the next (real) done reply.
     printf 'THOUGHT: padded.\n\n```ssa_script\n\n  %s  \n\n```\n' \
         "$DONE_SENTINEL" >"$REPLIES_FOLDER/reply1.txt"
-    write_done_reply "$REPLIES_FOLDER/reply2.txt"
+    write_script_reply "$REPLIES_FOLDER/reply2.txt" "$DONE_SENTINEL"
     run_ssa done edge cases
     expect_exit 0 || return 1
     # The padded sentinel ran as a script, so its output reached stdout.

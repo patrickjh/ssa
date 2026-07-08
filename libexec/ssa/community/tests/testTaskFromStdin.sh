@@ -8,7 +8,7 @@ COMMUNITY_FOLDER=${COMMUNITY_FOLDER:-$(CDPATH= cd -- \
 . "$COMMUNITY_FOLDER/testUtils.sh"
 
 test_task_from_stdin() {
-    write_done_reply "$REPLIES_FOLDER/reply1.txt"
+    write_script_reply "$REPLIES_FOLDER/reply1.txt" "$DONE_SENTINEL"
     printf 'task-words-came-from-stdin\n' >"$CASE_FOLDER/task.txt"
     RUN_STDIN_FILE="$CASE_FOLDER/task.txt"
     run_ssa --keep-session
