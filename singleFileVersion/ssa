@@ -744,7 +744,7 @@ die_with_api_error_if_present() {
             "$CURL_RESPONSE_FILE" 2>/dev/null)
     fi
     if [ -n "$API_ERROR" ]; then
-        die "API error: $API_ERROR; see ssa -h for help"
+        die "API error: $API_ERROR"
     fi
 }
 
