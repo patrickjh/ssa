@@ -1,0 +1,960 @@
+﻿#!/bin/sh
+# ssa — Simple Shell Agent. An AI agent in a single file shell script.
+# For help see HELP_TEXT in this file or DESIGN.md in this folder.
+# Help on the CLI: ssa -h
+
+set -u
+
+# Users can set
+OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+OPENAI_URL="${OPENAI_URL:-}"
+SSA_CURL_ARGS="${SSA_CURL_ARGS:-}"
+SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
+SSA_MAX_HTTP_REQUESTS="${SSA_MAX_HTTP_REQUESTS:-5}"
+SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
+SSA_MODEL="${SSA_MODEL:-}"
+SSA_NO_ASK="${SSA_NO_ASK:-0}"
+SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
+SSA_SANDBOX_USER="${SSA_SANDBOX_USER:-}"
+
+# Internal
+CURL_EXIT_CODE_FILE=""
+CURL_EXIT_OK=0
+CURL_HEADERS_FILE=""
+CURL_HTTP_CODE_FILE=""
+CURL_RESPONSE_FILE=""
+DEFAULT_RETRY_SLEEP_SECONDS=5
+HTTP_REQUEST_COUNT=0
+IS_FALSE=1
+IS_TRUE=0
+JSON_BODY_FILE=""
+PER_PROMPT_LOG_FOLDER=""
+PER_REQUEST_LOG_FOLDER=""
+SSA_EXIT_CODE_FILE=""
+SSA_HIT_MAX=2
+SSA_LOOP_AGAIN=0
+SSA_LOOP_STATUS="stopped"
+SSA_MODEL_RESPONSE_FILE=""
+SSA_PARSE_FAILURE=1
+SSA_PARSE_OK=0
+SSA_PARSED_SCRIPT_FILE=""
+SSA_PID=$$
+SSA_PROMPT_COUNTER=0
+SSA_SCRIPT_OUTPUT_FILE=""
+SSA_TASK=""
+SSA_TASK_DONE=1
+SSA_TEMP_FOLDER=""
+SSA_TRANSCRIPT_FILE=""
+SSA_TRY_AGAIN=1
+USER_ANSWER_FILE=""
+
+HELP_TEXT='Usage: ssa [options] task as a string no quotes needed
+       ssa -h | --help
+
+ssa — Simple Shell Agent.
+A simple AI agent that feels like a unix util. Written as a single file with
+under 1,000 lines of mostly POSIX shell scripts. Inspired by mini-swe-agent.
+
+Give ssa a task on the command line or via stdin.
+ssa then works with an AI model to achieve the task using shell scripts.
+This is like handing your terminal to an AI model for help with a task.
+
+The code is written using POSIX compliant sh, curl and jq.
+ssa depends on curl and jq to prompt the AI model via an OpenAI style url.
+Environment variables OPENAI_URL (or --openai-url) and SSA_MODEL (or -m)
+are required for ssa to work. You will also need to set OPENAI_API_KEY
+(or --openai-api-key) if the model provider at OPENAI_URL requires
+auth (local models do not). Options can be set via the CLI args or
+environment variables.
+
+Details on how ssa works, sandboxing, and model choice below the options.
+
+Options:
+  -h, --help
+          Show this help and exit.
+  -m, --model VALUE
+          OpenAI-style model name for the API (e.g. gpt-4o-mini).
+          Sets SSA_MODEL.
+  --curl-args ARGS
+          Extra curl flags; unquoted word-split (e.g. -k or --proxy URL).
+          Sets SSA_CURL_ARGS.
+  --keep-temp
+          Keep per-run temp folder after exit. Useful for debugging.
+          Sets SSA_KEEP_TEMP to 1.
+  --max-http-requests N
+          Max HTTP requests per model prompt (default 5).
+          Sets SSA_MAX_HTTP_REQUESTS.
+  --max-model-prompts N
+          Stop after N model prompts (0 = no limit, default = 20).
+          Sets SSA_MAX_MODEL_PROMPTS to N.
+  --no-ask
+          Do not ask before running the scripts the model creates.
+          (Default is to ask on stderr and wait for user response on /dev/tty).
+          Sets SSA_NO_ASK to 1.
+  --openai-api-key KEY
+          Bearer auth token for model provider (optional for local servers).
+          Prefer OPENAI_API_KEY in the environment; CLI may show in ps.
+          Sets OPENAI_API_KEY.
+  --openai-url URL
+          Full OpenAI style …/chat/completions URL (required).
+          Sets OPENAI_URL.
+  --sandbox-command COMMAND
+          Command that receives the script the model creates on stdin and runs
+          it using sandbox tools. Useful for using OS specific sandbox tools.
+          Should work like sh but with sandboxing. If not set we use sh.
+          Sets SSA_SANDBOX_COMMAND.
+  --sandbox-user USER
+          Run model scripts as this Unix login user using sudo or doas.
+          USER can be a username or UID that is not root or the current user.
+          Sets SSA_SANDBOX_USER.
+
+Environment:
+  OPENAI_API_KEY                See --openai-api-key.
+  OPENAI_URL                    See --openai-url.
+  SSA_CURL_ARGS                 See --curl-args.
+  SSA_KEEP_TEMP                 See --keep-temp (0 = discard, 1 = keep).
+  SSA_MAX_HTTP_REQUESTS         See --max-http-requests.
+  SSA_MAX_MODEL_PROMPTS         See --max-model-prompts.
+  SSA_MODEL                     See -m / --model.
+  SSA_NO_ASK                    See --no-ask (0 = ask, 1 = no ask).
+  SSA_SANDBOX_COMMAND           See --sandbox-command.
+  SSA_SANDBOX_USER              See --sandbox-user.
+
+  CLI flags override environment variables when both are set.
+
+Files:
+  $TMPDIR/ssa-$LOGNAME-YYYY-MM-DD_HH.MM.SS/
+          Per-run temp folder. Folder removed on exit unless --keep-temp.
+          ssa working files:
+          fullTranscript.txt, task.txt, openaiUrl.txt,
+          latestModelResponse.txt, latestParsedScript.txt,
+          latestScriptExitCode.txt, latestScriptOutput.txt,
+          promptN/ (N = 1, 2, … model prompts)
+            transcript.txt, body.json, userAnswer.txt (if ask),
+            curlA/
+              Logs of each curl attempt (A = attempt within that prompt).
+              headers.txt, response.txt, httpCode.txt, exit.txt
+
+The ssa agent loop (How ssa works)
+  ssa prompts the AI model asking for POSIX shell scripts to advance a task.
+  The model replies with a shell script.
+  ssa runs the shell script and appends the results to a transcript.
+  ssa sends the transcript to the AI model as the next prompt. Repeat until
+  the AI model signals the task is done or --max-model-prompts is hit
+
+Sandboxing:
+  Because using ssa is like handing your terminal to an AI model, you may want
+  to apply some sandbox tactics. There are two built in ways to sandbox the
+  scripts the AI model creates and one simple way to apply your own sandbox:
+
+  First built in sandbox tactic: POSIX compliant Ask User Sandbox
+  This sandbox shows the script the model wants to run on stderr.
+  The user then allows the script to run or not via /dev/tty.
+  Prompt looks like: Run this script? [Y]es / [N]o / [Q]uit 
+  Yes runs the script. No lets the AI model try another script. Quit exits ssa.
+  This sandbox is on by default.
+  To turn off: set environment variable SSA_NO_ASK=1 or use --no-ask CLI arg.
+
+  Second built in sandbox tactic: POSIX compliant Switch User Sandbox
+  This sandbox uses sudo or doas to switch to some other unix user before
+  running the script the AI model creates. This sandbox is off by default.
+  To use this sandbox tactic we need the user name or uid of a sandbox user.
+  You must first create this sandbox user. Then set the SSA_SANDBOX_USER
+  environment variable to their user name or uid. You can also pass the user
+  name or uid as a CLI arg using --sandbox-user. If one of those is set
+  ssa will switch to that user before running the script the AI model creates.
+  For this sandbox tactic to protect you, you have to set up file or directory
+  permissions to restrict the sandbox user as you wish.
+
+  Third sandbox: non POSIX Custom Script Sandboxes
+  After those other two sandboxes, the script the AI model creates is passed
+  to a command that runs the script. By default this is "sh" which does no
+  additional sandboxing. You can use the SSA_SANDBOX_COMMAND environment
+  variable or --sandbox-command CLI argument to replace sh with your own
+  command. That command will receive the script the AI model creates on
+  stdin. That command should then apply whatever sandboxing tactics you want,
+  run the script or not, and send any output back to ssa via stdout and stderr.
+  This output will be added to the transcript. If you return error messages
+  saying why the script failed, the next script the AI model creates may be able
+  to adjust and achieve the task within the limits your sandbox sets up.
+  You can use this mechanism to apply platform specific non POSIX tools like
+  containers / jails / pledge() etc.
+
+  You can apply any, all, or none of these sandbox tactics. If you apply none
+  of these sandbox tactics, the AI will run using sh in the current folder as
+  your user and can do anything you can do.  
+
+Models
+  In order to parse and run the shell scripts, ssa needs the AI model to respond
+  in a certain precise format. Your choice of model can have an effect on how
+  good those shell scripts are and if ssa can parse them at all. In some
+  simple tests the smallest AI models would respond with output that ssa could
+  not parse and run. In my simple tests I only started getting useful results
+  when using models with roughly 30B parameters and up. So if you are trying
+  to use a model smaller than that and running into problems, you may have to
+  upgrade to a larger model.
+
+Exit status:
+  0       Task complete
+  1       Failure (bad arguments, ssa failure, or max model prompts).
+  130     Interrupted (SIGINT).
+  143     Terminated (SIGTERM).
+
+Examples:
+  # easy CLI usage after environment variables OPENAI_URL,
+  # OPENAI_API_KEY and SSA_MODEL are set:
+  ssa why is apt not updating?
+
+  # Script usage, showing all CLI args in action.
+  cat prompt.txt | ssa \
+    --model gpt-4o-mini \
+    --openai-api-key "$(cat openai_api_key.txt)" \
+    --openai-url https://api.openai.com/v1/chat/completions \
+    --no-ask \
+    --keep-temp \
+    --max-http-requests 3 \
+    --max-model-prompts 10 \
+    --curl-args -k \
+    --sandbox-user ssa-sandbox \
+    --sandbox-command /path/to/mySandbox.sh
+'
+
+SSA_SYSTEM_PROMPT='
+[SYSTEM]
+You help users solve tasks with POSIX sh. Each turn you get a transcript of
+prior commands and their output. Continue from this transcript; earlier steps
+may already be there. Reply with one POSIX sh script that is a good next step.
+Try to reply with shell scripts that will not hang and will time out eventually.
+We will run the script and append the results to the transcript. Each reply
+must be in a precise format for us to parse and run your shell script. Replies
+that do not match this exact format will cause a format error. Following is an
+example in the right format with the command to use when you judge the task is
+complete. When you judge the task is not done, reply with other commands
+instead of the echo but follow the same format. The format is:
+
+THOUGHT: your reasoning here.
+
+```ssa_script
+echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+```
+
+[USER]
+Do this task:
+
+'
+SSA_FAKE_FIRST_RESPONSE='THOUGHT: Confirm the agent is starting.
+
+```ssa_script
+echo starting the agent
+```
+'
+SSA_FORMAT_ERROR='
+[USER]
+Format error: your last reply did not match the required format. In order for
+us to parse and then run your POSIX sh scripts, your reply must be in the
+correct format. Here is an example of the correct format with the command you
+should use when the transcript shows the task is complete. If you are not sure
+the task is complete, use this same format with a POSIX sh script that will
+help complete the task. Try again and match this format exactly:
+
+THOUGHT: your reasoning here.
+
+```ssa_script
+echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+```
+'
+
+main() {
+    trap handle_die_signal USR1
+    parse_arguments "$@"
+    check_required_commands
+    read_task_from_stdin_if_needed
+    check_can_run
+    setup_agent_loop
+    run_agent_loop
+    finish_agent_loop
+}
+
+handle_die_signal() {
+    if [ "$SSA_KEEP_TEMP" = 0 ]; then
+        cleanup_temp_folder
+    fi
+    exit 1
+}
+
+parse_arguments() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
+            -m|--model) set_model "$2"; shift 2 ;;
+            --curl-args) set_curl_args "$2"; shift 2 ;;
+            --keep-temp) SSA_KEEP_TEMP=1; shift ;;
+            --max-http-requests) set_max_http_requests "$2"; shift 2 ;;
+            --max-model-prompts) set_max_model_prompts "$2"; shift 2 ;;
+            --no-ask) SSA_NO_ASK=1; shift ;;
+            --openai-api-key) set_openai_api_key "$2"; shift 2 ;;
+            --openai-url) set_openai_url "$2"; shift 2 ;;
+            --sandbox-command) set_sandbox_command "$2"; shift 2 ;;
+            --sandbox-user) set_sandbox_user "$2"; shift 2 ;;
+            --) shift; SSA_TASK=$*; return ;;
+            -*) die "bad option: $1; see ssa -h for help" ;;
+            *) SSA_TASK=$*; return ;;
+        esac
+    done
+}
+
+set_model() {
+    [ -n "${1-}" ] ||
+        die "-m / --model found with empty value; see ssa -h for help"
+    SSA_MODEL=$1
+}
+
+set_curl_args() {
+    [ -n "${1-}" ] ||
+        die "--curl-args found with empty value; see ssa -h for help"
+    SSA_CURL_ARGS=$1
+}
+
+set_max_http_requests() {
+    [ -n "${1-}" ] ||
+        die "--max-http-requests found with empty value; see ssa -h for help"
+    SSA_MAX_HTTP_REQUESTS=$1
+}
+
+set_max_model_prompts() {
+    [ -n "${1-}" ] ||
+        die "--max-model-prompts found with empty value; see ssa -h for help"
+    SSA_MAX_MODEL_PROMPTS=$1
+}
+
+set_openai_api_key() {
+    [ -n "${1-}" ] ||
+        die "--openai-api-key found with empty value; see ssa -h for help"
+    OPENAI_API_KEY=$1
+}
+
+set_openai_url() {
+    [ -n "${1-}" ] ||
+        die "--openai-url found with empty value; see ssa -h for help"
+    OPENAI_URL=$1
+}
+
+set_sandbox_command() {
+    [ -n "${1-}" ] ||
+        die "--sandbox-command found with empty value; see ssa -h for help"
+    SSA_SANDBOX_COMMAND=$1
+}
+
+set_sandbox_user() {
+    [ -n "${1-}" ] ||
+        die "--sandbox-user found with empty value; see ssa -h for help"
+    SSA_SANDBOX_USER=$1
+}
+
+check_required_commands() {
+    check_command cat
+    check_command chmod
+    check_command cp
+    check_command curl
+    check_command date
+    check_command grep
+    check_command id
+    check_command jq
+    check_command mkdir
+    check_command rm
+    check_command sed
+    check_command sleep
+    check_command tee
+    check_command tr
+}
+
+check_command() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 not found on PATH"
+}
+
+read_task_from_stdin_if_needed() {
+    if [ -n "$SSA_TASK" ]; then return 0; fi
+    if [ -t 0 ]; then return 0; fi
+    SSA_TASK=$(cat) ||
+        die "cannot read task from stdin; pass task as words after CLI " \
+          "options or pipe task to stdin; see ssa -h for help"
+}
+
+check_can_run() {
+    check_task_is_set
+    check_max_model_prompts
+    check_no_ask_setting
+    check_model_is_set
+    check_openai_url
+    check_max_http_requests
+    check_sandbox_user
+    check_sandbox_command
+    if ask_user_enabled; then check_prompt_device; fi
+}
+
+check_task_is_set() {
+    [ -n "$SSA_TASK" ] ||
+        die "no task; pass task as words after CLI options or pipe task on " \
+          "stdin; see ssa -h for help"
+}
+
+check_max_model_prompts() {
+    case $SSA_MAX_MODEL_PROMPTS in
+    *[!0-9]*) die "SSA_MAX_MODEL_PROMPTS must be a non-negative integer; " \
+        "use --max-model-prompts or SSA_MAX_MODEL_PROMPTS; " \
+        "see ssa -h for help" ;;
+    esac
+}
+
+check_no_ask_setting() {
+    case $SSA_NO_ASK in
+    0|1) ;;
+    *) die "SSA_NO_ASK must be 0 or 1; use --no-ask or SSA_NO_ASK; " \
+        "see ssa -h for help" ;;
+    esac
+}
+
+check_model_is_set() {
+    [ -n "$SSA_MODEL" ] ||
+        die "model not set; use -m / --model or SSA_MODEL " \
+            "(e.g. gpt-4o-mini); see ssa -h for help"
+}
+
+check_openai_url() {
+    [ -n "$OPENAI_URL" ] ||
+        die "OPENAI_URL not set; use --openai-url or OPENAI_URL with a full " \
+            "http(s)://…/chat/completions URL " \
+            "(e.g. https://api.openai.com/v1/chat/completions);" \
+            " see ssa -h for help"
+    printf '%s' "$OPENAI_URL" |
+        grep -Eq '^https?://[^[:space:]]+/chat/completions$' ||
+        die "OPENAI_URL must be a full http(s)://…/chat/completions " \
+            "OpenAI style URL (got $OPENAI_URL); use --openai-url " \
+            "or OPENAI_URL; see ssa -h for help"
+}
+
+check_max_http_requests() {
+    case $SSA_MAX_HTTP_REQUESTS in
+    *[!0-9]*) die "SSA_MAX_HTTP_REQUESTS must be a positive integer " \
+        "(got $SSA_MAX_HTTP_REQUESTS); use --max-http-requests or " \
+        "SSA_MAX_HTTP_REQUESTS; see ssa -h for help" ;;
+    esac
+    [ "$SSA_MAX_HTTP_REQUESTS" -ge 1 ] ||
+        die "SSA_MAX_HTTP_REQUESTS must be at least 1 " \
+        "(got $SSA_MAX_HTTP_REQUESTS); use --max-http-requests or " \
+        "SSA_MAX_HTTP_REQUESTS; see ssa -h for help"
+}
+
+check_sandbox_user() {
+    if [ -z "$SSA_SANDBOX_USER" ]; then return 0; fi
+    check_sandbox_user_exists
+    check_current_user_is_not_root
+    check_sandbox_user_is_not_current_user
+    check_sandbox_user_is_not_root
+    check_sudo_or_doas_available
+}
+
+check_sandbox_user_exists() {
+    id -u "$SSA_SANDBOX_USER" >/dev/null 2>&1 ||
+        die "sandbox user not found: $SSA_SANDBOX_USER; " \
+        "use --sandbox-user or SSA_SANDBOX_USER; see ssa -h for help"
+}
+
+check_current_user_is_not_root() {
+    [ "$(id -u)" -ne 0 ] ||
+        die "refusing to run as root; use your login account and " \
+        "a dedicated sandbox user; see ssa -h for help"
+}
+
+check_sandbox_user_is_not_current_user() {
+    [ "$(id -u)" -ne "$(id -u "$SSA_SANDBOX_USER")" ] ||
+        die "sandbox user is the current user; " \
+        "use --sandbox-user or SSA_SANDBOX_USER; see ssa -h for help"
+}
+
+check_sandbox_user_is_not_root() {
+    [ "$(id -u "$SSA_SANDBOX_USER")" -ne 0 ] ||
+        die "refusing to run scripts as root; see ssa -h for help"
+}
+
+check_sudo_or_doas_available() {
+    if command -v sudo >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v doas >/dev/null 2>&1; then
+        return 0
+    fi
+    die "need sudo or doas on PATH to change user; see ssa -h for help"
+}
+
+check_sandbox_command() {
+    command -v "$SSA_SANDBOX_COMMAND" >/dev/null 2>&1 ||
+        die "sandbox command not found: $SSA_SANDBOX_COMMAND; " \
+        "use --sandbox-command or SSA_SANDBOX_COMMAND; see ssa -h for help"
+}
+
+check_prompt_device() {
+    [ -r /dev/tty ] ||
+        die "need /dev/tty to ask before running scripts; " \
+        "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+}
+
+setup_agent_loop() {
+    setup_temp_folder
+    setup_temp_files
+    log_openai_url
+    log_task
+    setup_temp_cleanup
+    setup_transcript_file
+    SSA_LOOP_STATUS="stopped"
+}
+
+setup_temp_folder() {
+    SSA_TEMP_FOLDER="${TMPDIR:-/tmp}/ssa-${LOGNAME:-user}-$(date \
+        +%Y-%m-%d_%H.%M.%S)"
+    mkdir "$SSA_TEMP_FOLDER" || die "cannot create temp folder"
+    chmod 700 "$SSA_TEMP_FOLDER" ||
+        die "cannot set temp folder permissions"
+}
+
+setup_temp_files() {
+    SSA_TRANSCRIPT_FILE="${SSA_TEMP_FOLDER}/fullTranscript.txt"
+    SSA_MODEL_RESPONSE_FILE="${SSA_TEMP_FOLDER}/latestModelResponse.txt"
+    SSA_PARSED_SCRIPT_FILE="${SSA_TEMP_FOLDER}/latestParsedScript.txt"
+    SSA_EXIT_CODE_FILE="${SSA_TEMP_FOLDER}/latestScriptExitCode.txt"
+    SSA_SCRIPT_OUTPUT_FILE="${SSA_TEMP_FOLDER}/latestScriptOutput.txt"
+    create_file_no_overwrite "$SSA_TRANSCRIPT_FILE"
+    create_file_no_overwrite "$SSA_MODEL_RESPONSE_FILE"
+    create_file_no_overwrite "$SSA_PARSED_SCRIPT_FILE"
+    create_file_no_overwrite "$SSA_EXIT_CODE_FILE"
+    create_file_no_overwrite "$SSA_SCRIPT_OUTPUT_FILE"
+}
+
+log_openai_url() {
+    create_file_no_overwrite "${SSA_TEMP_FOLDER}/openaiUrl.txt"
+    printf '%s' "$OPENAI_URL" >"${SSA_TEMP_FOLDER}/openaiUrl.txt" ||
+        die "cannot write to temp file: ${SSA_TEMP_FOLDER}/openaiUrl.txt"
+}
+
+log_task() {
+    create_file_no_overwrite "${SSA_TEMP_FOLDER}/task.txt"
+    printf '%s\n' "$SSA_TASK" >"${SSA_TEMP_FOLDER}/task.txt" ||
+        die "cannot write to temp file: ${SSA_TEMP_FOLDER}/task.txt"
+}
+
+setup_temp_cleanup() {
+    if [ "$SSA_KEEP_TEMP" = 0 ]; then
+        trap cleanup_temp_folder EXIT
+        trap 'cleanup_temp_folder; exit 130' INT
+        trap 'cleanup_temp_folder; exit 143' TERM
+    fi
+}
+
+cleanup_temp_folder() {
+    if [ -n "$SSA_TEMP_FOLDER" ]; then
+      rm -rf "$SSA_TEMP_FOLDER";
+    fi
+}
+
+setup_transcript_file() {
+    printf '%s\n' "$SSA_SYSTEM_PROMPT" >"$SSA_TRANSCRIPT_FILE" ||
+        die "cannot write transcript"
+    printf '%s\n' "$SSA_TASK" >>"$SSA_TRANSCRIPT_FILE" ||
+        die "cannot write transcript"
+    run_fake_first_turn
+}
+
+run_fake_first_turn() {
+    setup_per_prompt_log_folder
+    printf '%s\n' "$SSA_FAKE_FIRST_RESPONSE" >"$SSA_MODEL_RESPONSE_FILE" ||
+        die "cannot write fake first turn response"
+    parse_model_result
+    [ $? -eq "$SSA_PARSE_OK" ] || \
+        die "internal error: fake first turn response failed to parse"
+    run_model_script
+}
+
+run_agent_loop() {
+    while :; do
+        SSA_PROMPT_COUNTER=$((SSA_PROMPT_COUNTER + 1))
+        prompt_model_then_run_script
+        case $? in
+            $SSA_TASK_DONE) SSA_LOOP_STATUS="done"; break ;;
+            $SSA_HIT_MAX) SSA_LOOP_STATUS="hit max"; break ;;
+            $SSA_LOOP_AGAIN) continue ;;
+            *) die "unknown loop status $?" ;;
+        esac
+    done
+}
+
+prompt_model_then_run_script() {
+    if over_model_prompt_limit; then return $SSA_HIT_MAX; fi
+    setup_per_prompt_log_folder
+    log_transcript
+    call_curl
+    if [ $? -ne 0 ]; then return $SSA_LOOP_AGAIN; fi
+    handle_model_response
+}
+
+over_model_prompt_limit() {
+    if [ "$SSA_MAX_MODEL_PROMPTS" -le 0 ]; then return $IS_FALSE; fi
+    if [ "$SSA_PROMPT_COUNTER" -gt "$SSA_MAX_MODEL_PROMPTS" ]; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+setup_per_prompt_log_folder() {
+    PER_PROMPT_LOG_FOLDER="${SSA_TEMP_FOLDER}/prompt${SSA_PROMPT_COUNTER}"
+    create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
+}
+
+log_transcript() {
+    cp "$SSA_TRANSCRIPT_FILE" "${PER_PROMPT_LOG_FOLDER}/transcript.txt" ||
+        die "cannot copy transcript to ${PER_PROMPT_LOG_FOLDER}/transcript.txt"
+}
+
+call_curl() {
+    build_curl_json_request
+    send_curl_json_request_with_retries
+    save_model_reply_to_file
+}
+
+build_curl_json_request() {
+    JSON_BODY_FILE="${PER_PROMPT_LOG_FOLDER}/body.json"
+    create_file_no_overwrite "$JSON_BODY_FILE"
+    jq -n \
+        --arg model "$SSA_MODEL" \
+        --rawfile content "$SSA_TRANSCRIPT_FILE" \
+        '{model: $model, messages: [{role: "user", content: $content}]}' \
+        >"$JSON_BODY_FILE" || die 'cannot build curl request JSON'
+}
+
+send_curl_json_request_with_retries() {
+    HTTP_REQUEST_COUNT=0
+    while [ "$HTTP_REQUEST_COUNT" -lt "$SSA_MAX_HTTP_REQUESTS" ]; do
+        HTTP_REQUEST_COUNT=$((HTTP_REQUEST_COUNT + 1))
+        setup_curl_request_logs
+        send_curl_json_request
+        if curl_request_succeeded; then
+            break
+        else
+            handle_failed_curl_request;
+        fi
+    done
+}
+
+setup_curl_request_logs() {
+    PER_REQUEST_LOG_FOLDER="${PER_PROMPT_LOG_FOLDER}/curl${HTTP_REQUEST_COUNT}"
+    create_dir_no_overwrite "$PER_REQUEST_LOG_FOLDER"
+    CURL_HEADERS_FILE="${PER_REQUEST_LOG_FOLDER}/headers.txt"
+    CURL_RESPONSE_FILE="${PER_REQUEST_LOG_FOLDER}/response.txt"
+    CURL_HTTP_CODE_FILE="${PER_REQUEST_LOG_FOLDER}/httpCode.txt"
+    CURL_EXIT_CODE_FILE="${PER_REQUEST_LOG_FOLDER}/exit.txt"
+    create_file_no_overwrite "$CURL_HEADERS_FILE"
+    create_file_no_overwrite "$CURL_RESPONSE_FILE"
+    create_file_no_overwrite "$CURL_HTTP_CODE_FILE"
+    create_file_no_overwrite "$CURL_EXIT_CODE_FILE"
+}
+
+create_dir_no_overwrite() {
+    mkdir "$1" || die "could not create directory: $1"
+    chmod 700 "$1" || die "cannot set permissions: $1"
+}
+
+create_file_no_overwrite() {
+    ( umask 077; set -C; : >"$1" ) ||
+        die "could not create file: $1"
+}
+
+send_curl_json_request() {
+    # shellcheck disable=SC2086
+    curl -sS \
+        -H "Content-Type: application/json" \
+        ${OPENAI_API_KEY:+-H "Authorization: Bearer $OPENAI_API_KEY"} \
+        -D "$CURL_HEADERS_FILE" -o "$CURL_RESPONSE_FILE" -w '%{http_code}' \
+        $SSA_CURL_ARGS \
+        -d @"$JSON_BODY_FILE" \
+        "$OPENAI_URL" >"$CURL_HTTP_CODE_FILE"
+    printf '%s' "$?" >"$CURL_EXIT_CODE_FILE" ||
+        die "cannot write to temp file: $CURL_EXIT_CODE_FILE"
+}
+
+curl_request_succeeded() {
+    if [ "$(cat "$CURL_EXIT_CODE_FILE")" -ne "$CURL_EXIT_OK" ]; then
+        return $IS_FALSE
+    fi
+    case $(cat "$CURL_HTTP_CODE_FILE") in
+        *[!0-9]*) return $IS_FALSE ;;
+    esac
+    if [ "$(cat "$CURL_HTTP_CODE_FILE")" -ge 200 ]; then
+        if [ "$(cat "$CURL_HTTP_CODE_FILE")" -lt 300 ]; then
+            return $IS_TRUE
+        fi
+    fi
+    return $IS_FALSE
+}
+
+handle_failed_curl_request() {
+    if [ "$(cat "$CURL_EXIT_CODE_FILE")" -eq "$CURL_EXIT_OK" ]; then
+        die_if_insufficient_quota
+        die_if_http_code_not_retryable
+    fi
+    die_if_too_many_retries
+    curl_sleep_before_retry
+}
+
+die_if_insufficient_quota() {
+    if [ "$(cat "$CURL_HTTP_CODE_FILE")" = 429 ]; then
+        if jq -e '.error.code == "insufficient_quota"' \
+            "$CURL_RESPONSE_FILE" >/dev/null 2>&1; then
+            die_with_api_error_if_present
+            die "quota exceeded; retry will not help; " \
+                "check --openai-api-key or OPENAI_API_KEY and API billing; " \
+                "see ssa -h for help"
+        fi
+    fi
+}
+
+die_if_http_code_not_retryable() {
+    case $(cat "$CURL_HTTP_CODE_FILE") in
+    429|408|500|502|503|504) return ;;
+    *)
+        die_with_api_error_if_present
+        die "HTTP $(cat "$CURL_HTTP_CODE_FILE") not retryable; " \
+            "check --openai-api-key or OPENAI_API_KEY, " \
+            "--openai-url or OPENAI_URL (full …/chat/completions URL), " \
+            "and -m / --model or SSA_MODEL; see ssa -h for help" ;;
+    esac
+}
+
+die_if_too_many_retries() {
+    if [ "$HTTP_REQUEST_COUNT" -ge "$SSA_MAX_HTTP_REQUESTS" ]; then
+        die_with_api_error_if_present
+        die "HTTP requests exhausted after $SSA_MAX_HTTP_REQUESTS " \
+            "requests; raise --max-http-requests or SSA_MAX_HTTP_REQUESTS; " \
+            "see ssa -h for help"
+    fi
+}
+
+die_with_api_error_if_present() {
+    API_ERROR=""
+    if [ -s "$CURL_RESPONSE_FILE" ]; then
+        API_ERROR=$(jq -r '.error.message // empty' \
+            "$CURL_RESPONSE_FILE" 2>/dev/null)
+    fi
+    if [ -n "$API_ERROR" ]; then
+        die "API error: $API_ERROR; see ssa -h for help"
+    fi
+}
+
+curl_sleep_before_retry() {
+    HEADER_VALUE=$(grep -i '^Retry-After:' "$CURL_HEADERS_FILE" 2>/dev/null |
+        sed -n '1p' | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r')
+    case $HEADER_VALUE in
+    ''|*[!0-9]*) sleep "$DEFAULT_RETRY_SLEEP_SECONDS" ;;
+    *) sleep "$HEADER_VALUE" ;;
+    esac
+}
+
+save_model_reply_to_file() {
+    REPLY=$(jq -r '.choices[0].message.content // empty' \
+        "$CURL_RESPONSE_FILE")
+    if [ -z "$REPLY" ]; then return 1; fi
+    printf '%s\n' "$REPLY" >"$SSA_MODEL_RESPONSE_FILE" ||
+        die "cannot write to temp file: $SSA_MODEL_RESPONSE_FILE"
+}
+
+handle_model_response() {
+    parse_model_result
+    if [ $? -ne "$SSA_PARSE_OK" ]; then return $SSA_LOOP_AGAIN; fi
+    if agent_is_done; then return $SSA_TASK_DONE
+    else run_model_script
+    fi
+    return $SSA_LOOP_AGAIN
+}
+
+parse_model_result() {
+    if [ ! -s "$SSA_MODEL_RESPONSE_FILE" ]; then
+        return $SSA_TRY_AGAIN
+    fi
+    append_model_response_to_transcript
+    extract_script_or_handle_format_error
+}
+
+append_model_response_to_transcript() {
+    printf '\n[ASSISTANT]\n' >>"$SSA_TRANSCRIPT_FILE" &&
+    cat "$SSA_MODEL_RESPONSE_FILE" >>"$SSA_TRANSCRIPT_FILE" &&
+    printf '\n' >>"$SSA_TRANSCRIPT_FILE" ||
+    die "cannot append to transcript"
+}
+
+extract_script_or_handle_format_error() {
+    if extract_script_to_file; then
+        return $SSA_PARSE_OK
+    else
+        append_format_error_to_transcript
+        return $SSA_TRY_AGAIN
+    fi
+}
+
+extract_script_to_file() {
+    clear_parsed_script_file
+    check_exactly_one_open_fence || return $SSA_PARSE_FAILURE
+    check_exactly_one_close_fence || return $SSA_PARSE_FAILURE
+    extract_script_between_fences
+    check_script_not_empty || return $SSA_PARSE_FAILURE
+    return $SSA_PARSE_OK
+}
+
+clear_parsed_script_file() {
+    : >"$SSA_PARSED_SCRIPT_FILE" ||
+        die "file error while clearing latestParsedScript.txt"
+}
+
+check_exactly_one_open_fence() {
+    [ "$(grep -cx '```ssa_script' "$SSA_MODEL_RESPONSE_FILE")" -eq 1 ]
+}
+
+check_exactly_one_close_fence() {
+    [ "$(grep -cx '```' "$SSA_MODEL_RESPONSE_FILE")" -eq 1 ]
+}
+
+extract_script_between_fences() {
+    SED_EXTRACT_BETWEEN_FENCES='/^```ssa_script$/,/^```$/ {
+  /^```/d
+  p
+}'
+    sed -n "$SED_EXTRACT_BETWEEN_FENCES" \
+        "$SSA_MODEL_RESPONSE_FILE" >"$SSA_PARSED_SCRIPT_FILE" ||
+        die "file error while extracting script"
+}
+
+check_script_not_empty() {
+    grep -q . "$SSA_PARSED_SCRIPT_FILE"
+}
+
+append_format_error_to_transcript() {
+    printf '%s' "$SSA_FORMAT_ERROR" >>"$SSA_TRANSCRIPT_FILE" ||
+        die "cannot append to transcript"
+}
+
+agent_is_done() {
+    if [ "$(cat "$SSA_PARSED_SCRIPT_FILE")" = \
+        "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" ]; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+run_model_script() {
+    (
+        run_script_in_configured_sandboxes 2>&1
+        echo $? >"$SSA_EXIT_CODE_FILE" ||
+            die "cannot write script exit code"
+    ) | tee "$SSA_SCRIPT_OUTPUT_FILE"
+    append_script_result_to_transcript
+}
+
+append_script_result_to_transcript() {
+    printf '\n[USER]\nOutput from running the script:\n\n' \
+        >>"$SSA_TRANSCRIPT_FILE" ||
+        die "cannot append to transcript"
+    cat "$SSA_SCRIPT_OUTPUT_FILE" >>"$SSA_TRANSCRIPT_FILE" ||
+        die "cannot append to transcript"
+    printf '\n\nScript exit code: %s\n' "$(cat "$SSA_EXIT_CODE_FILE")" \
+        >>"$SSA_TRANSCRIPT_FILE" ||
+        die "cannot append to transcript"
+}
+
+run_script_in_configured_sandboxes() {
+    if ask_user_enabled; then
+        ask_user_to_approve_script || return 1
+    fi
+    if [ -n "$SSA_SANDBOX_USER" ]; then
+        run_script_as_sandbox_user
+    else
+        "$SSA_SANDBOX_COMMAND" <"$SSA_PARSED_SCRIPT_FILE"
+    fi
+}
+
+ask_user_enabled() {
+    if [ "$SSA_NO_ASK" = 0 ]; then return $IS_TRUE; fi
+    return $IS_FALSE
+}
+
+ask_user_to_approve_script() {
+    USER_ANSWER_FILE="${PER_PROMPT_LOG_FOLDER}/userAnswer.txt"
+    print_model_script
+    print_ask_prompt
+    handle_user_answers
+}
+
+handle_user_answers() {
+    while true; do
+        read_ask_answer_from_tty
+        case $(cat "$USER_ANSWER_FILE") in
+        y|Y|yes|YES) return 0 ;;
+        n|N|no|NO) reject_script; return 1 ;;
+        q|Q|quit|QUIT) die 'User chose to quit.' ;;
+        *) print_invalid_input; print_ask_prompt ;;
+        esac
+    done
+}
+
+print_model_script() {
+    printf 'Script from model:\n' >&2
+    cat "$SSA_PARSED_SCRIPT_FILE" >&2
+}
+
+print_ask_prompt() {
+    printf 'Run this script? [Y]es / [N]o / [Q]uit ' >&2
+}
+
+read_ask_answer_from_tty() {
+    IFS= read -r REPLY </dev/tty || REPLY=""
+    printf '%s\n' "$REPLY" >"$USER_ANSWER_FILE" ||
+        die "cannot write to temp file: $USER_ANSWER_FILE"
+}
+
+reject_script() {
+    printf 'User chose not to run script. Try something else.\n'
+}
+
+print_invalid_input() {
+    printf 'invalid input: %s\n' "$(cat "$USER_ANSWER_FILE")" >&2
+}
+
+run_script_as_sandbox_user() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo -u "$SSA_SANDBOX_USER" -- "$SSA_SANDBOX_COMMAND" \
+            <"$SSA_PARSED_SCRIPT_FILE"
+    elif command -v doas >/dev/null 2>&1; then
+        doas -u "$SSA_SANDBOX_USER" -- "$SSA_SANDBOX_COMMAND" \
+            <"$SSA_PARSED_SCRIPT_FILE"
+    else
+        die "need sudo or doas on PATH to change user; see ssa -h for help"
+    fi
+}
+
+finish_agent_loop() {
+    case $SSA_LOOP_STATUS in
+    done) printf 'done: task complete after %s model prompts\n' \
+        "$SSA_PROMPT_COUNTER" >&2; exit 0 ;;
+    hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
+        "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
+    *) die "unknown loop status $SSA_LOOP_STATUS" ;;
+    esac
+}
+
+die() {
+    printf '%s\n' "$*" >&2
+    if [ -n "${SSA_PID:-}" ]; then
+        kill -USR1 "$SSA_PID" 2>/dev/null
+    else
+        printf 'SSA_PID not set; cannot signal parent process\n' >&2
+    fi
+    exit 1
+}
+
+main "$@"

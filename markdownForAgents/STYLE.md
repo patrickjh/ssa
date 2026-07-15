@@ -30,6 +30,7 @@ Names should be **clear and readable**: full words, favoring 1–2 syllables per
 
 - **Variables** use `UPPER_CASE` — top-level settings and run state, and locals inside functions.
 - **Functions** use `lower_case`.
+- **Top-level variable blocks** (`# Users can set` and `# Internal` in the single-file build) keep names **alphabetically ordered** within each block. Do not alphabetize large string constants such as help text or prompts with those lists.
 
 **Files, folders, and paths** — use a suffix that matches what the variable holds:
 
@@ -72,9 +73,13 @@ When the setting was provided but the path or value is wrong, name the same flag
 
 Settings with **no harness CLI flag** (e.g. `SSA_SANDBOX_USER`, `SSA_MAX_CURL_CALLS` in [curlRunner.sh](../libexec/ssa/curlRunner.sh)) should name the env var and point to `ssa -h` when useful. Do not say `export` — assume shell users know how to set variables.
 
-Keep hints **one short clause** after a semicolon (`; SSA_MAX_CURL_CALLS …`, `; use -m …`). Do not restate the whole header.
+Keep hints **one short clause** after a semicolon (`; SSA_MAX_CURL_CALLS …`, `; use -m …`). Do not restate the whole header. Prefer `; see ssa -h for help` at the end of user-facing setting/usage errors when useful.
 
-**Skip hints** only when there is no user setting to change: internal harness failures (transcript I/O, session folder setup), missing OS tools on `PATH`, or failures fixed outside ssa (install a package, fix API billing).
+**Skip “use --flag or ENV” hints** when that would mislead:
+
+- Internal harness failures (transcript I/O, session folder setup).
+- Missing OS tools on `PATH` (`curl`, `jq`, `sudo`/`doas`, …) — say to install or put the tool on `PATH`. Do **not** tell the user to set the related setting if they already set it (e.g. sandbox user is on, but `sudo`/`doas` is missing: say install those tools, or **omit** `--sandbox-user` / `SSA_SANDBOX_USER` — never `use --sandbox-user`).
+- Failures fixed outside ssa (API billing, account quota).
 
 The task has **no env var** — say to pass words after options or pipe stdin.
 
