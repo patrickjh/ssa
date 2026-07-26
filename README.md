@@ -10,10 +10,11 @@ model **only shell**, run each step in a **fresh process**, keep a
 - POSIX `sh`, plus `curl` and `jq` on `PATH`
 - Linux and macOS work as usual; on Windows use **Git Bash** or WSL
   (`winget install jqlang.jq` if you need `jq`)
+- A full OpenAI-style chat completions URL in `OPENAI_URL` (or
+  `--openai-url`), ending in `…/chat/completions`
 
-Any OpenAI-compatible `…/chat/completions` endpoint works (OpenAI, local
-proxies, and similar providers). Set `OPENAI_API_KEY` when the provider
-requires auth.
+Any OpenAI-compatible endpoint works (OpenAI, local proxies, and similar
+providers). Set `OPENAI_API_KEY` when the provider requires auth.
 
 ## Install
 
