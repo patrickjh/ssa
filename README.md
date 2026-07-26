@@ -42,13 +42,13 @@ echo "summarize this repo" | ssa \
 
 Batch / no TTY: add `--no-ask`. Keep temp logs: `--keep-temp`.
 
-Run `ssa -h` for full usage. Design and coding style: [AI.md](AI.md).
+Run `ssa -h` for full usage. Agent design and style: [AGENTS.md](AGENTS.md).
 
 ## Layout
 
 ```
 ssa/
-├── AI.md            # design + style for contributors / agents
+├── AGENTS.md        # design + style for coding agents
 ├── LICENSE
 ├── README.md        # this file
 ├── ssa              # the agent (single file)

@@ -1,15 +1,55 @@
-# AI.md — design and style for `ssa`
+# AGENTS.md
+
+Instructions for coding agents working in this repo. Humans: start with
+[README.md](README.md). Flags and defaults: `./ssa -h`. Design details and
+style rules are below; do not duplicate settings or behavior that `-h` and
+`ssa` already define.
+
+## Overview
 
 `ssa` is a Simple Shell Agent in one POSIX `sh` file: prompt a model for
 shell scripts, run them, feed output back, repeat until done.
 
-Run: `chmod +x ssa` then `./ssa`, or put this directory on `PATH`.
-User overview and defaults: `./ssa -h`. This file plus the code are the
-full design and coding style. Do not duplicate settings or behavior here
-when `-h` and the script already define them.
-
 Inspired by [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent):
 only shell as the tool, each action in a fresh process, a simple loop.
+
+## Layout
+
+```
+ssa/
+├── AGENTS.md      # this file (agent instructions)
+├── LICENSE
+├── README.md      # human intro and try-it
+├── ssa            # the only source file — edit this
+└── oldTests/      # archived suites; do not treat as current
+```
+
+## Setup and commands
+
+- Needs `curl` and `jq` on `PATH` (`winget install jqlang.jq` on Windows).
+- On Windows, use **Git Bash** (or WSL) for shell work and tests.
+- Help: `./ssa -h` (or `sh ssa -h`).
+- Smoke run (needs a real API): set `OPENAI_URL`, `OPENAI_API_KEY` if
+  required, and `-m` / `SSA_MODEL`; add `--no-ask` when there is no TTY.
+- Keep temp logs: `--keep-temp` or `SSA_KEEP_TEMP=1`.
+- There is no active test suite yet. `oldTests/` is archive only until
+  remade. When remaking: fake `curl` on `PATH`, canned `replyN.txt` as
+  chat-completions JSON, prefer `--no-ask`; skip `sudo`/`doas` and real
+  `/dev/tty` cases under Git Bash.
+
+## Boundaries
+
+- Keep the product surface small: one executable (`ssa`) plus docs.
+  Do not bring back `bin/` / `libexec/` / pluggable model runners.
+- Edit `ssa` in place; keep **≤80 characters per line**.
+- Do not invent flags or env vars for things the caller’s shell can do
+  (`cd`, `export`, redirects).
+- Ask before committing or pushing.
+- Leave `oldTests/` alone unless the task is to remake or remove tests.
+
+---
+
+# Design
 
 ## Goal
 
@@ -150,17 +190,6 @@ CLI overrides env when both are set.
 **Streams:** script output and help on **stdout**; ask UI (script listing,
 prompts, invalid-input lines), harness errors, and the final status line on
 **stderr**.
-
-## Offline tests (for later)
-
-`oldTests/` holds prior suites (multi-file community tests and an early
-single-file suite). Remake tests for this single-file `ssa` when ready.
-
-On a Windows laptop, run them under **Git Bash** with `jq` on `PATH`
-(e.g. `winget install jqlang.jq`). Offline model replies: put a fake
-`curl` ahead on `PATH` that serves canned `replyN.txt` files as OpenAI
-chat-completions JSON. Prefer `--no-ask` so `/dev/tty` is not required.
-Skip cases that need `sudo`/`doas` or a real TTY unless you have WSL.
 
 ---
 
