@@ -5,18 +5,29 @@
 model **only shell**, run each step in a **fresh process**, keep a
 **simple loop**. Feels like a unix util.
 
-**Needs:** `curl` and `jq` on `PATH`.
+## Requirements
 
-**Unix-shaped.** Invoke like `curl` or `make`: handle `cd`, env, and
-redirects in the shell. Script output streams live on **stdout**. Agent
-messages (ask UI, errors, final status) go to **stderr**.
+- POSIX `sh`, plus `curl` and `jq` on `PATH`
+- Linux and macOS work as usual; on Windows use **Git Bash** or WSL
+  (`winget install jqlang.jq` if you need `jq`)
 
-## Try it
+Any OpenAI-compatible `…/chat/completions` endpoint works (OpenAI, local
+proxies, and similar providers). Set `OPENAI_API_KEY` when the provider
+requires auth.
+
+## Install
 
 ```sh
+git clone https://github.com/patrickjh/ssa.git
+cd ssa
 chmod +x ssa
-export PATH="/path/to/this/folder:$PATH"
+export PATH="$PWD:$PATH"
 ```
+
+Or download the `ssa` file alone, `chmod +x`, and put its folder on
+`PATH`.
+
+## Try it
 
 ```sh
 export OPENAI_API_KEY="sk-..."
@@ -42,17 +53,37 @@ echo "summarize this repo" | ssa \
 
 Batch / no TTY: add `--no-ask`. Keep temp logs: `--keep-temp`.
 
-Run `ssa -h` for full usage. Agent design and style: [AGENTS.md](AGENTS.md).
+**Unix-shaped.** Handle `cd`, env, and redirects in the shell. Script
+output streams live on **stdout**. Agent messages (ask UI, errors, final
+status) go to **stderr**.
+
+## Safety
+
+`ssa` runs shell scripts written by the model in your current directory.
+Treat that like handing the model your terminal.
+
+- **Ask-user approval is on by default** — each model script is shown on
+  stderr; you approve from `/dev/tty` (`[Y]es` / `[N]o` / `[Q]uit`).
+- Optional **sandbox user**: `--sandbox-user` / `SSA_SANDBOX_USER`
+  (needs `sudo` or `doas`).
+- Optional **sandbox command**: `--sandbox-command` /
+  `SSA_SANDBOX_COMMAND` (default `sh`; use your own wrapper for
+  containers, pledge, jails, etc.).
+
+## Docs
+
+- Full usage and defaults: `ssa -h`
+- Design and coding style for contributors and coding agents:
+  [AGENTS.md](AGENTS.md)
 
 ## Layout
 
 ```
 ssa/
-├── AGENTS.md        # design + style for coding agents
+├── AGENTS.md   # design + style for coding agents
 ├── LICENSE
-├── README.md        # this file
-├── ssa              # the agent (single file)
-└── oldTests/        # prior test suites (to remake later)
+├── README.md   # this file
+└── ssa         # the agent (single file)
 ```
 
 ## License
