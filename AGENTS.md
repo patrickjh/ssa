@@ -17,12 +17,20 @@ only shell as the tool, each action in a fresh process, a simple loop.
 
 ```
 ssa/
-├── AGENTS.md      # this file (agent instructions)
+├── AGENTS.md          # this file (agent instructions)
 ├── LICENSE
-├── README.md      # human intro and try-it
-├── ssa            # the only source file — edit this
-└── oldTests/      # archived suites; do not treat as current
+├── README.md          # human intro and try-it
+├── ssa                # the only source file — edit this
+├── tests/             # live stories + acceptance tests
+│   ├── runTests.sh    # runner and shared helpers
+│   └── showHelp/      # one camelCase folder per story
+│       ├── story.md
+│       └── showHelp.test.sh
+└── oldTests/          # archived suites; not current
 ```
+
+Prefer **camelCase** for story folder names under `tests/`
+(e.g. `showHelp`, `completeSimpleTask`).
 
 ## Setup and commands
 
@@ -32,10 +40,11 @@ ssa/
 - Smoke run (needs a real API): set `OPENAI_URL`, `OPENAI_API_KEY` if
   required, and `-m` / `SSA_MODEL`; add `--no-ask` when there is no TTY.
 - Keep temp logs: `--keep-temp` or `SSA_KEEP_TEMP=1`.
-- There is no active test suite yet. `oldTests/` is archive only until
-  remade. When remaking: fake `curl` on `PATH`, canned `replyN.txt` as
-  chat-completions JSON, prefer `--no-ask`; skip `sudo`/`doas` and real
-  `/dev/tty` cases under Git Bash.
+- Live tests: `sh tests/runTests.sh` (optional story filter,
+  e.g. `sh tests/runTests.sh showHelp`).
+- `oldTests/` is archive only. When adding agent-loop stories: fake `curl`
+  on `PATH`, canned `replyN.txt` as chat-completions JSON, prefer
+  `--no-ask`; skip `sudo`/`doas` and real `/dev/tty` under Git Bash.
 
 ## Boundaries
 
@@ -46,6 +55,8 @@ ssa/
   (`cd`, `export`, redirects).
 - Ask before committing or pushing.
 - Leave `oldTests/` alone unless the task is to remake or remove tests.
+- New acceptance coverage goes under `tests/` (camelCase story folders,
+  `story.md` + `*.test.sh`).
 
 ---
 
