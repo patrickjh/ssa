@@ -1,6 +1,6 @@
 #!/bin/sh
 # ssa — Simple Shell Agent. An AI agent in a single file shell script.
-# For help see HELP_TEXT in this file or DESIGN.md in this folder.
+# For help see HELP_TEXT in this file or AI.md in this folder.
 # Help on the CLI: ssa -h
 
 set -u
