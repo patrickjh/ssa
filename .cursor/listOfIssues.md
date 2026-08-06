@@ -257,7 +257,7 @@ avoid accidental reuse.
 ### [ ] Make private-variable export guarantees robust or narrower
 
 Assigning an inherited exported variable does not necessarily remove its
-export attribute. If a caller exported `SSA_PID`, `SSA_TEMP_FOLDER`, or
+export attribute. If a caller exported `PID`, `TEMP_FOLDER`, or
 another internal name, reassignment may remain exported to model
 scripts.
 

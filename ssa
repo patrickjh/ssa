@@ -23,24 +23,24 @@ CURL_HEADERS_FILE=""
 CURL_HTTP_CODE_FILE=""
 CURL_RESPONSE_FILE=""
 DEFAULT_RETRY_SLEEP_SECONDS=5
+EXIT_CODE_FILE=""
+HIT_MAX=2
 HTTP_REQUEST_COUNT=0
 IS_FALSE=1
 IS_TRUE=0
 JSON_BODY_FILE=""
+LOOP_AGAIN=0
+LOOP_STATUS="stopped"
+MODEL_RESPONSE_FILE=""
 PER_PROMPT_LOG_FOLDER=""
 PER_REQUEST_LOG_FOLDER=""
-SSA_EXIT_CODE_FILE=""
-SSA_HIT_MAX=2
-SSA_LOOP_AGAIN=0
-SSA_LOOP_STATUS="stopped"
-SSA_MODEL_RESPONSE_FILE=""
-SSA_PID=$$
-SSA_PROMPT_COUNTER=0
-SSA_SCRIPT_OUTPUT_FILE=""
-SSA_TASK=""
-SSA_TASK_DONE=1
-SSA_TEMP_FOLDER=""
-SSA_TRANSCRIPT_FILE=""
+PID=$$
+PROMPT_COUNTER=0
+SCRIPT_OUTPUT_FILE=""
+TASK=""
+TASK_DONE=1
+TEMP_FOLDER=""
+TRANSCRIPT_FILE=""
 USER_ANSWER_FILE=""
 
 HELP_TEXT='Usage: ssa [options] task as a string no quotes needed
@@ -48,7 +48,7 @@ HELP_TEXT='Usage: ssa [options] task as a string no quotes needed
 
 ssa — Simple Shell Agent.
 A simple AI agent that feels like a unix util. Written as a single file with
-under 1,000 lines of mostly POSIX shell scripts. Inspired by mini-swe-agent.
+under 1,000 lines of mostly POSIX shell script. Inspired by mini-swe-agent.
 
 Give ssa a task on the command line or via stdin.
 ssa then works with an AI model to achieve the task using shell scripts.
@@ -60,10 +60,9 @@ Environment variables OPENAI_URL (or --openai-url) and SSA_MODEL (or -m)
 are required for ssa to work. You will also need to set OPENAI_API_KEY
 (or --openai-api-key) if the model provider at OPENAI_URL requires
 auth (local models do not). Options can be set via the CLI args or
-environment variables.
-To pass extra flags to curl (for example -k or timeouts), put a wrapper
-named curl earlier on PATH. curl also honors https_proxy and related
-proxy environment variables.
+environment variables. To pass extra flags to curl (for example -k
+or timeouts), put a wrapper named curl earlier on PATH. curl also honors
+https_proxy and related proxy environment variables.
 
 Details on how ssa works, sandboxing, and model choice below the options.
 
@@ -211,7 +210,7 @@ Examples:
     --sandbox-command /path/to/mySandbox.sh
 '
 
-SSA_SYSTEM_PROMPT='
+SYSTEM_PROMPT='
 [SYSTEM]
 You help users solve tasks with POSIX sh. Each turn you get a transcript of
 prior commands and their output. Continue from this transcript; earlier steps
@@ -260,9 +259,9 @@ parse_arguments() {
             --openai-url) set_openai_url "$2"; shift 2 ;;
             --sandbox-command) set_sandbox_command "$2"; shift 2 ;;
             --sandbox-user) set_sandbox_user "$2"; shift 2 ;;
-            --) shift; SSA_TASK=$*; return ;;
+            --) shift; TASK=$*; return ;;
             -*) die "bad option: $1; see ssa -h for help" ;;
-            *) SSA_TASK=$*; return ;;
+            *) TASK=$*; return ;;
         esac
     done
 }
@@ -331,9 +330,9 @@ check_command() {
 }
 
 read_task_from_stdin_if_needed() {
-    if [ -n "$SSA_TASK" ]; then return 0; fi
+    if [ -n "$TASK" ]; then return 0; fi
     if [ -t 0 ]; then return 0; fi
-    SSA_TASK=$(cat) ||
+    TASK=$(cat) ||
         die "cannot read task from stdin; pass task as words after CLI " \
           "options or pipe task to stdin; see ssa -h for help"
 }
@@ -351,7 +350,7 @@ check_can_run() {
 }
 
 check_task_is_set() {
-    [ -n "$SSA_TASK" ] ||
+    [ -n "$TASK" ] ||
         die "no task; pass task as words after CLI options or pipe task on " \
           "stdin; see ssa -h for help"
 }
@@ -464,37 +463,37 @@ setup_agent_loop() {
     log_task
     setup_temp_cleanup
     setup_transcript_file
-    SSA_LOOP_STATUS="stopped"
+    LOOP_STATUS="stopped"
 }
 
 setup_temp_folder() {
-    SSA_TEMP_FOLDER="${TMPDIR:-/tmp}/ssa-${LOGNAME:-user}-$(date \
-        +%Y-%m-%d_%H.%M.%S)-$SSA_PID"
-    ( umask 077; mkdir "$SSA_TEMP_FOLDER" ) ||
+    TEMP_FOLDER="${TMPDIR:-/tmp}/ssa-${LOGNAME:-user}-$(date \
+        +%Y-%m-%d_%H.%M.%S)-$PID"
+    ( umask 077; mkdir "$TEMP_FOLDER" ) ||
         die "cannot create temp folder"
 }
 
 setup_temp_files() {
-    SSA_TRANSCRIPT_FILE="${SSA_TEMP_FOLDER}/fullTranscript.txt"
-    SSA_MODEL_RESPONSE_FILE="${SSA_TEMP_FOLDER}/latestModelResponse.txt"
-    SSA_EXIT_CODE_FILE="${SSA_TEMP_FOLDER}/latestScriptExitCode.txt"
-    SSA_SCRIPT_OUTPUT_FILE="${SSA_TEMP_FOLDER}/latestScriptOutput.txt"
-    create_file_no_overwrite "$SSA_TRANSCRIPT_FILE"
-    create_file_no_overwrite "$SSA_MODEL_RESPONSE_FILE"
-    create_file_no_overwrite "$SSA_EXIT_CODE_FILE"
-    create_file_no_overwrite "$SSA_SCRIPT_OUTPUT_FILE"
+    TRANSCRIPT_FILE="${TEMP_FOLDER}/fullTranscript.txt"
+    MODEL_RESPONSE_FILE="${TEMP_FOLDER}/latestModelResponse.txt"
+    EXIT_CODE_FILE="${TEMP_FOLDER}/latestScriptExitCode.txt"
+    SCRIPT_OUTPUT_FILE="${TEMP_FOLDER}/latestScriptOutput.txt"
+    create_file_no_overwrite "$TRANSCRIPT_FILE"
+    create_file_no_overwrite "$MODEL_RESPONSE_FILE"
+    create_file_no_overwrite "$EXIT_CODE_FILE"
+    create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
 }
 
 log_openai_url() {
-    create_file_no_overwrite "${SSA_TEMP_FOLDER}/openaiUrl.txt"
-    printf '%s' "$OPENAI_URL" >"${SSA_TEMP_FOLDER}/openaiUrl.txt" ||
-        die "cannot write to temp file: ${SSA_TEMP_FOLDER}/openaiUrl.txt"
+    create_file_no_overwrite "${TEMP_FOLDER}/openaiUrl.txt"
+    printf '%s' "$OPENAI_URL" >"${TEMP_FOLDER}/openaiUrl.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/openaiUrl.txt"
 }
 
 log_task() {
-    create_file_no_overwrite "${SSA_TEMP_FOLDER}/task.txt"
-    printf '%s\n' "$SSA_TASK" >"${SSA_TEMP_FOLDER}/task.txt" ||
-        die "cannot write to temp file: ${SSA_TEMP_FOLDER}/task.txt"
+    create_file_no_overwrite "${TEMP_FOLDER}/task.txt"
+    printf '%s\n' "$TASK" >"${TEMP_FOLDER}/task.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/task.txt"
 }
 
 setup_temp_cleanup() {
@@ -506,22 +505,22 @@ setup_temp_cleanup() {
 }
 
 cleanup_temp_folder() {
-    if [ -n "$SSA_TEMP_FOLDER" ]; then
-      rm -rf "$SSA_TEMP_FOLDER";
+    if [ -n "$TEMP_FOLDER" ]; then
+      rm -rf "$TEMP_FOLDER";
     fi
 }
 
 setup_transcript_file() {
-    printf '%s\n' "$SSA_SYSTEM_PROMPT" >"$SSA_TRANSCRIPT_FILE" ||
+    printf '%s\n' "$SYSTEM_PROMPT" >"$TRANSCRIPT_FILE" ||
         die "cannot write transcript"
-    printf '%s\n' "$SSA_TASK" >>"$SSA_TRANSCRIPT_FILE" ||
+    printf '%s\n' "$TASK" >>"$TRANSCRIPT_FILE" ||
         die "cannot write transcript"
     run_fake_first_turn
 }
 
 run_fake_first_turn() {
     setup_per_prompt_log_folder
-    printf '%s\n' 'echo starting the agent' >"$SSA_MODEL_RESPONSE_FILE" ||
+    printf '%s\n' 'echo starting the agent' >"$MODEL_RESPONSE_FILE" ||
         die "cannot write fake first turn response"
     append_model_response_to_transcript
     run_model_script
@@ -529,41 +528,41 @@ run_fake_first_turn() {
 
 run_agent_loop() {
     while :; do
-        SSA_PROMPT_COUNTER=$((SSA_PROMPT_COUNTER + 1))
+        PROMPT_COUNTER=$((PROMPT_COUNTER + 1))
         prompt_model_then_run_script
         case $? in
-            $SSA_TASK_DONE) SSA_LOOP_STATUS="done"; break ;;
-            $SSA_HIT_MAX) SSA_LOOP_STATUS="hit max"; break ;;
-            $SSA_LOOP_AGAIN) continue ;;
+            $TASK_DONE) LOOP_STATUS="done"; break ;;
+            $HIT_MAX) LOOP_STATUS="hit max"; break ;;
+            $LOOP_AGAIN) continue ;;
             *) die "unknown loop status $?" ;;
         esac
     done
 }
 
 prompt_model_then_run_script() {
-    if over_model_prompt_limit; then return $SSA_HIT_MAX; fi
+    if over_model_prompt_limit; then return $HIT_MAX; fi
     setup_per_prompt_log_folder
     log_transcript
     call_curl
-    if [ $? -ne 0 ]; then return $SSA_LOOP_AGAIN; fi
+    if [ $? -ne 0 ]; then return $LOOP_AGAIN; fi
     handle_model_response
 }
 
 over_model_prompt_limit() {
     if [ "$SSA_MAX_MODEL_PROMPTS" -le 0 ]; then return $IS_FALSE; fi
-    if [ "$SSA_PROMPT_COUNTER" -gt "$SSA_MAX_MODEL_PROMPTS" ]; then
+    if [ "$PROMPT_COUNTER" -gt "$SSA_MAX_MODEL_PROMPTS" ]; then
         return $IS_TRUE
     fi
     return $IS_FALSE
 }
 
 setup_per_prompt_log_folder() {
-    PER_PROMPT_LOG_FOLDER="${SSA_TEMP_FOLDER}/prompt${SSA_PROMPT_COUNTER}"
+    PER_PROMPT_LOG_FOLDER="${TEMP_FOLDER}/prompt${PROMPT_COUNTER}"
     create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
 }
 
 log_transcript() {
-    cp "$SSA_TRANSCRIPT_FILE" "${PER_PROMPT_LOG_FOLDER}/transcript.txt" ||
+    cp "$TRANSCRIPT_FILE" "${PER_PROMPT_LOG_FOLDER}/transcript.txt" ||
         die "cannot copy transcript to ${PER_PROMPT_LOG_FOLDER}/transcript.txt"
 }
 
@@ -578,7 +577,7 @@ build_curl_json_request() {
     create_file_no_overwrite "$JSON_BODY_FILE"
     jq -n \
         --arg model "$SSA_MODEL" \
-        --rawfile content "$SSA_TRANSCRIPT_FILE" \
+        --rawfile content "$TRANSCRIPT_FILE" \
         '{model: $model, messages: [{role: "user", content: $content}]}' \
         >"$JSON_BODY_FILE" || die 'cannot build curl request JSON'
 }
@@ -710,34 +709,33 @@ curl_sleep_before_retry() {
 }
 
 save_model_reply_to_file() {
-    REPLY=$(jq -r '.choices[0].message.content // empty' \
-        "$CURL_RESPONSE_FILE")
+    REPLY=$(jq -r '.choices[0].message.content // empty' "$CURL_RESPONSE_FILE")
     if [ -z "$REPLY" ]; then
-        : >"$SSA_MODEL_RESPONSE_FILE" ||
-            die "cannot write to temp file: $SSA_MODEL_RESPONSE_FILE"
+        : >"$MODEL_RESPONSE_FILE" ||
+            die "cannot write to temp file: $MODEL_RESPONSE_FILE"
         return 0
     fi
-    printf '%s\n' "$REPLY" >"$SSA_MODEL_RESPONSE_FILE" ||
-        die "cannot write to temp file: $SSA_MODEL_RESPONSE_FILE"
+    printf '%s\n' "$REPLY" >"$MODEL_RESPONSE_FILE" ||
+        die "cannot write to temp file: $MODEL_RESPONSE_FILE"
 }
 
 handle_model_response() {
     append_model_response_to_transcript
-    if agent_is_done; then return $SSA_TASK_DONE
+    if agent_is_done; then return $TASK_DONE
     else run_model_script
     fi
-    return $SSA_LOOP_AGAIN
+    return $LOOP_AGAIN
 }
 
 append_model_response_to_transcript() {
-    printf '\n[ASSISTANT]\n' >>"$SSA_TRANSCRIPT_FILE" &&
-    cat "$SSA_MODEL_RESPONSE_FILE" >>"$SSA_TRANSCRIPT_FILE" &&
-    printf '\n' >>"$SSA_TRANSCRIPT_FILE" ||
+    printf '\n[ASSISTANT]\n' >>"$TRANSCRIPT_FILE" &&
+    cat "$MODEL_RESPONSE_FILE" >>"$TRANSCRIPT_FILE" &&
+    printf '\n' >>"$TRANSCRIPT_FILE" ||
     die "cannot append to transcript"
 }
 
 agent_is_done() {
-    if [ "$(cat "$SSA_MODEL_RESPONSE_FILE")" = '# task complete' ]; then
+    if [ "$(cat "$MODEL_RESPONSE_FILE")" = '# task complete' ]; then
         return $IS_TRUE
     fi
     return $IS_FALSE
@@ -746,9 +744,9 @@ agent_is_done() {
 run_model_script() {
     (
         run_script_in_configured_sandboxes 2>&1
-        echo $? >"$SSA_EXIT_CODE_FILE" ||
+        echo $? >"$EXIT_CODE_FILE" ||
             die "cannot write script exit code"
-    ) | tee "$SSA_SCRIPT_OUTPUT_FILE"
+    ) | tee "$SCRIPT_OUTPUT_FILE"
     append_script_result_to_transcript
 }
 
@@ -759,7 +757,7 @@ run_script_in_configured_sandboxes() {
     if [ -n "$SSA_SANDBOX_USER" ]; then
         run_script_as_sandbox_user
     else
-        "$SSA_SANDBOX_COMMAND" <"$SSA_MODEL_RESPONSE_FILE"
+        "$SSA_SANDBOX_COMMAND" <"$MODEL_RESPONSE_FILE"
     fi
 }
 
@@ -777,7 +775,7 @@ ask_user_to_approve_script() {
 
 print_model_script() {
     printf 'Script from model:\n' >&2
-    cat "$SSA_MODEL_RESPONSE_FILE" >&2
+    cat "$MODEL_RESPONSE_FILE" >&2
 }
 
 handle_user_answers() {
@@ -813,10 +811,10 @@ print_ask_prompt() {
 run_script_as_sandbox_user() {
     if command -v sudo >/dev/null 2>&1; then
         sudo -u "$SSA_SANDBOX_USER" -- "$SSA_SANDBOX_COMMAND" \
-            <"$SSA_MODEL_RESPONSE_FILE"
+            <"$MODEL_RESPONSE_FILE"
     elif command -v doas >/dev/null 2>&1; then
         doas -u "$SSA_SANDBOX_USER" -- "$SSA_SANDBOX_COMMAND" \
-            <"$SSA_MODEL_RESPONSE_FILE"
+            <"$MODEL_RESPONSE_FILE"
     else
         die "need sudo or doas on PATH to change user; see ssa -h for help"
     fi
@@ -824,31 +822,31 @@ run_script_as_sandbox_user() {
 
 append_script_result_to_transcript() {
     printf '\n[USER]\nOutput from running the script:\n\n' \
-        >>"$SSA_TRANSCRIPT_FILE" ||
+        >>"$TRANSCRIPT_FILE" ||
         die "cannot append to transcript"
-    cat "$SSA_SCRIPT_OUTPUT_FILE" >>"$SSA_TRANSCRIPT_FILE" ||
+    cat "$SCRIPT_OUTPUT_FILE" >>"$TRANSCRIPT_FILE" ||
         die "cannot append to transcript"
-    printf '\n\nScript exit code: %s\n' "$(cat "$SSA_EXIT_CODE_FILE")" \
-        >>"$SSA_TRANSCRIPT_FILE" ||
+    printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")" \
+        >>"$TRANSCRIPT_FILE" ||
         die "cannot append to transcript"
 }
 
 finish_agent_loop() {
-    case $SSA_LOOP_STATUS in
+    case $LOOP_STATUS in
     done) printf 'done: task complete after %s model prompts\n' \
-        "$SSA_PROMPT_COUNTER" >&2; exit 0 ;;
+        "$PROMPT_COUNTER" >&2; exit 0 ;;
     hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
         "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
-    *) die "unknown loop status $SSA_LOOP_STATUS" ;;
+    *) die "unknown loop status $LOOP_STATUS" ;;
     esac
 }
 
 die() {
     printf '%s\n' "$*" >&2
-    if [ -n "${SSA_PID:-}" ]; then
-        kill -USR1 "$SSA_PID" 2>/dev/null
+    if [ -n "${PID:-}" ]; then
+        kill -USR1 "$PID" 2>/dev/null
     else
-        printf 'SSA_PID not set; cannot signal parent process\n' >&2
+        printf 'PID not set; cannot signal parent process\n' >&2
     fi
     exit 1
 }

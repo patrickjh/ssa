@@ -116,11 +116,11 @@ first-line logic).
 Harness state is **not** exported into child processes (`sh`,
 `--sandbox-command`, or `sudo`/`doas` children).
 
-Private (not exported): `SSA_PID`, `SSA_PROMPT_COUNTER`, `SSA_TEMP_FOLDER`.
+Private (not exported): `PID`, `PROMPT_COUNTER`, `TEMP_FOLDER`.
 Pipeline subshells inside the harness still see them; model scripts and
 custom sandbox commands do not inherit them unless the caller sets them.
 
-`SSA_PID` holds the agent PID at startup for `die` (SIGUSR1). It must
+`PID` holds the agent PID at startup for `die` (SIGUSR1). It must
 not be replaced with `$$` inside a pipeline subshell.
 
 User-facing settings (`SSA_MODEL`, `SSA_NO_ASK`, …) are normal env/CLI
@@ -157,7 +157,7 @@ Ask and sandbox user are optional. The sandbox command always runs
 - The harness feeds `latestModelResponse.txt` on that command’s **stdin**.
 - Contract: stdout/stderr from the run; exit code recorded in the
   transcript. Unrecoverable stop from inside the harness uses `die`
-  (SIGUSR1 to `SSA_PID`). Custom sandbox commands do not get `SSA_PID`
+  (SIGUSR1 to `PID`). Custom sandbox commands do not get `PID`
   in their environment.
 
 ### How the script is run
@@ -180,17 +180,17 @@ Built-in OpenAI-compatible `/chat/completions` client:
 - Optional: `OPENAI_API_KEY`, `SSA_MAX_HTTP_REQUESTS` (default 5)
 - Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
   `--curl-args`). curl also honors `https_proxy` and related env vars.
-- Once per run, writes `OPENAI_URL` to `$SSA_TEMP_FOLDER/openaiUrl.txt`
-  and the task to `$SSA_TEMP_FOLDER/task.txt` (log only; transcript seed
-  still uses `SSA_TASK`)
+- Once per run, writes `OPENAI_URL` to `$TEMP_FOLDER/openaiUrl.txt`
+  and the task to `$TEMP_FOLDER/task.txt` (log only; transcript seed
+  still uses `TASK`)
 - Temp working files include `latestModelResponse.txt`,
   `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d script
   output before transcript append).
 - Before each **model** prompt (`prompt1+`), the harness copies
-  `fullTranscript.txt` to `$SSA_TEMP_FOLDER/promptN/transcript.txt` for
+  `fullTranscript.txt` to `$TEMP_FOLDER/promptN/transcript.txt` for
   debugging (`--keep-temp`). `prompt0/` is created for the fake-first
   bootstrap (no curl / no transcript copy). `N` matches
-  `SSA_PROMPT_COUNTER`.
+  `PROMPT_COUNTER`.
 - Per-prompt HTTP logs live under `promptN/` for model prompts:
   `body.json`, and `curlA/` with `headers.txt`, `response.txt`,
   `httpCode.txt`, `exit.txt`
@@ -256,6 +256,8 @@ tool names stay as-is (`curl`, `jq`, `-f`, etc.).
 
 - **Variables** use `UPPER_CASE` (settings, run state, and locals).
 - **Functions** use `lower_case`.
+- **User-facing settings** use the `SSA_` prefix (except OpenAI’s
+  `OPENAI_*`). Internal run state does not.
 - **Top-level variable blocks** (`# Users can set` and `# Internal`) keep
   names **alphabetically ordered** within each block. Do not alphabetize
   large string constants (help text, prompts) with those lists.
@@ -305,7 +307,7 @@ Keep hints one short clause after a semicolon. Prefer
 The task has **no env var** — say to pass words after options or pipe
 stdin.
 
-`die` prints on stderr and sends SIGUSR1 to `SSA_PID`. Opening quote
+`die` prints on stderr and sends SIGUSR1 to `PID`. Opening quote
 starts on the **same line** as `die`. Wrap at **80 columns** with
 adjacent quoted parts.
 
