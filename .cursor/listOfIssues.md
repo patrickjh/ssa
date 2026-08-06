@@ -124,25 +124,17 @@ comparison error.
 
 Handle `''|*[!0-9]*)` as failure.
 
-### [ ] Make fence extraction verify order and preserve script content
+### [x] Make fence extraction verify order and preserve script content
 
-The parser counts one opening and one closing fence but does not verify
-that the closing fence follows the opening fence. Its sed deletion also
-removes any line beginning with three backticks inside the selected
-range.
-
-Use a small state machine that:
-
-1. Requires exactly one `ssa_script` opening fence.
-2. Requires exactly one exact closing fence after it.
-3. Removes only those two delimiter lines.
-4. Rejects trailing or malformed fence structure.
+Obsolete: replies are raw shell scripts (no `ssa_script` fence parse).
+Cancelled in favor of copy-reply-as-script.
 
 ### [ ] Decide the exact completion-marker newline contract
 
 `agent_is_done` uses command substitution, which removes trailing
 newlines. A marker followed by blank lines therefore counts as complete,
-despite `AGENTS.md` saying there is no trimming.
+despite `AGENTS.md` saying there is no trimming. Done marker is now
+`# task complete`.
 
 Either implement byte-exact comparison or update the documentation and
 tests to allow trailing newlines explicitly.
@@ -169,20 +161,6 @@ test entry point:
 ```sh
 sh tests/runTests.sh
 ```
-
-### [ ] Clarify `--curl-args` quoting and security
-
-Multiple CLI curl arguments must be passed as one quoted value, for
-example:
-
-```sh
---curl-args '--connect-timeout 10 --max-time 300'
-```
-
-The current `--proxy URL` example can be read as separate CLI arguments.
-Also avoid normalizing `-k` in the main example because it disables TLS
-certificate verification. Unquoted expansion also performs pathname
-globbing, not only word splitting.
 
 ### [ ] Decide whether URL query strings are supported
 
@@ -293,8 +271,8 @@ transcript behind. Add a HUP policy if cleanup-on-hangup is expected.
 
 ## Deliberate tradeoffs, not current bugs
 
-- `SSA_CURL_ARGS` is intentionally expanded as arguments rather than as
-  one quoted string.
+- Extra curl flags are left to a `curl` wrapper on `PATH` (no
+  `--curl-args`); curl proxy env vars still apply.
 - The fake first script is intentionally subject to ask approval.
 - Sandbox commands intentionally accept a single executable path; users
   wrap multi-argument sandbox tools in a script.

@@ -82,7 +82,7 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 
 ## Goal
 
-Agent loop (prompt → parse one `ssa_script` block → run → transcript →
+Agent loop (prompt → treat reply as shell script → run → transcript →
 repeat) with:
 
 - OpenAI-compatible HTTP via **curl** and **jq** (built in)
@@ -99,14 +99,16 @@ repeat) with:
    `echo starting the agent` (ask-user applies when enabled).
 2. **Loop** — For each model prompt (`prompt1+`), copy
    `fullTranscript.txt` to `promptN/transcript.txt` (temp log only), run
-   `call_curl` against the live transcript; parse one script; if done
-   marker, stop; else run through ask / user / command layers; capture
-   script output, then append it to the transcript.
-3. **Stop** — Exit `0` when the parsed script is exactly
-   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`. Exit `1` on harness
-   failure or max model prompts. SIGINT / SIGTERM → `130` / `143`.
+   `call_curl` against the live transcript; treat the reply as the
+   script; if done marker, stop; else run through ask / user / command
+   layers; capture script output, then append it to the transcript.
+   Empty replies run like any other script (usually a no-op) and get the
+   normal script-result turn in the transcript.
+3. **Stop** — Exit `0` when the model reply is exactly
+   `# task complete`. Exit `1` on harness failure or max model prompts.
+   SIGINT / SIGTERM → `130` / `143`.
 
-Done detection: full script contents must equal that one line (no trim /
+Done detection: full reply contents must equal that one line (no trim /
 first-line logic).
 
 ## Environment
@@ -152,7 +154,7 @@ Ask and sandbox user are optional. The sandbox command always runs
 
 - CLI: `--sandbox-command COMMAND`, or leave default `sh`.
 - Validated with `command -v` at startup.
-- The harness feeds `latestParsedScript.txt` on that command’s **stdin**.
+- The harness feeds `latestModelResponse.txt` on that command’s **stdin**.
 - Contract: stdout/stderr from the run; exit code recorded in the
   transcript. Unrecoverable stop from inside the harness uses `die`
   (SIGUSR1 to `SSA_PID`). Custom sandbox commands do not get `SSA_PID`
@@ -160,11 +162,11 @@ Ask and sandbox user are optional. The sandbox command always runs
 
 ### How the script is run
 
-After ask (or after ask is disabled), `latestParsedScript.txt` is fed to:
+After ask (or after ask is disabled), `latestModelResponse.txt` is fed to:
 
 | `SSA_SANDBOX_USER` | Runs |
 |--------------------|------|
-| unset | `"$SSA_SANDBOX_COMMAND" < latestParsedScript.txt` |
+| unset | `"$SSA_SANDBOX_COMMAND" < latestModelResponse.txt` |
 | set | `sudo`/`doas -u USER -- "$SSA_SANDBOX_COMMAND"` with that file on stdin |
 
 User set → **change user, then run the sandbox command**.
@@ -175,14 +177,15 @@ Built-in OpenAI-compatible `/chat/completions` client:
 
 - Required: `OPENAI_URL` (full `http(s)://…/chat/completions`), `-m` /
   `SSA_MODEL`
-- Optional: `OPENAI_API_KEY`, `SSA_CURL_ARGS`, `SSA_MAX_HTTP_REQUESTS`
-  (default 5)
+- Optional: `OPENAI_API_KEY`, `SSA_MAX_HTTP_REQUESTS` (default 5)
+- Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
+  `--curl-args`). curl also honors `https_proxy` and related env vars.
 - Once per run, writes `OPENAI_URL` to `$SSA_TEMP_FOLDER/openaiUrl.txt`
   and the task to `$SSA_TEMP_FOLDER/task.txt` (log only; transcript seed
   still uses `SSA_TASK`)
 - Temp working files include `latestModelResponse.txt`,
-  `latestParsedScript.txt`, `latestScriptExitCode.txt`, and
-  `latestScriptOutput.txt` (tee’d script output before transcript append).
+  `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d script
+  output before transcript append).
 - Before each **model** prompt (`prompt1+`), the harness copies
   `fullTranscript.txt` to `$SSA_TEMP_FOLDER/promptN/transcript.txt` for
   debugging (`--keep-temp`). `prompt0/` is created for the fake-first
@@ -205,7 +208,6 @@ Non-zero curl exit → retry the loop (next call number gets a fresh
 |---------|-----|---------|
 | `OPENAI_API_KEY` | `--openai-api-key` | empty (optional) |
 | `OPENAI_URL` | `--openai-url` | unset (required) |
-| `SSA_CURL_ARGS` | `--curl-args` | empty |
 | `SSA_KEEP_TEMP` | `--keep-temp` | `0` |
 | `SSA_MAX_HTTP_REQUESTS` | `--max-http-requests` | `5` |
 | `SSA_MAX_MODEL_PROMPTS` | `--max-model-prompts` | `20` |
@@ -367,6 +369,8 @@ in one line at the call site.
 | Environment | `export VAR=value` or `VAR=value ssa …` |
 | Diagnostic log file | `ssa … 2>run.log` |
 | Keep temp logs | `--keep-temp` or `SSA_KEEP_TEMP=1` |
+| Extra curl flags | `curl` wrapper earlier on `PATH` |
+| HTTP(S) proxy | `https_proxy` / `http_proxy` (curl) |
 | Repeat for many tasks | `for task in …; do …; done` |
 
 Ask: *could the user do this with `cd`, `export`, or a redirect?* If yes,
