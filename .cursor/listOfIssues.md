@@ -5,59 +5,38 @@ This is an actionable backlog from a review of `ssa`, `AGENTS.md`,
 
 ## High priority
 
-### [ ] Keep ask-user UI on stderr and out of the transcript
+### [x] Keep ask-user UI on stderr and out of the transcript
 
-`run_model_script` applies `2>&1` to
-`run_script_in_configured_sandboxes`. That also captures the ask-user
-script listing, prompt, and invalid-input messages.
+Fixed: ask approval runs before the `2>&1 | tee` capture. Only the
+sandbox command is captured. Rejection text is still teed as script
+output for the transcript.
 
-Effects:
+### [x] Fail when `/dev/tty` cannot provide an answer
 
-- Ask UI appears on stdout instead of stderr.
-- Ask UI is saved in `latestScriptOutput.txt`.
-- Ask UI and a duplicate of the model script are appended to the model
-  transcript.
-- Redirecting stdout can make an interactive run appear stuck because
-  the question is no longer shown on stderr.
+Fixed: startup opens `/dev/tty` (not only `-r`); a failed ask `read`
+dies with the `--no-ask` / `SSA_NO_ASK=1` hint instead of looping on
+empty input.
 
-Apply output capture only to the sandbox command. Perform approval outside
-that capture while retaining rejection text as script output.
+### [x] Prevent terminal control characters from spoofing ask review
 
-### [ ] Fail when `/dev/tty` cannot provide an answer
+Fixed: `print_model_script` pipes through display-only `sed` filters
+(CR → `\r`, ESC → `\e`, other non-print except tab → `?`). Sandbox
+input file is unchanged.
 
-`read_ask_answer_from_tty` changes a failed read into an empty answer.
-`handle_user_answers` then treats it as invalid and immediately retries.
-Persistent EOF or a missing controlling terminal can therefore cause a
-busy loop that floods output.
+### [ ] Harden ask listing against Unicode / visual spoofing
 
-Treat read failure as fatal and include the existing `--no-ask` /
-`SSA_NO_ASK=1` hint. The startup check should test whether `/dev/tty` can
-actually be opened, not only whether it has readable permission bits.
+Control-byte filtering does not cover bidi marks, homoglyphs, or other
+Unicode visual tricks that can still make the ask listing diverge from
+a human reading of the script. Decide on a policy later (reject non-ASCII
+in ask display, normalize/escape, or document the residual risk).
 
-### [ ] Prevent terminal control characters from spoofing ask review
+### [x] Keep the API key out of model scripts and process arguments
 
-`print_model_script` writes model-controlled bytes directly to the
-terminal. Carriage returns, ANSI cursor movement, erase sequences, and
-other control characters can make the displayed script differ from what
-the shell executes.
-
-Render control characters visibly or strip dangerous terminal controls
-before displaying the script. The parsed file executed by the sandbox
-must remain unchanged.
-
-### [ ] Keep the API key out of model scripts and process arguments
-
-The authorization header is passed to curl as an argument, so the key can
-be visible in process listings while curl runs. When `OPENAI_API_KEY` was
-exported by the caller, the default `sh` sandbox also inherits it.
-
-Consider:
-
-- Supplying curl headers through a private file or curl config rather
-  than argv.
-- Unsetting `OPENAI_API_KEY` in the model-script execution environment.
-- Documenting that nested agents need a keyless host-side API broker if
-  they require model access.
+Fixed: setup writes `authHeader.txt` for curl `-H @file`, then
+`unset OPENAI_API_KEY`. Curl argv no longer carries the bearer token;
+sandbox children do not inherit the key. `authHeader.txt` is always
+cleared on exit (even with `--keep-temp`). No `OPENAI_API_KEY_FILE`
+setting.
 
 ## Correctness and reliability
 

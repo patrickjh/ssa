@@ -139,10 +139,12 @@ Ask and sandbox user are optional. The sandbox command always runs
   `/dev/tty`.
 - Yes → run the script (other layers). No → rejection text on stdout,
   status `1` (loop continues). Quit → `die`.
+- Ask listing shows CR as `\r`, ESC as `\e`, and other non-print
+  bytes (except tab) as `?`. The file fed to the sandbox is unchanged.
 - Invalid answers print `invalid input: …` on stderr and re-prompt.
 - Answers are logged to `promptN/userAnswer.txt` when ask runs.
-- Requires a readable `/dev/tty` when ask is enabled. Batch jobs:
-  `--no-ask` or `SSA_NO_ASK=1`.
+- Requires an openable `/dev/tty` when ask is enabled. Read failure
+  from `/dev/tty` is fatal. Batch jobs: `--no-ask` or `SSA_NO_ASK=1`.
 
 ### 2. Sandbox user — `SSA_SANDBOX_USER` (default empty)
 
@@ -180,12 +182,18 @@ Built-in OpenAI-compatible `/chat/completions` client:
 - Optional: `OPENAI_API_KEY`, `SSA_MAX_HTTP_REQUESTS` (default 5)
 - Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
   `--curl-args`). curl also honors `https_proxy` and related env vars.
+- At setup, if `OPENAI_API_KEY` is set, write
+  `$TEMP_FOLDER/authHeader.txt` for curl `-H @file`, then
+  `unset OPENAI_API_KEY` so model scripts do not inherit the key and
+  curl argv does not contain it. `authHeader.txt` is overwritten and
+  removed on every exit (including `--keep-temp`).
 - Once per run, writes `OPENAI_URL` to `$TEMP_FOLDER/openaiUrl.txt`
   and the task to `$TEMP_FOLDER/task.txt` (log only; transcript seed
   still uses `TASK`)
-- Temp working files include `latestModelResponse.txt`,
-  `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d script
-  output before transcript append).
+- Temp working files include `authHeader.txt` while the run needs it
+  (always deleted on exit), `latestModelResponse.txt`,
+  `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d
+  script output before transcript append).
 - Before each **model** prompt (`prompt1+`), the harness copies
   `fullTranscript.txt` to `$TEMP_FOLDER/promptN/transcript.txt` for
   debugging (`--keep-temp`). `prompt0/` is created for the fake-first

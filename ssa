@@ -17,6 +17,7 @@ SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
 SSA_SANDBOX_USER="${SSA_SANDBOX_USER:-}"
 
 # Internal
+AUTH_HEADER_FILE=""
 CURL_EXIT_CODE_FILE=""
 CURL_EXIT_OK=0
 CURL_HEADERS_FILE=""
@@ -88,6 +89,8 @@ Options:
   --openai-api-key KEY
           Bearer auth token for model provider (optional for local servers).
           Prefer OPENAI_API_KEY in the environment; CLI may show in ps.
+          Copied into the temp folder then cleared from the agent env.
+          authHeader.txt is removed on exit even with --keep-temp.
           Sets OPENAI_API_KEY.
   --openai-url URL
           Full OpenAI style …/chat/completions URL (required).
@@ -119,7 +122,8 @@ Files:
   $TMPDIR/ssa-$LOGNAME-YYYY-MM-DD_HH.MM.SS-PID/
           Per-run temp folder. Folder removed on exit unless --keep-temp.
           ssa working files:
-          fullTranscript.txt, task.txt, openaiUrl.txt,
+          fullTranscript.txt, task.txt, openaiUrl.txt, authHeader.txt
+          (authHeader.txt is always removed on exit),
           latestModelResponse.txt, latestScriptExitCode.txt,
           latestScriptOutput.txt,
           promptN/ (N = 1, 2, … model prompts)
@@ -240,9 +244,7 @@ main() {
 }
 
 handle_die_signal() {
-    if [ "$SSA_KEEP_TEMP" = 0 ]; then
-        cleanup_temp_folder
-    fi
+    cleanup_on_exit
     exit 1
 }
 
@@ -451,7 +453,7 @@ check_sandbox_command() {
 }
 
 check_prompt_device() {
-    [ -r /dev/tty ] ||
+    ( exec </dev/tty ) 2>/dev/null ||
         die "need /dev/tty to ask before running scripts; " \
         "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
 }
@@ -459,6 +461,7 @@ check_prompt_device() {
 setup_agent_loop() {
     setup_temp_folder
     setup_temp_files
+    setup_auth_header_file
     log_openai_url
     log_task
     setup_temp_cleanup
@@ -484,6 +487,18 @@ setup_temp_files() {
     create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
 }
 
+setup_auth_header_file() {
+    AUTH_HEADER_FILE=""
+    if [ -n "$OPENAI_API_KEY" ]; then
+        AUTH_HEADER_FILE="${TEMP_FOLDER}/authHeader.txt"
+        create_file_no_overwrite "$AUTH_HEADER_FILE"
+        printf 'Authorization: Bearer %s\n' "$OPENAI_API_KEY" \
+            >"$AUTH_HEADER_FILE" ||
+            die "cannot write auth header file"
+    fi
+    unset OPENAI_API_KEY
+}
+
 log_openai_url() {
     create_file_no_overwrite "${TEMP_FOLDER}/openaiUrl.txt"
     printf '%s' "$OPENAI_URL" >"${TEMP_FOLDER}/openaiUrl.txt" ||
@@ -497,11 +512,27 @@ log_task() {
 }
 
 setup_temp_cleanup() {
+    trap cleanup_on_exit EXIT
+    trap 'cleanup_on_exit; exit 130' INT
+    trap 'cleanup_on_exit; exit 143' TERM
+}
+
+cleanup_on_exit() {
+    cleanup_auth_header_file
     if [ "$SSA_KEEP_TEMP" = 0 ]; then
-        trap cleanup_temp_folder EXIT
-        trap 'cleanup_temp_folder; exit 130' INT
-        trap 'cleanup_temp_folder; exit 143' TERM
+        cleanup_temp_folder
     fi
+}
+
+cleanup_auth_header_file() {
+    if [ -z "$AUTH_HEADER_FILE" ]; then
+        return
+    fi
+    if [ -f "$AUTH_HEADER_FILE" ]; then
+        : >"$AUTH_HEADER_FILE" || :
+        rm -f "$AUTH_HEADER_FILE" || :
+    fi
+    AUTH_HEADER_FILE=""
 }
 
 cleanup_temp_folder() {
@@ -623,7 +654,7 @@ send_curl_json_request() {
     # shellcheck disable=SC2086
     curl -sS \
         -H "Content-Type: application/json" \
-        ${OPENAI_API_KEY:+-H "Authorization: Bearer $OPENAI_API_KEY"} \
+        ${AUTH_HEADER_FILE:+-H @"$AUTH_HEADER_FILE"} \
         -D "$CURL_HEADERS_FILE" -o "$CURL_RESPONSE_FILE" -w '%{http_code}' \
         -d @"$JSON_BODY_FILE" \
         "$OPENAI_URL" >"$CURL_HTTP_CODE_FILE"
@@ -742,6 +773,24 @@ agent_is_done() {
 }
 
 run_model_script() {
+    if ask_user_enabled; then
+        ask_user_to_approve_script || {
+            record_script_rejection
+            return
+        }
+    fi
+    run_approved_script
+}
+
+record_script_rejection() {
+    printf 'User chose not to run script. Try something else.\n' |
+        tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" ||
+        die "cannot write script exit code"
+    append_script_result_to_transcript
+}
+
+run_approved_script() {
     (
         run_script_in_configured_sandboxes 2>&1
         echo $? >"$EXIT_CODE_FILE" ||
@@ -751,9 +800,6 @@ run_model_script() {
 }
 
 run_script_in_configured_sandboxes() {
-    if ask_user_enabled; then
-        ask_user_to_approve_script || return 1
-    fi
     if [ -n "$SSA_SANDBOX_USER" ]; then
         run_script_as_sandbox_user
     else
@@ -775,7 +821,15 @@ ask_user_to_approve_script() {
 
 print_model_script() {
     printf 'Script from model:\n' >&2
-    cat "$MODEL_RESPONSE_FILE" >&2
+    # Show the script safely for ask review (file on disk unchanged).
+    cat "$MODEL_RESPONSE_FILE" |
+    # Carriage return can overwrite the line; show as \r.
+    sed -e "s/$(printf '\r')/\\\\r/g" |
+    # ESC starts ANSI/CSI sequences; show as \e.
+    sed -e "s/$(printf '\033')/\\\\e/g" |
+    # Other non-print bytes (keep tab); show as ?.
+    sed -e "s/[^[:print:]$(printf '\t')]/?/g" >&2 ||
+        die "cannot show model script"
 }
 
 handle_user_answers() {
@@ -783,7 +837,7 @@ handle_user_answers() {
         read_ask_answer_from_tty
         case $(cat "$USER_ANSWER_FILE") in
         y|Y|yes|YES) return 0 ;;
-        n|N|no|NO) reject_script; return 1 ;;
+        n|N|no|NO) return 1 ;;
         q|Q|quit|QUIT) die 'User chose to quit.' ;;
         *) print_invalid_input; print_ask_prompt ;;
         esac
@@ -791,13 +845,11 @@ handle_user_answers() {
 }
 
 read_ask_answer_from_tty() {
-    IFS= read -r REPLY </dev/tty || REPLY=""
+    IFS= read -r REPLY </dev/tty ||
+        die "cannot read answer from /dev/tty; " \
+        "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
     printf '%s\n' "$REPLY" >"$USER_ANSWER_FILE" ||
         die "cannot write to temp file: $USER_ANSWER_FILE"
-}
-
-reject_script() {
-    printf 'User chose not to run script. Try something else.\n'
 }
 
 print_invalid_input() {
