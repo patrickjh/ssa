@@ -49,7 +49,9 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 
 ## Setup and commands
 
-- Needs `curl` and `jq` on `PATH`.
+- Needs `curl`, `jq`, and usual POSIX tools on `PATH` (`cat`, `grep`,
+  `head`, `sed`, …). `ssa` checks these at startup (`head` is used to
+  take the first action line of a model reply).
 - ssa targets **POSIX systems only**. On Windows use WSL.
 - Help: `./ssa -h` (or `sh ssa -h`).
 - Smoke run (needs a real API): set `OPENAI_URL`, `OPENAI_API_KEY` if
@@ -96,23 +98,26 @@ repeat) with:
 ## Program flow
 
 1. **Start** — Parse CLI and task, validate settings and tools (`curl`,
-   `jq`, …), create temp folder, write system prompt and task into the
-   transcript, create `prompt0/`, seed with a bootstrap
+   `jq`, `head`, …), create temp folder, write system prompt and task
+   into the transcript, create `prompt0/`, seed with a bootstrap
    `echo starting the agent` (ask-user applies when enabled).
 2. **Loop** — For each model prompt (`prompt1+`), copy
    `fullTranscript.txt` to `promptN/transcript.txt` (temp log only), run
    `call_curl` against the live transcript; treat the reply as the
-   script; if done marker, stop; if write request (first line
-   `# write file: PATH`), write the rest of the reply to PATH through
-   the ask / user / command layers; else run through ask / user /
-   command layers; capture script output, then append it to the
-   transcript. Empty replies run like any other script (usually a
-   no-op) and get the normal script-result turn in the transcript.
-3. **Stop** — Exit `0` when the model reply is `# task complete`
-   (trailing newlines ignored: the check is
-   `[ "$(cat latestModelResponse.txt)" = '# task complete' ]`).
-   Exit `1` on harness failure or max model prompts.
-   SIGINT / SIGTERM → `130` / `143`.
+   script; if done marker, stop; if write request (first action line
+   `# write file: PATH`, after leading blank lines and `#` notes),
+   write everything after that line to PATH through the ask / user /
+   command layers; else run through ask / user / command layers;
+   capture script output, then append it to the transcript. Empty
+   replies run like any other script (usually a no-op) and get the
+   normal script-result turn in the transcript.
+3. **Stop** — Exit `0` when the first action line is `# task complete`
+   (leading blank lines and `#` notes skipped; trailing newlines
+   ignored: `[ "$(first_action_line)" = '# task complete' ]`).
+   `first_action_line` keeps `# task complete`, `# write file:…`, or a
+   non-`#` line (`grep -E`), takes the first (`head -n 1`), and fails
+   if none remain (`grep .`). Exit `1` on harness failure or max
+   model prompts. SIGINT / SIGTERM → `130` / `143`.
 
 ## Environment
 
@@ -178,22 +183,25 @@ User set → **change user, then run the sandbox command**.
 
 ## Write requests (`# write file:`)
 
-A reply whose **first line** is exactly `# write file: PATH` (path
+A reply whose **first action line** is `# write file: PATH` (path
 runs to end of line, must be non-empty) is a file write request, not a
-script. Everything after the first line is the raw file contents — no
-heredocs, no quoting, no escaping. Detection is in
-`reply_is_write_request`; done-marker check comes first.
+script. Leading blank lines and `#` notes are skipped;
+`first_action_line` returns that line. Everything after the sentinel
+is the raw file contents — no heredocs, no quoting, no escaping.
+Detection is in `reply_is_write_request`; done-marker check comes first.
 
 - The write runs through the same ask / sandbox layers as a script.
   The sandbox command is invoked with `-c`,
-  `sed 1d > "$0" && printf "wrote file: %s\n" "$0"`, and PATH
-  (`$0` in the `-c` script), with the full `latestModelResponse.txt`
-  on **stdin**. `sed 1d` drops the sentinel line; the rest is the
-  payload. The fd is opened by the harness, so sandbox user
+  `sed -n "/^# write file: ./,$p" | sed 1d > "$0"` then
+  `printf "wrote file: %s\n" "$0"`, and PATH (`$0` in the `-c`
+  script), with the full `latestModelResponse.txt` on **stdin**.
+  The first sed keeps from the sentinel to the end; `sed 1d` drops
+  the sentinel. That works when the sentinel is line 1 (unlike
+  `1,/pattern/d`). The fd is opened by the harness, so sandbox user
   permissions on the temp folder do not matter. The path is a
   positional argument — never interpolated into script text — so no
-  quoting problem exists. Sandbox commands must support sh-style
-  `-c` for write turns.
+  quoting problem exists. Sandbox commands must support sh-style `-c`
+  for write turns.
 - Success prints `wrote file: PATH`; failures (missing parent folder,
   permissions) land in the transcript like any script failure. The
   harness does **not** create parent folders; the model sends a
@@ -204,8 +212,9 @@ heredocs, no quoting, no escaping. Detection is in
   are kept. `jq -b` is added when the probe at startup succeeds, so
   jq builds that would otherwise write CRLF do not.
 - Large-file edits (prompt-taught **contract**, no prescribed
-  program): split into a chunk folder any way such that `cat chunks/*`
-  reproduces the file, prove it with
+  program): prefer blank-line boundaries and small chunks (a few
+  dozen lines at most, not large fixed blocks). Split such that
+  `cat chunks/*` reproduces the file, prove it with
   `cat chunks/* > check && cmp FILE check` **before** editing,
   overwrite one chunk per reply with a write request, join with
   `cat chunks/* > FILE.new && mv`.
@@ -241,8 +250,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   bootstrap (no curl / no transcript copy). `N` matches
   `PROMPT_COUNTER`.
 - Per-prompt HTTP logs live under `promptN/` for model prompts:
-  `body.json`, and `curlA/` with `headers.txt`, `response.txt`,
-  `httpCode.txt`, `exit.txt`
+  `body.json`, and `curlN/` (`curl1`, `curl2`, …) with `headers.txt`,
+  `response.txt`, `httpCode.txt`, `exit.txt`
 - `call_curl` / jq read the live transcript (`jq --rawfile`); no stdin
   prompt spool
 - Model replies are extracted with `jq -j` (and `jq -b` when that flag
@@ -351,8 +360,8 @@ Keep hints one short clause after a semicolon. Prefer
 **Skip “use --flag or ENV” hints** when that would mislead:
 
 - Internal harness failures (transcript I/O, temp folder setup).
-- Missing OS tools on `PATH` (`curl`, `jq`, `sudo`/`doas`, …) — say to
-  install or put the tool on `PATH`.
+- Missing OS tools on `PATH` (`curl`, `jq`, `head`, `sudo`/`doas`, …) —
+  say to install or put the tool on `PATH`.
 - Failures fixed outside ssa (API billing, account quota).
 
 The task has **no env var** — say to pass words after options or pipe

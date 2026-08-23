@@ -1,10 +1,11 @@
 writeFileRequest — model write requests
 
 The model creates or overwrites a file with no heredoc and no shell in
-the reply: first line is exactly "# write file: PATH" and every line
-after that is the raw file. ssa writes the rest of the reply to PATH
-with sed 1d through the same ask and sandbox layers as a script.
-No quoting or escaping applies to the payload.
+the reply: first action line is "# write file: PATH" (leading blank
+lines and # notes skipped) and every line after that sentinel is the
+raw file. ssa writes that payload to PATH with sed through the same
+ask and sandbox layers as a script. No quoting or escaping applies
+to the payload.
 
 Acceptance:
 - File lands byte-for-byte (quotes, dollars, backticks, backslashes,
@@ -16,5 +17,7 @@ Acceptance:
 - First line "# write file:" with no path is not a write request; it
   runs as a script
 - Path with spaces ("# write file: my file.txt") writes that file
+- Leading # notes and blank lines before the write sentinel are not
+  part of the file
 - Exit 0 after "# task complete"
 - Fake curl on PATH; no real network
