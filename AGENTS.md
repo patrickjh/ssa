@@ -24,9 +24,10 @@ ssa/
 ├── tests/             # live stories + acceptance tests
 │   ├── runTests.sh    # only entry point; per-test temp + trap
 │   ├── testUtils.sh   # functions only (sourced; no work on source)
+│   ├── completeSimpleTask/
+│   ├── editLargeFileByChunks/
 │   ├── showHelp/
-│   ├── writeFileRequest/
-│   └── editLargeFileByChunks/
+│   └── writeFileRequest/
 └── oldTests/          # archived suites; not current
 ```
 

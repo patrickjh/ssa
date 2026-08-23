@@ -154,3 +154,14 @@ run_ssa_task() {
         >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
     SSA_EXIT_CODE=$?
 }
+
+run_ssa_task_from_stdin() {
+    # Like run_ssa_task, but the task is stdin (no argv words).
+    require_test_temp_folder
+    [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
+    ( cd "$WORK_FOLDER" && sh "$(get_ssa_path)" \
+        --openai-url 'http://fake.test/chat/completions' \
+        --model fakeModel --no-ask "$@" ) \
+        >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
+    SSA_EXIT_CODE=$?
+}

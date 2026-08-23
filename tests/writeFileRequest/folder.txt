@@ -15,5 +15,6 @@ Acceptance:
   retried write recovers
 - First line "# write file:" with no path is not a write request; it
   runs as a script
+- Path with spaces ("# write file: my file.txt") writes that file
 - Exit 0 after "# task complete"
 - Fake curl on PATH; no real network
