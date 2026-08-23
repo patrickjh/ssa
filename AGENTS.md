@@ -49,8 +49,8 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 
 ## Setup and commands
 
-- Needs `curl` and `jq` on `PATH` (`winget install jqlang.jq` on Windows).
-- On Windows, use **Git Bash** (or WSL) for shell work and tests.
+- Needs `curl` and `jq` on `PATH`.
+- ssa targets **POSIX systems only**. On Windows use WSL.
 - Help: `./ssa -h` (or `sh ssa -h`).
 - Smoke run (needs a real API): set `OPENAI_URL`, `OPENAI_API_KEY` if
   required, and `-m` / `SSA_MODEL`; add `--no-ask` when there is no TTY.
@@ -62,7 +62,8 @@ checks, resolve paths, or set up state — callers invoke helpers such as
   `testUtils.sh` and call its functions; do not run `*.test.sh` alone.
 - `oldTests/` is archive only. When adding agent-loop stories: fake `curl`
   on `PATH`, canned `replyN.txt` as chat-completions JSON, prefer
-  `--no-ask`; skip `sudo`/`doas` and real `/dev/tty` under Git Bash.
+  `--no-ask`; skip `sudo`/`doas` and real `/dev/tty` requirements so
+  tests run on minimal POSIX setups.
 
 ## Boundaries
 
@@ -100,10 +101,12 @@ repeat) with:
 2. **Loop** — For each model prompt (`prompt1+`), copy
    `fullTranscript.txt` to `promptN/transcript.txt` (temp log only), run
    `call_curl` against the live transcript; treat the reply as the
-   script; if done marker, stop; else run through ask / user / command
-   layers; capture script output, then append it to the transcript.
-   Empty replies run like any other script (usually a no-op) and get the
-   normal script-result turn in the transcript.
+   script; if done marker, stop; if write request (first line
+   `# write file: PATH`), write the rest of the reply to PATH through
+   the ask / user / command layers; else run through ask / user /
+   command layers; capture script output, then append it to the
+   transcript. Empty replies run like any other script (usually a
+   no-op) and get the normal script-result turn in the transcript.
 3. **Stop** — Exit `0` when the model reply is exactly
    `# task complete`. Exit `1` on harness failure or max model prompts.
    SIGINT / SIGTERM → `130` / `143`.
@@ -173,6 +176,44 @@ After ask (or after ask is disabled), `latestModelResponse.txt` is fed to:
 
 User set → **change user, then run the sandbox command**.
 
+## Write requests (`# write file:`)
+
+A reply whose **first line** is exactly `# write file: PATH` (path
+runs to end of line, must be non-empty) is a file write request, not a
+script. Everything after the first line is the raw file contents — no
+heredocs, no quoting, no escaping. Detection is in
+`reply_is_write_request`; done-marker check comes first.
+
+- The write runs through the same ask / sandbox layers as a script.
+  The sandbox command is invoked with `-c`,
+  `sed 1d > "$0" && printf "wrote file: %s\n" "$0"`, and PATH
+  (`$0` in the `-c` script), with the full `latestModelResponse.txt`
+  on **stdin**. `sed 1d` drops the sentinel line; the rest is the
+  payload. The fd is opened by the harness, so sandbox user
+  permissions on the temp folder do not matter. The path is a
+  positional argument — never interpolated into script text — so no
+  quoting problem exists. Sandbox commands must support sh-style
+  `-c` for write turns.
+- Success prints `wrote file: PATH`; failures (missing parent folder,
+  permissions) land in the transcript like any script failure. The
+  harness does **not** create parent folders; the model sends a
+  normal `mkdir` script turn first.
+- One file per reply. `save_model_reply_to_file` writes the model
+  string with `jq -j` (raw, no extra newline) straight onto
+  `latestModelResponse.txt`, so trailing blank lines in the payload
+  are kept. `jq -b` is added when the probe at startup succeeds, so
+  jq builds that would otherwise write CRLF do not.
+- Large-file edits (prompt-taught **contract**, no prescribed
+  program): split into a chunk folder any way such that `cat chunks/*`
+  reproduces the file, prove it with
+  `cat chunks/* > check && cmp FILE check` **before** editing,
+  overwrite one chunk per reply with a write request, join with
+  `cat chunks/* > FILE.new && mv`.
+
+This is harness-parsed (unlike the earlier prompt-only raw-tail idea)
+because relying on POSIX stdin sharing proved non-portable across
+shells used as the sandbox command.
+
 ## Model (curl)
 
 Built-in OpenAI-compatible `/chat/completions` client:
@@ -204,6 +245,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   `httpCode.txt`, `exit.txt`
 - `call_curl` / jq read the live transcript (`jq --rawfile`); no stdin
   prompt spool
+- Model replies are extracted with `jq -j` (and `jq -b` when that flag
+  works; probed once at startup) onto `latestModelResponse.txt`
 - Sent as one `user` message; retries on transient HTTP errors;
   insufficient-quota `429` is fatal
 

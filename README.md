@@ -8,8 +8,8 @@ model **only shell**, run each step in a **fresh process**, keep a
 ## Requirements
 
 - POSIX `sh`, plus `curl` and `jq` on `PATH`
-- Linux and macOS work as usual; on Windows use **Git Bash** or WSL
-  (`winget install jqlang.jq` if you need `jq`)
+- Linux and macOS work as usual; on Windows use WSL (ssa targets POSIX
+  systems only)
 - A full OpenAI-style chat completions URL in `OPENAI_URL` (or
   `--openai-url`), ending in `…/chat/completions`
 
