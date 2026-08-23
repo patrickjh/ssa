@@ -74,7 +74,8 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 - Ask before committing or pushing.
 - Leave `oldTests/` alone unless the task is to remake or remove tests.
 - New acceptance coverage goes under `tests/` (camelCase story folders,
-  `story.md`, one case per explicitly named `*.test.sh`).
+  `folder.txt` explaining the folder, one case per explicitly named
+  `*.test.sh`).
 
 ---
 

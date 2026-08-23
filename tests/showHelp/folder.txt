@@ -1,0 +1,11 @@
+showHelp — user-facing help
+
+Run ssa -h or ssa --help to learn the tool without starting an agent.
+
+Acceptance:
+- Exit code 0
+- Help on stdout
+- Output includes usage (-h, --help) and a required setting such as
+  OPENAI_URL
+- Stderr empty on success
+- No model call and no temp agent session

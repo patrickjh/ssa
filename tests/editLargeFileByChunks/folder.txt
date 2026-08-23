@@ -1,0 +1,17 @@
+editLargeFileByChunks — large-file edits via chunk files
+
+The model changes part of a large file without heredocs or in-file
+markers: split at blank lines into chunks/NNNNNN (blank lines attach
+to the start of the following chunk), prove the split is lossless,
+overwrite one chunk with a write request, then join and remove the
+chunk folder. SYSTEM_PROMPT teaches the contract (cmp-proven split,
+cat join) without prescribing a program; the awk splitter in the test
+is one valid way a model might do it.
+
+Acceptance:
+- cat chunks/* reproduces the original file before any edit (cmp)
+- Overwrite one chunk and join yields the expected full file,
+  including blank-line separators
+- Chunk folder removed after join
+- Exit 0 after "# task complete"
+- Fake curl on PATH; no real network
