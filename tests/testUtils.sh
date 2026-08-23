@@ -42,6 +42,13 @@ expect_stdout_has() {
         fail "stdout missing: $1"
 }
 
+expect_stdout_lacks() {
+    require_test_temp_folder
+    if grep -qF -- "$1" "$TEST_TEMP_FOLDER/stdout.txt"; then
+        fail "stdout should not contain: $1"
+    fi
+}
+
 expect_stderr_empty() {
     require_test_temp_folder
     [ ! -s "$TEST_TEMP_FOLDER/stderr.txt" ] ||

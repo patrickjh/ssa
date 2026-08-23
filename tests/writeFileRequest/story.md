@@ -17,6 +17,8 @@ behavior.
   the transcript)
 - A write to a missing parent folder fails, the failure lands in the
   transcript, and a later script turn plus retried write recovers
+- A first line `# write file:` with no path is not a write request; it
+  runs as a script
 - The run exits 0 after the `# task complete` reply
 - No real network use: a fake `curl` on `PATH` serves canned
   chat-completions JSON replies

@@ -83,7 +83,7 @@ Options:
           Sets SSA_NO_ASK to 1.
   --openai-api-key KEY
           Bearer auth token for the model provider (optional for local
-          servers).Prefer OPENAI_API_KEY in the environment; CLI may
+          servers). Prefer OPENAI_API_KEY in the environment; CLI may
           show in ps.
           Sets OPENAI_API_KEY.
   --openai-url URL
@@ -289,7 +289,6 @@ set_sandbox_user() {
 
 check_required_commands() {
     check_command cat
-    check_command chmod
     check_command cp
     check_command curl
     check_command date

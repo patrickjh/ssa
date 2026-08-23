@@ -24,10 +24,9 @@ ssa/
 ├── tests/             # live stories + acceptance tests
 │   ├── runTests.sh    # only entry point; per-test temp + trap
 │   ├── testUtils.sh   # functions only (sourced; no work on source)
-│   └── showHelp/      # one camelCase folder per story
-│       ├── story.md
-│       ├── showHelpWithDashH.test.sh
-│       └── showHelpWithLongOption.test.sh
+│   ├── showHelp/
+│   ├── writeFileRequest/
+│   └── editLargeFileByChunks/
 └── oldTests/          # archived suites; not current
 ```
 
@@ -107,12 +106,11 @@ repeat) with:
    command layers; capture script output, then append it to the
    transcript. Empty replies run like any other script (usually a
    no-op) and get the normal script-result turn in the transcript.
-3. **Stop** — Exit `0` when the model reply is exactly
-   `# task complete`. Exit `1` on harness failure or max model prompts.
+3. **Stop** — Exit `0` when the model reply is `# task complete`
+   (trailing newlines ignored: the check is
+   `[ "$(cat latestModelResponse.txt)" = '# task complete' ]`).
+   Exit `1` on harness failure or max model prompts.
    SIGINT / SIGTERM → `130` / `143`.
-
-Done detection: full reply contents must equal that one line (no trim /
-first-line logic).
 
 ## Environment
 
