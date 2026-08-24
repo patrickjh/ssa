@@ -1,0 +1,41 @@
+parallelTestRunner — run story tests in parallel
+
+Why:
+tests/runTests.sh already isolates each *.test.sh (own process, own
+temp folder, fake curl PATH only in the child, TMPDIR under that
+folder). The loop is still sequential: setup, run, cleanup. Wall
+clock is the sum of every case.
+
+Do:
+Change only tests/runTests.sh (and a line in AGENTS.md if the runner
+contract changes). Cases should not need edits.
+
+Stay POSIX sh. Do not use xargs -P or make -j.
+
+Per case: unique temp folder (ssaTest.$$.$COUNTER is fine), pass
+TEST_TEMP_FOLDER and TEST_UTILS_FILE on the command line, then
+background sh "$TEST_SCRIPT". Do not mutate one exported parent
+TEST_TEMP_FOLDER while children run.
+
+Record pid → test path (a small file per job; POSIX sh has no
+arrays). wait "$pid" for each so FAIL lines still name the case.
+Plain wait only returns the last child's status.
+
+Clean temp folders after wait, not via a single EXIT trap that can
+delete a folder from under a running child. On SIGINT / SIGTERM,
+kill children, then clean up.
+
+No job-cap machinery unless needed; ~50 short local cases can all
+start. FAIL lines may wait until after wait so they do not
+interleave. Silent success and exit 0 when all pass stay as they
+are. No new ssa flag or env var.
+
+ssa temp dirs already include $PID and tests nest them under
+TEST_TEMP_FOLDER, so same-second starts should not collide.
+
+Tests:
+sh tests/runTests.sh still finds every tests/*/*.test.sh, exit 0
+when all pass, FAIL lines and exit 1 when one fails. A deliberate
+failing case (or a one-off copy) should still print FAIL  with the
+relative path. No new story folder required if the runner stay the
+same from the outside.

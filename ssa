@@ -224,14 +224,14 @@ parse_arguments() {
     while [ $# -gt 0 ]; do
         case $1 in
             -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
-            -m|--model) set_model "$2"; shift 2 ;;
+            -m|--model) set_model "${2-}"; shift 2 ;;
             --keep-temp) SSA_KEEP_TEMP=1; shift ;;
-            --max-model-prompts) set_max_model_prompts "$2"; shift 2 ;;
+            --max-model-prompts) set_max_model_prompts "${2-}"; shift 2 ;;
             --no-ask) SSA_NO_ASK=1; shift ;;
-            --openai-api-key) set_openai_api_key "$2"; shift 2 ;;
-            --openai-url) set_openai_url "$2"; shift 2 ;;
-            --request-json) set_request_json "$2"; shift 2 ;;
-            --sandbox-command) set_sandbox_command "$2"; shift 2 ;;
+            --openai-api-key) set_openai_api_key "${2-}"; shift 2 ;;
+            --openai-url) set_openai_url "${2-}"; shift 2 ;;
+            --request-json) set_request_json "${2-}"; shift 2 ;;
+            --sandbox-command) set_sandbox_command "${2-}"; shift 2 ;;
             --) shift; TASK=$*; return ;;
             -*) die "bad option: $1; see ssa -h for help" ;;
             *) TASK=$*; return ;;
