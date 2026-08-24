@@ -1,0 +1,5 @@
+omitBinaryScriptOutput — skip non-text script output in the chat log
+
+Script stdout is still printed live. A NUL, or bytes jq cannot put
+in messages.json, are omitted from the user turn. The exit code is
+kept and the loop continues.

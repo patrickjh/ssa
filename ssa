@@ -46,21 +46,15 @@ TEMP_FOLDER=""
 USER_ANSWER_FILE=""
 USER_TURN_FILE=""
 
-HELP_TEXT='Usage: ssa [options] task as a string no quotes needed
-       ssa -h | --help
-
-ssa — Simple Shell Agent.
+HELP_TEXT='ssa — Simple Shell Agent.
 A simple AI agent that feels like a unix util. Inspired by mini-swe-agent.
 
-Give ssa a task on the command line or via stdin. ssa works with an AI
-model to achieve the task using shell scripts. This is like handing your
-terminal to an AI model.
+Usage: ssa [options] task as a string no quotes needed
+       ssa -h | --help
 
-Needs POSIX sh, curl, and jq. OPENAI_URL (or --openai-url) and SSA_MODEL
-(or -m) are required. Set OPENAI_API_KEY (or --openai-api-key) if the
-provider requires auth. Extra curl flags: put a curl wrapper earlier on
-PATH. curl also honors https_proxy and related proxy environment
-variables.
+Requires POSIX sh, curl, and jq.
+OPENAI_URL and -m / SSA_MODEL are required.
+OPENAI_API_KEY is required if the provider needs auth.
 
 Options:
   -h, --help
@@ -93,9 +87,9 @@ Options:
           messages from ssa win if the object also sets those keys.
           Sets SSA_REQUEST_JSON.
   --sandbox-command COMMAND
-          Command that receives the model script on stdin and runs the script
-          in a sandbox. Should work like sh. Must support sh-style -c for
-          file write and edit requests. Default is sh.
+          Command that receives the model script on stdin and runs the
+          script in a sandbox. Should work like sh. Must support
+          sh-style -c for file write and edit requests. Default is sh.
           Sets SSA_SANDBOX_COMMAND.
 
 Environment:
@@ -108,42 +102,10 @@ Environment:
   SSA_REQUEST_JSON              See --request-json.
   SSA_SANDBOX_COMMAND           See --sandbox-command.
 
-  CLI flags override environment variables when both are set.
-
-Files:
-  Per-run temp folder under $TMPDIR. Removed on exit unless --keep-temp.
-
-How ssa works
-  ssa asks the model for a POSIX sh script, runs it, and appends the
-  result to the chat messages. Repeat until the first action line is
-  # task complete
-  or --max-model-prompts is hit. Leading blank lines and # notes are
-  skipped. A reply whose first action line is "# write file: PATH"
-  writes everything after that line to PATH (same ask and sandbox as a
-  script). A reply whose first action line is "# edit file: PATH"
-  replaces a unique old string in PATH with a new string (SEARCH /
-  REPLACE markers; same ask and sandbox). A script may also write
-  files (for example with a heredoc); prefer a write request for new
-  file bytes and an edit for a unique change. Empty or invalid replies
-  are sent back to the model as a format error and are not run. Old
-  chat turns are dropped when messages.json grows past a fixed byte
-  cap (system prompt and task are kept).
-
-Sandboxing
-  Ask sandbox (default): show each model script on stderr; approve from
-  /dev/tty ([Y]es / [N]o / [Q]uit). Turn off with --no-ask or SSA_NO_ASK=1.
-  Custom sandbox command: set --sandbox-command / SSA_SANDBOX_COMMAND to
-  some file that acts like sh but also applies sandboxing. You choose
-  which sandboxing to apply.
-  If none of these are set, the model runs as you in the current folder.
-
-Models
-  The model must reply with a raw POSIX sh script, a write request, an
-  edit request, or
-  # task complete
-  (leading blank lines and # notes before that line are ignored).
-  Markdown fences, thinking tags, empty replies, and invalid sh are
-  not run; the model is told and the loop continues.
+ssa asks the model for a script, a write, or an edit; runs it; and
+appends the result. Repeat until the first action line is
+# task complete
+or --max-model-prompts is hit. Empty or invalid replies are not run.
 
 Exit status:
   0       Task complete
@@ -151,21 +113,8 @@ Exit status:
   130     Interrupted (SIGINT).
   143     Terminated (SIGTERM).
 
-Examples:
-  # easy CLI usage after environment variables OPENAI_URL,
-  # OPENAI_API_KEY and SSA_MODEL are set:
+Example:
   ssa why is apt not updating?
-
-  # Script usage, showing all CLI args in action.
-  cat prompt.txt | ssa \
-    --model gpt-4o-mini \
-    --openai-api-key "$(cat openai_api_key.txt)" \
-    --openai-url https://api.openai.com/v1/chat/completions \
-    --no-ask \
-    --keep-temp \
-    --max-model-prompts 10 \
-    --sandbox-command /path/to/mySandbox.sh \
-    --request-json '\''{"max_tokens":8192,"think":false}'\''
 '
 
 SYSTEM_PROMPT='You help users solve tasks with POSIX sh. Each turn you get
@@ -215,6 +164,9 @@ FORMAT_ERROR_EMPTY='Format error: empty reply. Use a script, a write '\
 FORMAT_ERROR_NOT_SHELL='Format error: not valid POSIX sh. No markdown. '\
 'First line a script, # write file: PATH, # edit file: PATH, or '\
 '# task complete.'
+
+OUTPUT_OMITTED_NOT_UTF8='Output omitted: not valid UTF-8 (NUL or binary '\
+'bytes).'
 
 EDIT_APPLY_JQ='
 ($payload | split("<<<<<<< SEARCH\n")) as $a
@@ -474,7 +426,6 @@ setup_temp_files() {
 }
 
 setup_auth_header_file() {
-    AUTH_HEADER_FILE=""
     if [ -n "$OPENAI_API_KEY" ]; then
         AUTH_HEADER_FILE="${TEMP_FOLDER}/authHeader.txt"
         create_file_no_overwrite "$AUTH_HEADER_FILE"
@@ -751,8 +702,9 @@ reply_has_fence_line() {
 }
 
 reply_has_thinking_tags() {
-    if grep -q '<think>' "$MODEL_RESPONSE_FILE" ||
-        grep -q '</think>' "$MODEL_RESPONSE_FILE"
+    if grep -qF -- '<think>' "$MODEL_RESPONSE_FILE" ||
+        grep -qF -- '</think>' "$MODEL_RESPONSE_FILE" ||
+        grep -qF -- '<|channel>thought' "$MODEL_RESPONSE_FILE"
     then
         return $IS_TRUE
     fi
@@ -938,7 +890,29 @@ append_script_result() {
         printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
     } >"$USER_TURN_FILE" ||
         die "cannot write user turn"
+    if ! user_turn_is_json_safe; then
+        write_omitted_script_output
+    fi
     append_user_turn
+}
+
+user_turn_is_json_safe() {
+    # shellcheck disable=SC2086
+    if jq $JQ_BINARY_FLAG -e -n \
+        --rawfile content "$USER_TURN_FILE" \
+        '$content | contains("\u0000") | not' >/dev/null 2>&1
+    then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+write_omitted_script_output() {
+    {
+        printf '%s\n\n' "$OUTPUT_OMITTED_NOT_UTF8"
+        printf 'Script exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
+    } >"$USER_TURN_FILE" ||
+        die "cannot write user turn"
 }
 
 append_user_turn() {

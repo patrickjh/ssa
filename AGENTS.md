@@ -74,6 +74,10 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 - Edit `ssa` in place; keep **≤80 characters per line**.
 - Do not invent flags or env vars for things the caller’s shell can do
   (`cd`, `export`, redirects).
+- Keep `-h` short: flags, one loop paragraph, exit codes. Do not copy
+  Design, README recipes, or an Environment “See --foo” table into
+  help. When behavior changes, update `ssa` and this file. Only add a
+  help sentence if a flag’s meaning would otherwise be unclear.
 - Ask before committing or pushing.
 - Leave `oldTests/` alone unless the task is to remake or remove tests.
 - New acceptance coverage goes under `tests/` (camelCase story folders,
@@ -111,10 +115,12 @@ repeat) with:
    layers; if edit request (first action line
    `# edit file: PATH`), apply one unique SEARCH/REPLACE in the
    harness then write through the same layers; if the reply is empty,
-   has a markdown fence line, has thinking tags, or `sh -n` fails,
-   append a format error and continue (do not run it); else run
-   through ask / command layers; capture script output, then append
-   it to `messages.json`.
+   has a markdown fence line, has thinking tags (`<think>` or
+   `<|channel>thought`), or `sh -n` fails, append a format error
+   and continue (do not run it); else run through ask / command
+   layers; capture script output, then append it to `messages.json`
+   (if jq cannot hold it, or it contains a NUL, omit those bytes and
+   append a short note plus the exit code instead).
 3. **Stop** — Exit `0` when the first action line is `# task complete`
    (leading blank lines and `#` notes skipped; trailing newlines
    ignored: `[ "$(first_action_line)" = '# task complete' ]`).
@@ -270,6 +276,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   (always deleted on exit), `messages.json`, `latestModelResponse.txt`,
   `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d
   script output before the user-turn append to `messages.json`).
+  Output that `jq --rawfile` cannot hold, or that contains a NUL, is
+  omitted from that user turn; stdout is unchanged.
 - Before each **model** prompt (`prompt1+`), the harness caps
   `messages.json` to `MAX_MESSAGES_BYTES` (system prompt, task,
   and newest turns; die if one remaining turn is still over the cap),
