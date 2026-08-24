@@ -85,14 +85,24 @@ Treat that like handing the model your terminal.
 - **Ask-user approval is on by default** — each model script is shown on
   stderr; you approve from `/dev/tty` (`[Y]es` / `[N]o` / `[Q]uit`).
 - Optional **sandbox command**: `--sandbox-command` /
-  `SSA_SANDBOX_COMMAND` (default `sh`; use your own wrapper for
-  containers, pledge, jails, or a wall-clock timeout).
-  `COMMAND` is one executable (`command -v`), not `timeout 60 sh`.
-  A hung script (`tail -f`) or a background child that keeps stdout
-  open will block `tee` until that wrapper uses `timeout` /
-  `timelimit` and a process group (`timeout --foreground`, or
-  `setsid`) around `sh`, passing `"$@"` through so write/edit `-c`
-  still works.
+  `SSA_SANDBOX_COMMAND` (default `sh`). `COMMAND` is one executable
+  (`command -v`), not `timeout 60 sh`. Write/edit turns pass `-c`,
+  so the wrapper must forward `"$@"`. A hung script (`tail -f`) or
+  a background child that keeps stdout open will block `tee` unless
+  you use `timeout --foreground` (or `setsid`) around `sh`.
+
+  Example (save, `chmod +x`, then export the path). Needs a non-root
+  user and passwordless `sudo`/`doas` for that user. Drop `sudo` or
+  `timeout` if you only want one of those:
+
+```sh
+#!/bin/sh
+exec sudo -u ssa-sandbox -- timeout --foreground 60 sh "$@"
+```
+
+```sh
+export SSA_SANDBOX_COMMAND="$HOME/bin/ssa-sandbox"
+```
 
 ## Docs
 
