@@ -1,7 +1,8 @@
 #!/bin/sh
 # runTests.sh — only supported way to run story tests.
 # Starts each *.test.sh in a background process with its own temp
-# folder and harness env. Prints FAIL lines only; exit 0 if all pass.
+# folder and harness env. Prints FAIL lines, then a ran/failed count;
+# exit 0 if all pass.
 # Usage:
 #   sh tests/runTests.sh
 
@@ -9,7 +10,7 @@ set -u
 
 # Private to the runner
 CLEANED=0
-FAILED=0
+FAIL_COUNT=0
 JOBS_FOLDER=""
 TEST_COUNTER=0
 TEST_UTILS_FILE=""
@@ -23,7 +24,8 @@ main() {
     trap 'EXIT_STATUS=$?; cleanup_all_tests; exit $EXIT_STATUS' EXIT
     start_all_tests
     wait_all_tests
-    [ "$FAILED" = 0 ]
+    print_test_summary
+    [ "$FAIL_COUNT" = 0 ]
 }
 
 setup_test_runner() {
@@ -96,9 +98,14 @@ wait_all_tests() {
         TEST_STATUS=$?
         if [ "$TEST_STATUS" != 0 ]; then
             printf 'FAIL  %s\n' "$(cat "$JOBS_FOLDER/$TEST_PID.path")"
-            FAILED=1
+            FAIL_COUNT=$((FAIL_COUNT + 1))
         fi
     done <"$JOBS_FOLDER/pids"
+}
+
+print_test_summary() {
+    printf '%s tests ran and %s tests failed\n' \
+        "$TEST_COUNTER" "$FAIL_COUNT"
 }
 
 cleanup_all_tests() {

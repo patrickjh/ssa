@@ -59,8 +59,9 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 - Live tests: **only** via `sh tests/runTests.sh`. The runner starts
   each `*.test.sh` in a background process with its own temp folder
   and harness env (`TEST_TEMP_FOLDER`, `TEST_UTILS_FILE`), waits,
-  then cleans up. Test files are top-to-bottom scripts that source
-  `testUtils.sh` and call its functions; do not run `*.test.sh` alone.
+  then prints a ran/failed count and cleans up. Test files are
+  top-to-bottom scripts that source `testUtils.sh` and call its
+  functions; do not run `*.test.sh` alone.
 - When adding agent-loop stories: fake `curl` on `PATH`, canned
   `replyN.txt` as chat-completions JSON, prefer `--no-ask`; skip
   `sudo`/`doas` and real `/dev/tty` requirements so tests run on
