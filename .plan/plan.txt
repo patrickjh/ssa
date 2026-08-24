@@ -5,3 +5,4 @@ malformedHttpSuccess
 privateVarExport
 validateKeepTemp
 askUserRejectionFeedback
+readmeHumanLanguage
