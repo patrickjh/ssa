@@ -3,7 +3,7 @@
 Instructions for coding agents working in this repo. Humans: start with
 [README.md](README.md). Flags and defaults: `./ssa -h`. Design details and
 style rules are below; do not duplicate settings or behavior that `-h` and
-`ssa` already define.
+`ssa` already define. Open work lives in `.plan/`.
 
 ## Overview
 

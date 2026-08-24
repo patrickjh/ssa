@@ -1,0 +1,12 @@
+.plan/ — open work for coding agents, not product. Current
+behavior lives in ssa -h and AGENTS.md.
+
+folder.txt     this file
+plan.txt       next jobs, in order, by task file stem
+tasks/         one open task per .txt file; delete the file when done
+
+Every file under tasks/ is a job except doNot.txt. Do not add
+README, folder.txt, or index files in that folder. When a job is
+done, delete its task file and drop it from plan.txt.
+
+doNot.txt is a permanent fence, not a scheduled job.
