@@ -21,10 +21,18 @@ sentinel is # complete unless that line would get unclear.
 Do not accept both markers.
 
 A bare # complete is easier to type and to list with the other
-one-word sentinels. It is also a more ordinary comment; a
-script note that says # complete would become a done marker if
-it is the first action line. That is the same class of collision
-requireReplySentinels.txt is about. Do not rename as a drive-by
+one-word sentinels. Gemma 4 31B (see doNot.txt) is unlikely to
+hurt more from this rename: write/edit already need an exact
+sentinel, and a shorter done line is easier to copy from the
+prompt than # task complete. The Gemma-sensitive change is
+required # script on the hot path (requireReplySentinels.txt),
+not this marker.
+
+# complete is also a more ordinary comment; a script note that
+says # complete would become a done marker if it is the first
+action line. That is the same class of collision
+requireReplySentinels.txt is about: a wrong sentinel dispatches
+and does not format-error retry. Do not rename as a drive-by
 in that task; land them together only if both are yes.
 
 Tests:

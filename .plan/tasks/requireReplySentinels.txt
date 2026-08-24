@@ -30,14 +30,35 @@ script (today they are, because stdin is the full file).
 Empty payload is a format error. Ask can label the kind instead
 of always "Script from model."
 
-Cost: scripts are the hot path. Extra ceremony is another miss
-for small models; format-error retry can recover. System prompt
-and FORMAT_ERROR_* text must list the sentinels. first_action_line
-only keeps known sentinels (drop ^[^#]).
+Cost: scripts are the hot path. Gemma 4 31B (see doNot.txt)
+already misses envelopes: JSON tool calls if you send tools,
+markdown fences, <think> / <|channel>thought. ssa does not
+unwrap those; format-error retry is the recovery. Requiring
+# script moves the common path onto a protocol line, which is
+closer to those misses than write/edit already are. Keep one
+system-prompt example that is exactly # script plus a tiny
+script. Do not also accept a bare script. Do not rename
+write/edit in the same change.
 
-Related: completeSentinel.txt (maybe # complete). subAgents.txt
-is cheaper if script is not the leftover, but that task stays
-separate.
+A forgotten # script on an otherwise valid shell reply is the
+same as today's prose/fence miss: not run, no ask, no sandbox,
+format error in messages.json, next prompt can add the
+sentinel. Extra turns, tokens, and context. It can burn
+--max-model-prompts (exit 1) if it never complies, same as
+fences. A wrong sentinel (# complete as a comment, # script
+then a write payload) dispatches; it does not retry. Bare
+valid scripts that run today stop until the prefix appears.
+# script does not fix fences: a fenced reply still fails.
+
+A fifth kind (# subagent) is more like a second edit shape,
+which doNot.txt already rules out for this model.
+
+Related: completeSentinel.txt (maybe # complete; that rename
+is not the Gemma-sensitive part). subAgents.txt is cheaper if
+script is not the leftover, but that task stays separate.
+
+System prompt and FORMAT_ERROR_* text must list the sentinels.
+first_action_line only keeps known sentinels (drop ^[^#]).
 
 Tests:
 If no: none. If yes: every canned script reply gets # script.
