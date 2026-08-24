@@ -1,0 +1,2 @@
+--sandbox-command / SSA_SANDBOX_COMMAND runs each model script.
+A custom command that behaves like sh is used for the script turn.

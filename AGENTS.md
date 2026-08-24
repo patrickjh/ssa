@@ -28,7 +28,6 @@ ssa/
 │   ├── editLargeFileByChunks/
 │   ├── showHelp/
 │   └── writeFileRequest/
-└── oldTests/          # archived suites; not current
 ```
 
 Prefer **camelCase** for story folder names under `tests/`
@@ -62,10 +61,10 @@ checks, resolve paths, or set up state — callers invoke helpers such as
   `TEST_UTILS_FILE`), traps cleanup, then runs each `*.test.sh` as its
   own process. Test files are top-to-bottom scripts that source
   `testUtils.sh` and call its functions; do not run `*.test.sh` alone.
-- `oldTests/` is archive only. When adding agent-loop stories: fake `curl`
-  on `PATH`, canned `replyN.txt` as chat-completions JSON, prefer
-  `--no-ask`; skip `sudo`/`doas` and real `/dev/tty` requirements so
-  tests run on minimal POSIX setups.
+- When adding agent-loop stories: fake `curl` on `PATH`, canned
+  `replyN.txt` as chat-completions JSON, prefer `--no-ask`; skip
+  `sudo`/`doas` and real `/dev/tty` requirements so tests run on
+  minimal POSIX setups.
 
 ## Boundaries
 
@@ -79,7 +78,6 @@ checks, resolve paths, or set up state — callers invoke helpers such as
   help. When behavior changes, update `ssa` and this file. Only add a
   help sentence if a flag’s meaning would otherwise be unclear.
 - Ask before committing or pushing.
-- Leave `oldTests/` alone unless the task is to remake or remove tests.
 - New acceptance coverage goes under `tests/` (camelCase story folders,
   `folder.txt` explaining the folder, one case per explicitly named
   `*.test.sh`).
