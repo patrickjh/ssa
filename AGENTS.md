@@ -223,9 +223,9 @@ Built-in OpenAI-compatible `/chat/completions` client:
 
 - Required: `OPENAI_URL` (full `http(s)://…/chat/completions`), `-m` /
   `SSA_MODEL`
-- Optional: `OPENAI_API_KEY`, `SSA_MAX_HTTP_REQUESTS` (default 5),
-  `SSA_REQUEST_JSON` (JSON object merged into the request body; model
-  and messages from ssa win on key conflicts)
+- Optional: `OPENAI_API_KEY`, `SSA_REQUEST_JSON` (JSON object merged
+  into the request body; model and messages from ssa win on key
+  conflicts)
 - Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
   `--curl-args`). curl also honors `https_proxy` and related env vars.
 - At setup, if `OPENAI_API_KEY` is set, write
@@ -251,10 +251,9 @@ Built-in OpenAI-compatible `/chat/completions` client:
 - Model replies are extracted with `jq -j` (and `jq -b` when that flag
   works; probed once at startup) onto `latestModelResponse.txt`
 - Request body is `system` / `user` / `assistant` messages plus
-  `SSA_REQUEST_JSON` merged in. Curl uses `--fail`, `--retry`
-  (`SSA_MAX_HTTP_REQUESTS` minus one), `--retry-connrefused`,
-  `--retry-max-time`, `--connect-timeout`, and `--max-time`. A failed
-  curl is fatal.
+  `SSA_REQUEST_JSON` merged in. Curl uses `--fail`, `--retry`,
+  `--retry-connrefused`, `--retry-max-time`, `--connect-timeout`,
+  and `--max-time`. A failed curl is fatal.
 
 ## Settings summary
 
@@ -263,7 +262,6 @@ Built-in OpenAI-compatible `/chat/completions` client:
 | `OPENAI_API_KEY` | `--openai-api-key` | empty (optional) |
 | `OPENAI_URL` | `--openai-url` | unset (required) |
 | `SSA_KEEP_TEMP` | `--keep-temp` | `0` |
-| `SSA_MAX_HTTP_REQUESTS` | `--max-http-requests` | `5` |
 | `SSA_MAX_MODEL_PROMPTS` | `--max-model-prompts` | `20` |
 | `SSA_MODEL` | `-m` / `--model` | unset (required) |
 | `SSA_NO_ASK` | `--no-ask` → `1` | `0` |

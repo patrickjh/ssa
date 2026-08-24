@@ -9,7 +9,6 @@ set -u
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENAI_URL="${OPENAI_URL:-}"
 SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
-SSA_MAX_HTTP_REQUESTS="${SSA_MAX_HTTP_REQUESTS:-5}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
@@ -19,10 +18,7 @@ SSA_SANDBOX_USER="${SSA_SANDBOX_USER:-}"
 
 # Internal
 AUTH_HEADER_FILE=""
-CURL_CONNECT_TIMEOUT_SECONDS=30
-CURL_MAX_TIME_SECONDS=300
 CURL_RESPONSE_FILE=""
-CURL_RETRY_MAX_TIME_SECONDS=120
 EXIT_CODE_FILE=""
 HIT_MAX=2
 IS_FALSE=1
@@ -71,9 +67,6 @@ Options:
   --keep-temp
           Keep per-run temp folder after exit. Useful for debugging.
           Sets SSA_KEEP_TEMP to 1.
-  --max-http-requests N
-          Max HTTP tries per model prompt (default 5). Extra tries use
-          curl --retry (N-1). Sets SSA_MAX_HTTP_REQUESTS.
   --max-model-prompts N
           Stop after N model prompts (0 = no limit, default = 20).
           Sets SSA_MAX_MODEL_PROMPTS to N.
@@ -109,7 +102,6 @@ Environment:
   OPENAI_API_KEY                See --openai-api-key.
   OPENAI_URL                    See --openai-url.
   SSA_KEEP_TEMP                 See --keep-temp (0 = discard, 1 = keep).
-  SSA_MAX_HTTP_REQUESTS         See --max-http-requests.
   SSA_MAX_MODEL_PROMPTS         See --max-model-prompts.
   SSA_MODEL                     See -m / --model.
   SSA_NO_ASK                    See --no-ask (0 = ask, 1 = no ask).
@@ -168,7 +160,6 @@ Examples:
     --openai-url https://api.openai.com/v1/chat/completions \
     --no-ask \
     --keep-temp \
-    --max-http-requests 3 \
     --max-model-prompts 10 \
     --sandbox-user ssa-sandbox \
     --sandbox-command /path/to/mySandbox.sh \
@@ -233,7 +224,6 @@ parse_arguments() {
             -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
             -m|--model) set_model "$2"; shift 2 ;;
             --keep-temp) SSA_KEEP_TEMP=1; shift ;;
-            --max-http-requests) set_max_http_requests "$2"; shift 2 ;;
             --max-model-prompts) set_max_model_prompts "$2"; shift 2 ;;
             --no-ask) SSA_NO_ASK=1; shift ;;
             --openai-api-key) set_openai_api_key "$2"; shift 2 ;;
@@ -252,12 +242,6 @@ set_model() {
     [ -n "${1-}" ] ||
         die "-m / --model found with empty value; see ssa -h for help"
     SSA_MODEL=$1
-}
-
-set_max_http_requests() {
-    [ -n "${1-}" ] ||
-        die "--max-http-requests found with empty value; see ssa -h for help"
-    SSA_MAX_HTTP_REQUESTS=$1
 }
 
 set_max_model_prompts() {
@@ -329,7 +313,6 @@ check_can_run() {
     check_no_ask_setting
     check_model_is_set
     check_openai_url
-    check_max_http_requests
     check_sandbox_user
     check_sandbox_command
     check_request_json
@@ -375,18 +358,6 @@ check_openai_url() {
         die "OPENAI_URL must be a full http(s)://…/chat/completions " \
             "OpenAI style URL (got $OPENAI_URL); use --openai-url " \
             "or OPENAI_URL; see ssa -h for help"
-}
-
-check_max_http_requests() {
-    case $SSA_MAX_HTTP_REQUESTS in
-    *[!0-9]*) die "SSA_MAX_HTTP_REQUESTS must be a positive integer " \
-        "(got $SSA_MAX_HTTP_REQUESTS); use --max-http-requests or " \
-        "SSA_MAX_HTTP_REQUESTS; see ssa -h for help" ;;
-    esac
-    [ "$SSA_MAX_HTTP_REQUESTS" -ge 1 ] ||
-        die "SSA_MAX_HTTP_REQUESTS must be at least 1 " \
-        "(got $SSA_MAX_HTTP_REQUESTS); use --max-http-requests or " \
-        "SSA_MAX_HTTP_REQUESTS; see ssa -h for help"
 }
 
 check_sandbox_user() {
@@ -644,19 +615,16 @@ send_curl_json_request() {
     create_file_no_overwrite "$CURL_RESPONSE_FILE"
     # shellcheck disable=SC2086
     curl -sS --fail \
-        --retry "$((SSA_MAX_HTTP_REQUESTS - 1))" --retry-connrefused \
-        --retry-max-time "$CURL_RETRY_MAX_TIME_SECONDS" \
-        --connect-timeout "$CURL_CONNECT_TIMEOUT_SECONDS" \
-        --max-time "$CURL_MAX_TIME_SECONDS" \
+        --retry 4 --retry-connrefused --retry-max-time 120 \
+        --connect-timeout 30 --max-time 300 \
         -H "Content-Type: application/json" \
         ${AUTH_HEADER_FILE:+-H @"$AUTH_HEADER_FILE"} \
         --data-binary @"$JSON_BODY_FILE" \
         -o "$CURL_RESPONSE_FILE" \
         "$OPENAI_URL" ||
         die "curl failed; check --openai-url or OPENAI_URL, " \
-            "-m / --model or SSA_MODEL, --openai-api-key or " \
-            "OPENAI_API_KEY, and --max-http-requests or " \
-            "SSA_MAX_HTTP_REQUESTS; see ssa -h for help"
+            "-m / --model or SSA_MODEL, and --openai-api-key or " \
+            "OPENAI_API_KEY; see ssa -h for help"
 }
 
 save_model_reply_to_file() {
