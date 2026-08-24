@@ -1,0 +1,16 @@
+guardMissingCliValues — missing $2 under set -u
+
+Why:
+Value-taking options use $2 while set -u is on. ssa -m (no value)
+fails with a raw unbound variable error before the setter can print
+its usage die.
+
+Do:
+Guard that at least two arguments remain, or pass ${2-} into each
+setter. Keep the existing empty-value die messages.
+
+Tests:
+One case per value-taking option (or one story with several invokes):
+-m, --max-model-prompts, --openai-api-key, --openai-url,
+--request-json, --sandbox-command, --sandbox-user. expect_stderr_has
+the usage hint; expect_exit 1. No fake model needed (run_ssa).

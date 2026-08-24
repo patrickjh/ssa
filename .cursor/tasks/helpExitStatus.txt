@@ -1,0 +1,10 @@
+helpExitStatus — -h exits 0
+
+Why:
+Help documents exit 0 as task complete, but -h and --help also exit 0.
+
+Do:
+One line in the Exit status section: 0 also means requested help.
+tests/showHelp already expect_exit 0.
+
+No behavior change.

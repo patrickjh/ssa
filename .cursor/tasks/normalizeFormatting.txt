@@ -1,0 +1,13 @@
+normalizeFormatting — small style nits
+
+Why:
+Leftover formatting vs AGENTS.md style.
+
+Do:
+- Four-space indentation in cleanup_temp_folder if it still drifts.
+- Remove trailing spaces in static help text.
+- Revisit handle_user_answers vs print_ask_prompt so call-order
+  layout can be strict without a shared before-and-after dependency
+  (prompt at the top of the answer loop).
+
+No behavior change. Run sh tests/runTests.sh.

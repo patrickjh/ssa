@@ -1,0 +1,16 @@
+malformedHttpSuccess — 2xx with no usable message
+
+Why:
+Empty content is already a format error (emptyContentIsFormatError).
+A 2xx body that is not JSON, or JSON with no choices[0].message, can
+still fail inside jq with a poor hint and burn max model prompts.
+
+Do:
+Distinguish malformed JSON, missing fields, and empty content. Empty
+content stays a format error and the loop continues. Malformed HTTP
+success should die or format-error with a useful message — pick one
+and document it. Bound any retry.
+
+Tests:
+Fake curl serving non-JSON and JSON without choices; assert stderr
+and exit or recovery as documented.

@@ -1,0 +1,19 @@
+capMessagesJson — cap the live chat log
+
+Why:
+messages.json grows every turn. A Q4 Gemma 4 31B on a 24 GB card will
+drop the system prompt from KV cache or die mid-task. Cloud models hit
+context and cost the same way. Highest remaining harness win for local
+coding.
+
+Do:
+Keep system + task + the last N turns, or a byte cap, before each model
+prompt. Fail closed with a clear message if a single turn is over the
+cap. Do not invent a second transcript file.
+
+Tests/docs:
+Agent-loop story: many turns, assert promptN/messages.json stays within
+the cap and still has the system prompt. AGENTS.md program flow.
+
+No new flag unless a default is not enough; prefer a constant first.
+If a setting is needed: CLI + env, document in -h.

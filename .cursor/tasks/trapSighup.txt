@@ -1,0 +1,12 @@
+trapSighup — cleanup on hangup
+
+Why:
+INT and TERM clean the temp folder. A terminal hangup (SIGHUP) may
+leave it behind.
+
+Do:
+Add a HUP trap if cleanup-on-hangup is expected (same as TERM, or
+exit 129 if you follow that convention). If leaving files on hangup
+is fine, document that and delete this task.
+
+No need for an acceptance test that sends HUP unless it is easy.

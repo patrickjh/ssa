@@ -1,0 +1,13 @@
+declareScratchGlobals — name or declare scratch variables
+
+Why:
+POSIX sh has no portable locals. Names such as REPLY persist in the
+shell and can be reused by accident. listOfIssues also mentioned
+API_ERROR, HEADER_VALUE, SED_EXTRACT_BETWEEN_FENCES; some of those
+may already be gone — grep before renaming.
+
+Do:
+Declare leftovers in the Internal block, or use more explicit names.
+Do not shadow top-level variables.
+
+No user-facing change.

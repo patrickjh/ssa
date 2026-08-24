@@ -1,0 +1,16 @@
+urlQueryString — query string after /chat/completions
+
+Why:
+The URL check requires the value to end exactly in /chat/completions.
+That rejects Azure-style and other compatible URLs with ?api-version=
+and similar. README says any OpenAI-compatible endpoint works.
+
+Do:
+Either allow an optional query string (and fragment if needed) after
+the path, or narrow README. Prefer allowing ?... if it stays a single
+grep.
+
+Tests:
+Usage story: URL with a query string is accepted (can fail later on
+fake curl, but must not die at validation). One that is still a bad
+path still dies.

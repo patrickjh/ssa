@@ -1,0 +1,12 @@
+testRunnerSuccessSummary — optional pass count
+
+Why:
+tests/runTests.sh prints FAIL lines only. A short count on success
+would show that tests were discovered and run. Silent success may be
+a deliberate convention.
+
+Do:
+If you add it, keep it one line on stderr or stdout and still exit 0
+when all pass. Do not get noisy. If silent success is the point,
+delete this task and note the convention in tests/runTests.sh comments
+only.

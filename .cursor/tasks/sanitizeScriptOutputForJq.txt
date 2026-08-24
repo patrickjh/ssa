@@ -1,0 +1,17 @@
+sanitizeScriptOutputForJq — binary and invalid UTF-8 in script output
+
+Why:
+Script output is appended with jq --rawfile. Binary or invalid UTF-8
+can kill the next model prompt for any model, not just Gemma.
+
+Do:
+Pick one policy and document it: reject with a clear error, sanitize
+to a safe substitute, or encode before the user turn. Fail closed;
+do not die inside jq with no transcript hint.
+
+Tests:
+Agent-loop story: a script that prints a NUL or invalid UTF-8; assert
+the loop continues or dies with the documented message; messages.json
+stays valid JSON.
+
+Also listed in the old listOfIssues review.

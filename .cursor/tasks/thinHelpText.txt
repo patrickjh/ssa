@@ -1,0 +1,12 @@
+thinHelpText — shorter -h
+
+Why:
+The flag list is useful. Sandboxing, Models, the long example, and
+the Environment "See --foo" table repeat README and AGENTS.md. Cutting
+help does not make models smarter; it makes the file smaller.
+
+Do:
+Flags plus one short paragraph on the loop and exit codes. Keep Unix
+help on stdout. Update tests/showHelp greps if strings move.
+
+No behavior change.

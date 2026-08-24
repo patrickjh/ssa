@@ -1,0 +1,17 @@
+hardenAskListingUnicode — visual spoofing beyond control bytes
+
+Why:
+print_model_script already maps CR, ESC, and other non-print (except
+tab) for the ask listing. Bidi marks, homoglyphs, and similar Unicode
+tricks can still make the listing diverge from a human reading of the
+script. The file fed to the sandbox is unchanged.
+
+Do:
+Decide a policy: reject non-ASCII in the ask display, normalize/escape,
+or document the residual risk. Implement that policy only; do not
+change sandbox bytes.
+
+Tests:
+If display changes, an ask-enabled story is hard without a tty. Prefer
+documenting the risk in AGENTS.md ask sandbox unless you add a
+display-only unit you can run offline.
