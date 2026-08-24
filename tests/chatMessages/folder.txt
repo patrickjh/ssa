@@ -1,0 +1,3 @@
+The chat-completions body uses real system, user, and assistant roles.
+The live log is messages.json (copied to promptN/messages.json);
+there is no fullTranscript.txt.

@@ -106,11 +106,9 @@ REPLY_FILE="$SSA_TEST_REPLIES_FOLDER/reply${COUNT}.txt"
     exit 1
 }
 OUT_FILE=""
-HEADERS_FILE=""
 PREV=""
 for ARG in "$@"; do
     if [ "$PREV" = "-o" ]; then OUT_FILE=$ARG; fi
-    if [ "$PREV" = "-D" ]; then HEADERS_FILE=$ARG; fi
     PREV=$ARG
 done
 [ -n "$OUT_FILE" ] || {
@@ -118,10 +116,6 @@ done
     exit 1
 }
 cp "$REPLY_FILE" "$OUT_FILE" || exit 1
-if [ -n "$HEADERS_FILE" ]; then
-    printf 'HTTP/1.1 200 OK\r\n\r\n' >"$HEADERS_FILE" || exit 1
-fi
-printf '200'
 exit 0
 FAKE_CURL
     chmod +x "$1" || fail "cannot make fake curl executable"
@@ -147,7 +141,7 @@ run_ssa_task() {
     # Run an agent loop against the fake model, from WORK_FOLDER.
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
-    ( cd "$WORK_FOLDER" && sh "$(get_ssa_path)" \
+    ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" sh "$(get_ssa_path)" \
         --openai-url 'http://fake.test/chat/completions' \
         --model fakeModel --no-ask "$@" ) \
         </dev/null \
@@ -159,9 +153,29 @@ run_ssa_task_from_stdin() {
     # Like run_ssa_task, but the task is stdin (no argv words).
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
-    ( cd "$WORK_FOLDER" && sh "$(get_ssa_path)" \
+    ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" sh "$(get_ssa_path)" \
         --openai-url 'http://fake.test/chat/completions' \
         --model fakeModel --no-ask "$@" ) \
         >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
     SSA_EXIT_CODE=$?
+}
+
+add_model_reply_json() {
+    # $1 = reply number. Raw chat-completions JSON on stdin.
+    [ -n "${REPLIES_FOLDER:-}" ] || fail "call setup_fake_model first"
+    cat >"$REPLIES_FOLDER/reply$1.txt" ||
+        fail "cannot write canned reply $1"
+}
+
+get_kept_ssa_folder() {
+    require_test_temp_folder
+    set -- "$TEST_TEMP_FOLDER"/ssa-*
+    [ -d "$1" ] || fail "no kept ssa temp folder under $TEST_TEMP_FOLDER"
+    [ "$#" -eq 1 ] || fail "expected one ssa temp folder, got $#"
+    printf '%s\n' "$1"
+}
+
+get_prompt_body_file() {
+    # $1 = prompt number (1, 2, …)
+    printf '%s\n' "$(get_kept_ssa_folder)/prompt$1/body.json"
 }

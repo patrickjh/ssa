@@ -1,8 +1,8 @@
 #!/bin/sh
 # Model splits a file into chunks at blank lines, proves the split is
 # lossless, overwrites one chunk with a write request, joins back.
-# SYSTEM_PROMPT teaches the contract (lossless split proven with cmp);
-# the awk splitter here is one valid way a model might implement it.
+# The prompt does not teach this; the awk splitter is one way a model
+# might do it.
 
 set -u
 . "$TEST_UTILS_FILE"

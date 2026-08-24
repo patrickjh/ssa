@@ -1,0 +1,3 @@
+Invalid shell (prose, markdown fences, thinking tags, syntax errors)
+and empty replies are not run. A short format error is appended and
+the loop continues so the model can recover.

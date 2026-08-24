@@ -86,7 +86,7 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 
 ## Goal
 
-Agent loop (prompt → treat reply as shell script → run → transcript →
+Agent loop (prompt → treat reply as shell script → run → messages →
 repeat) with:
 
 - OpenAI-compatible HTTP via **curl** and **jq** (built in)
@@ -99,18 +99,18 @@ repeat) with:
 
 1. **Start** — Parse CLI and task, validate settings and tools (`curl`,
    `jq`, `head`, …), create temp folder, write system prompt and task
-   into the transcript, create `prompt0/`, seed with a bootstrap
+   into `messages.json`, create `prompt0/`, seed with a bootstrap
    `echo starting the agent` (ask-user applies when enabled).
-2. **Loop** — For each model prompt (`prompt1+`), copy
-   `fullTranscript.txt` to `promptN/transcript.txt` (temp log only), run
-   `call_curl` against the live transcript; treat the reply as the
-   script; if done marker, stop; if write request (first action line
-   `# write file: PATH`, after leading blank lines and `#` notes),
+2. **Loop** — For each model prompt (`prompt1+`), copy `messages.json`
+   to `promptN/messages.json` (temp log only), run `call_curl` against
+   `messages.json` (system / user / assistant roles); treat the reply
+   as the script. If done marker, stop; if write request (first action
+   line `# write file: PATH`, after leading blank lines and `#` notes),
    write everything after that line to PATH through the ask / user /
-   command layers; else run through ask / user / command layers;
-   capture script output, then append it to the transcript. Empty
-   replies run like any other script (usually a no-op) and get the
-   normal script-result turn in the transcript.
+   command layers; if the reply is empty, has a markdown fence line,
+   has thinking tags, or `sh -n` fails, append a format error and
+   continue (do not run it); else run through ask / user / command
+   layers; capture script output, then append it to `messages.json`.
 3. **Stop** — Exit `0` when the first action line is `# task complete`
    (leading blank lines and `#` notes skipped; trailing newlines
    ignored: `[ "$(first_action_line)" = '# task complete' ]`).
@@ -165,8 +165,8 @@ Ask and sandbox user are optional. The sandbox command always runs
 - CLI: `--sandbox-command COMMAND`, or leave default `sh`.
 - Validated with `command -v` at startup.
 - The harness feeds `latestModelResponse.txt` on that command’s **stdin**.
-- Contract: stdout/stderr from the run; exit code recorded in the
-  transcript. Unrecoverable stop from inside the harness uses `die`
+- Contract: stdout/stderr from the run; exit code recorded in
+  `messages.json`. Unrecoverable stop from inside the harness uses `die`
   (SIGUSR1 to `PID`). Custom sandbox commands do not get `PID`
   in their environment.
 
@@ -188,7 +188,8 @@ runs to end of line, must be non-empty) is a file write request, not a
 script. Leading blank lines and `#` notes are skipped;
 `first_action_line` returns that line. Everything after the sentinel
 is the raw file contents — no heredocs, no quoting, no escaping.
-Detection is in `reply_is_write_request`; done-marker check comes first.
+Detection is in `reply_is_write_request`; done-marker and blank-reply
+checks come first; `sh -n` is not applied to write requests.
 
 - The write runs through the same ask / sandbox layers as a script.
   The sandbox command is invoked with `-c`,
@@ -203,7 +204,7 @@ Detection is in `reply_is_write_request`; done-marker check comes first.
   quoting problem exists. Sandbox commands must support sh-style `-c`
   for write turns.
 - Success prints `wrote file: PATH`; failures (missing parent folder,
-  permissions) land in the transcript like any script failure. The
+  permissions) land in `messages.json` like any script failure. The
   harness does **not** create parent folders; the model sends a
   normal `mkdir` script turn first.
 - One file per reply. `save_model_reply_to_file` writes the model
@@ -211,13 +212,6 @@ Detection is in `reply_is_write_request`; done-marker check comes first.
   `latestModelResponse.txt`, so trailing blank lines in the payload
   are kept. `jq -b` is added when the probe at startup succeeds, so
   jq builds that would otherwise write CRLF do not.
-- Large-file edits (prompt-taught **contract**, no prescribed
-  program): prefer blank-line boundaries and small chunks (a few
-  dozen lines at most, not large fixed blocks). Split such that
-  `cat chunks/*` reproduces the file, prove it with
-  `cat chunks/* > check && cmp FILE check` **before** editing,
-  overwrite one chunk per reply with a write request, join with
-  `cat chunks/* > FILE.new && mv`.
 
 This is harness-parsed (unlike the earlier prompt-only raw-tail idea)
 because relying on POSIX stdin sharing proved non-portable across
@@ -229,7 +223,9 @@ Built-in OpenAI-compatible `/chat/completions` client:
 
 - Required: `OPENAI_URL` (full `http(s)://…/chat/completions`), `-m` /
   `SSA_MODEL`
-- Optional: `OPENAI_API_KEY`, `SSA_MAX_HTTP_REQUESTS` (default 5)
+- Optional: `OPENAI_API_KEY`, `SSA_MAX_HTTP_REQUESTS` (default 5),
+  `SSA_REQUEST_JSON` (JSON object merged into the request body; model
+  and messages from ssa win on key conflicts)
 - Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
   `--curl-args`). curl also honors `https_proxy` and related env vars.
 - At setup, if `OPENAI_API_KEY` is set, write
@@ -238,29 +234,27 @@ Built-in OpenAI-compatible `/chat/completions` client:
   curl argv does not contain it. `authHeader.txt` is overwritten and
   removed on every exit (including `--keep-temp`).
 - Once per run, writes `OPENAI_URL` to `$TEMP_FOLDER/openaiUrl.txt`
-  and the task to `$TEMP_FOLDER/task.txt` (log only; transcript seed
-  still uses `TASK`)
+  and the task to `$TEMP_FOLDER/task.txt` (log only)
 - Temp working files include `authHeader.txt` while the run needs it
-  (always deleted on exit), `latestModelResponse.txt`,
+  (always deleted on exit), `messages.json`, `latestModelResponse.txt`,
   `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d
-  script output before transcript append).
+  script output before the user-turn append to `messages.json`).
 - Before each **model** prompt (`prompt1+`), the harness copies
-  `fullTranscript.txt` to `$TEMP_FOLDER/promptN/transcript.txt` for
+  `messages.json` to `$TEMP_FOLDER/promptN/messages.json` for
   debugging (`--keep-temp`). `prompt0/` is created for the fake-first
-  bootstrap (no curl / no transcript copy). `N` matches
+  bootstrap (no curl / no messages copy). `N` matches
   `PROMPT_COUNTER`.
 - Per-prompt HTTP logs live under `promptN/` for model prompts:
-  `body.json`, and `curlN/` (`curl1`, `curl2`, …) with `headers.txt`,
-  `response.txt`, `httpCode.txt`, `exit.txt`
-- `call_curl` / jq read the live transcript (`jq --rawfile`); no stdin
-  prompt spool
+  `body.json`, `requestExtra.json`, and `response.txt`
+- `call_curl` / jq read `messages.json` (not one concatenated user
+  blob); no stdin prompt spool
 - Model replies are extracted with `jq -j` (and `jq -b` when that flag
   works; probed once at startup) onto `latestModelResponse.txt`
-- Sent as one `user` message; retries on transient HTTP errors;
-  insufficient-quota `429` is fatal
-
-Non-zero curl exit → retry the loop (next call number gets a fresh
-`promptN/transcript.txt` log snapshot).
+- Request body is `system` / `user` / `assistant` messages plus
+  `SSA_REQUEST_JSON` merged in. Curl uses `--fail`, `--retry`
+  (`SSA_MAX_HTTP_REQUESTS` minus one), `--retry-connrefused`,
+  `--retry-max-time`, `--connect-timeout`, and `--max-time`. A failed
+  curl is fatal.
 
 ## Settings summary
 
@@ -273,6 +267,7 @@ Non-zero curl exit → retry the loop (next call number gets a fresh
 | `SSA_MAX_MODEL_PROMPTS` | `--max-model-prompts` | `20` |
 | `SSA_MODEL` | `-m` / `--model` | unset (required) |
 | `SSA_NO_ASK` | `--no-ask` → `1` | `0` |
+| `SSA_REQUEST_JSON` | `--request-json` | empty |
 | `SSA_SANDBOX_COMMAND` | `--sandbox-command` | `sh` |
 | `SSA_SANDBOX_USER` | `--sandbox-user` | empty |
 
@@ -331,7 +326,7 @@ Path suffix by what the variable holds:
 | `_SCRIPT` | Path to an executable file |
 
 On-disk names under the temp folder use **camelCase** (e.g.
-`fullTranscript.txt`). Shell variables that hold paths use `UPPER_CASE`
+`messages.json`). Shell variables that hold paths use `UPPER_CASE`
 with `_FILE` / `_FOLDER` / `_SCRIPT`.
 
 **Do not shadow top-level variables.** Use `$1`, `$2`, or different local
@@ -359,7 +354,7 @@ Keep hints one short clause after a semicolon. Prefer
 
 **Skip “use --flag or ENV” hints** when that would mislead:
 
-- Internal harness failures (transcript I/O, temp folder setup).
+- Internal harness failures (messages I/O, temp folder setup).
 - Missing OS tools on `PATH` (`curl`, `jq`, `head`, `sudo`/`doas`, …) —
   say to install or put the tool on `PATH`.
 - Failures fixed outside ssa (API billing, account quota).
