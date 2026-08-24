@@ -1,0 +1,53 @@
+subAgents — figure out how nested agents should work
+
+Why:
+Large tasks want a fresh messages.json and a short result back,
+without dumping the child's whole loop into the parent. The model
+cannot honestly re-enter ssa today: OPENAI_API_KEY is unset so
+scripts never see it; CLI-set OPENAI_URL / SSA_MODEL are unexported
+harness locals; inner ssa defaults to ask-on and wants /dev/tty;
+child stdout is every inner script's output, which can blow
+MAX_MESSAGES_BYTES. This is undecided. Do not treat a fifth reply
+shape as required work.
+
+Do:
+Decide first. Keep the product Unix-shaped: only shell, each action
+a fresh process, no extra protocol unless quoting or credentials
+force it. Document the choice in AGENTS.md; keep -h short.
+
+One path is composition with existing shapes: write a prompt file,
+then run ssa --no-ask as a script. That matches "do not add what
+the caller's shell can do." It only works if the child can auth
+without putting the key in the sandbox (a wrapper or harness
+re-exec, not export OPENAI_API_KEY into model scripts). If the key
+lands in the sandbox, the model can curl with it too.
+
+One suggested possibility is a harness flow like write/edit:
+
+# subagent
+<raw prompt>
+
+First action line is the sentinel; everything after it is the task,
+no quoting. Skip sh -n, fences, and think tags (the prompt may
+contain those). Empty tail fails the turn, like a bad edit, and
+does not spawn. Optional: # subagent: short label for the ask
+banner and promptN/ logs, so a bare # comment is not a spawn.
+Ask once on the prompt, then run the child with --no-ask. Child
+inherits model, URL, key, sandbox, and request JSON; fresh temp
+and messages.json. Depth 1 (child # subagent fails). Cap the
+child's --max-model-prompts. Return child's stdout plus the final
+status / exit code as one user turn, not the child's
+messages.json; reuse the omit path for huge or NUL output. One
+spawn per reply. No parallel, no per-child model.
+
+The spawn syntax is the easy part. The decision is ask, depth,
+budget, and what the parent sees. A smaller experiment is
+harness-only re-exec so `ssa --no-ask "$(cat task.txt)"` works
+from a script without a new reply shape.
+
+Tests:
+None until a shape is chosen. Fake curl, --no-ask, skip sudo/doas
+and real /dev/tty. Cover empty prompt / failed spawn, depth 1, and
+that the parent user turn is a short result (not the child's full
+transcript). Ask-once needs a pty if you keep ask on for the
+parent spawn.
