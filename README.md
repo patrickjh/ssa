@@ -83,8 +83,6 @@ Treat that like handing the model your terminal.
 
 - **Ask-user approval is on by default** — each model script is shown on
   stderr; you approve from `/dev/tty` (`[Y]es` / `[N]o` / `[Q]uit`).
-- Optional **sandbox user**: `--sandbox-user` / `SSA_SANDBOX_USER`
-  (needs `sudo` or `doas`).
 - Optional **sandbox command**: `--sandbox-command` /
   `SSA_SANDBOX_COMMAND` (default `sh`; use your own wrapper for
   containers, pledge, jails, etc.).

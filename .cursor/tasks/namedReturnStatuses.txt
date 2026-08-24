@@ -3,7 +3,7 @@ namedReturnStatuses — no magic 0/1 in function bodies
 Why:
 AGENTS.md says control-flow numbers used for return and loop status
 are named constants. Several functions still return literal 0 or 1
-(parse_arguments helpers, ask answers, sandbox-user early returns).
+(parse_arguments helpers, ask answers).
 
 Do:
 Use IS_TRUE, IS_FALSE, or a more specific named status. Keep

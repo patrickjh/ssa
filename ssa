@@ -14,11 +14,13 @@ SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
 SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
 SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
-SSA_SANDBOX_USER="${SSA_SANDBOX_USER:-}"
 
 # Internal
 AUTH_HEADER_FILE=""
 CURL_RESPONSE_FILE=""
+EDITED_BYTES_FILE=""
+EDIT_PAYLOAD_FILE=""
+EDIT_RESULT_FILE=""
 EXIT_CODE_FILE=""
 HIT_MAX=2
 IS_FALSE=1
@@ -27,6 +29,7 @@ JQ_BINARY_FLAG=""
 JSON_BODY_FILE=""
 LOOP_AGAIN=0
 LOOP_STATUS="stopped"
+MAX_MESSAGES_BYTES=131072
 MESSAGES_FILE=""
 MESSAGES_NEXT_FILE=""
 MODEL_RESPONSE_FILE=""
@@ -34,6 +37,7 @@ PER_PROMPT_LOG_FOLDER=""
 PID=$$
 PROMPT_COUNTER=0
 REQUEST_EXTRA_FILE=""
+SANDBOX_STDIN_FILE=""
 SCRIPT_OUTPUT_FILE=""
 SYSTEM_PROMPT_FILE=""
 TASK=""
@@ -91,12 +95,8 @@ Options:
   --sandbox-command COMMAND
           Command that receives the model script on stdin and runs the script
           in a sandbox. Should work like sh. Must support sh-style -c for
-          file write requests. Default is sh.
+          file write and edit requests. Default is sh.
           Sets SSA_SANDBOX_COMMAND.
-  --sandbox-user USER
-          Run model scripts as this Unix login user using sudo or doas.
-          USER can be a username or UID that is not root or the current user.
-          Sets SSA_SANDBOX_USER.
 
 Environment:
   OPENAI_API_KEY                See --openai-api-key.
@@ -107,7 +107,6 @@ Environment:
   SSA_NO_ASK                    See --no-ask (0 = ask, 1 = no ask).
   SSA_REQUEST_JSON              See --request-json.
   SSA_SANDBOX_COMMAND           See --sandbox-command.
-  SSA_SANDBOX_USER              See --sandbox-user.
 
   CLI flags override environment variables when both are set.
 
@@ -121,22 +120,26 @@ How ssa works
   or --max-model-prompts is hit. Leading blank lines and # notes are
   skipped. A reply whose first action line is "# write file: PATH"
   writes everything after that line to PATH (same ask and sandbox as a
-  script). A script may also write files (for example with a heredoc);
-  prefer a write request for new file bytes. Empty or invalid replies
-  are sent back to the model as a format error and are not run.
+  script). A reply whose first action line is "# edit file: PATH"
+  replaces a unique old string in PATH with a new string (SEARCH /
+  REPLACE markers; same ask and sandbox). A script may also write
+  files (for example with a heredoc); prefer a write request for new
+  file bytes and an edit for a unique change. Empty or invalid replies
+  are sent back to the model as a format error and are not run. Old
+  chat turns are dropped when messages.json grows past a fixed byte
+  cap (system prompt and task are kept).
 
 Sandboxing
   Ask sandbox (default): show each model script on stderr; approve from
   /dev/tty ([Y]es / [N]o / [Q]uit). Turn off with --no-ask or SSA_NO_ASK=1.
-  POSIX user sandbox: set --sandbox-user / SSA_SANDBOX_USER to a user that
-  is not root or the current user. Restrict that user with file permissions.
   Custom sandbox command: set --sandbox-command / SSA_SANDBOX_COMMAND to
   some file that acts like sh but also applies sandboxing. You choose
   which sandboxing to apply.
   If none of these are set, the model runs as you in the current folder.
 
 Models
-  The model must reply with a raw POSIX sh script, a write request, or
+  The model must reply with a raw POSIX sh script, a write request, an
+  edit request, or
   # task complete
   (leading blank lines and # notes before that line are ignored).
   Markdown fences, thinking tags, empty replies, and invalid sh are
@@ -161,14 +164,13 @@ Examples:
     --no-ask \
     --keep-temp \
     --max-model-prompts 10 \
-    --sandbox-user ssa-sandbox \
     --sandbox-command /path/to/mySandbox.sh \
     --request-json '\''{"max_tokens":8192,"think":false}'\''
 '
 
 SYSTEM_PROMPT='You help users solve tasks with POSIX sh. Each turn you get
 prior commands and their output. Continue from there. Reply with only
-one of the three shapes below. Do not wrap the reply in markdown or
+one of the four shapes below. Do not wrap the reply in markdown or
 code fences. Put reasoning in # comments. Prefer scripts that will
 not hang.
 
@@ -190,6 +192,17 @@ Do not put a script after the write file line. One file per reply.
 If you need mkdir first, send that as a script turn, then the write.
 A script may also write files with a heredoc or printf.
 
+An edit request (preferred for changing existing file bytes). The
+old string must match exactly once:
+
+# edit file: hello.txt
+<<<<<<< SEARCH
+hello
+=======
+hello
+world
+>>>>>>> REPLACE
+
 Or the done line when the task is complete (leading blank lines and
 # notes are ignored):
 
@@ -197,10 +210,47 @@ Or the done line when the task is complete (leading blank lines and
 '
 
 FORMAT_ERROR_EMPTY='Format error: empty reply. Use a script, a write '\
-'request, or # task complete.'
+'request, an edit, or # task complete.'
 
 FORMAT_ERROR_NOT_SHELL='Format error: not valid POSIX sh. No markdown. '\
-'First line a script, # write file: PATH, or # task complete.'
+'First line a script, # write file: PATH, # edit file: PATH, or '\
+'# task complete.'
+
+EDIT_APPLY_JQ='
+($payload | split("<<<<<<< SEARCH\n")) as $a
+| if ($a | length) != 2 or $a[0] != "" then
+    {ok: false, msg: "missing SEARCH/REPLACE markers"}
+  else
+    ($a[1] | split("\n=======\n")) as $b
+    | if ($b | length) != 2 then
+        {ok: false, msg: "missing SEARCH/REPLACE markers"}
+      else
+        ($b[1] |
+          if startswith(">>>>>>> REPLACE") then
+            ["", ltrimstr(">>>>>>> REPLACE")]
+          else split("\n>>>>>>> REPLACE")
+          end
+        ) as $c
+        | if ($c | length) != 2 then
+            {ok: false, msg: "missing SEARCH/REPLACE markers"}
+          elif $c[1] != "" and $c[1] != "\n" then
+            {ok: false, msg: "missing SEARCH/REPLACE markers"}
+          elif $b[0] == "" then
+            {ok: false, msg: "old string is empty"}
+          else
+            ($file | split($b[0])) as $p
+            | if ($p | length) != 2 then
+                {ok: false,
+                 msg: ("old string matched "
+                   + (($p | length) - 1 | tostring)
+                   + " times (need 1)")}
+              else
+                {ok: true, text: ($p[0] + $c[0] + $p[1])}
+              end
+          end
+      end
+  end
+'
 
 main() {
     trap handle_die_signal USR1
@@ -230,7 +280,6 @@ parse_arguments() {
             --openai-url) set_openai_url "$2"; shift 2 ;;
             --request-json) set_request_json "$2"; shift 2 ;;
             --sandbox-command) set_sandbox_command "$2"; shift 2 ;;
-            --sandbox-user) set_sandbox_user "$2"; shift 2 ;;
             --) shift; TASK=$*; return ;;
             -*) die "bad option: $1; see ssa -h for help" ;;
             *) TASK=$*; return ;;
@@ -274,12 +323,6 @@ set_sandbox_command() {
     SSA_SANDBOX_COMMAND=$1
 }
 
-set_sandbox_user() {
-    [ -n "${1-}" ] ||
-        die "--sandbox-user found with empty value; see ssa -h for help"
-    SSA_SANDBOX_USER=$1
-}
-
 check_required_commands() {
     check_command cat
     check_command cp
@@ -287,7 +330,6 @@ check_required_commands() {
     check_command date
     check_command grep
     check_command head
-    check_command id
     check_command jq
     check_command mkdir
     check_command rm
@@ -313,7 +355,6 @@ check_can_run() {
     check_no_ask_setting
     check_model_is_set
     check_openai_url
-    check_sandbox_user
     check_sandbox_command
     check_request_json
     if ask_user_enabled; then check_prompt_device; fi
@@ -358,48 +399,6 @@ check_openai_url() {
         die "OPENAI_URL must be a full http(s)://…/chat/completions " \
             "OpenAI style URL (got $OPENAI_URL); use --openai-url " \
             "or OPENAI_URL; see ssa -h for help"
-}
-
-check_sandbox_user() {
-    if [ -z "$SSA_SANDBOX_USER" ]; then return 0; fi
-    check_sandbox_user_exists
-    check_current_user_is_not_root
-    check_sandbox_user_is_not_current_user
-    check_sandbox_user_is_not_root
-    check_sudo_or_doas_available
-}
-
-check_sandbox_user_exists() {
-    id -u "$SSA_SANDBOX_USER" >/dev/null 2>&1 ||
-        die "sandbox user not found: $SSA_SANDBOX_USER; " \
-        "use --sandbox-user or SSA_SANDBOX_USER; see ssa -h for help"
-}
-
-check_current_user_is_not_root() {
-    [ "$(id -u)" -ne 0 ] ||
-        die "refusing to run as root; use your login account and " \
-        "a dedicated sandbox user; see ssa -h for help"
-}
-
-check_sandbox_user_is_not_current_user() {
-    [ "$(id -u)" -ne "$(id -u "$SSA_SANDBOX_USER")" ] ||
-        die "sandbox user is the current user; " \
-        "use --sandbox-user or SSA_SANDBOX_USER; see ssa -h for help"
-}
-
-check_sandbox_user_is_not_root() {
-    [ "$(id -u "$SSA_SANDBOX_USER")" -ne 0 ] ||
-        die "refusing to run scripts as root; see ssa -h for help"
-}
-
-check_sudo_or_doas_available() {
-    if command -v sudo >/dev/null 2>&1; then
-        return 0
-    fi
-    if command -v doas >/dev/null 2>&1; then
-        return 0
-    fi
-    die "need sudo or doas on PATH to change user; see ssa -h for help"
 }
 
 check_sandbox_command() {
@@ -455,12 +454,19 @@ setup_temp_folder() {
 
 setup_temp_files() {
     MODEL_RESPONSE_FILE="${TEMP_FOLDER}/latestModelResponse.txt"
+    EDITED_BYTES_FILE="${TEMP_FOLDER}/latestEditedBytes.txt"
+    EDIT_PAYLOAD_FILE="${TEMP_FOLDER}/latestEditPayload.txt"
+    EDIT_RESULT_FILE="${TEMP_FOLDER}/latestEditResult.json"
     EXIT_CODE_FILE="${TEMP_FOLDER}/latestScriptExitCode.txt"
     SCRIPT_OUTPUT_FILE="${TEMP_FOLDER}/latestScriptOutput.txt"
     MESSAGES_FILE="${TEMP_FOLDER}/messages.json"
     MESSAGES_NEXT_FILE="${TEMP_FOLDER}/messagesNext.json"
     USER_TURN_FILE="${TEMP_FOLDER}/latestUserTurn.txt"
+    SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
     create_file_no_overwrite "$MODEL_RESPONSE_FILE"
+    create_file_no_overwrite "$EDITED_BYTES_FILE"
+    create_file_no_overwrite "$EDIT_PAYLOAD_FILE"
+    create_file_no_overwrite "$EDIT_RESULT_FILE"
     create_file_no_overwrite "$EXIT_CODE_FILE"
     create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
     create_file_no_overwrite "$MESSAGES_FILE"
@@ -560,6 +566,7 @@ run_agent_loop() {
 prompt_model_then_run_script() {
     if over_model_prompt_limit; then return $HIT_MAX; fi
     setup_per_prompt_log_folder
+    cap_messages_file
     log_messages
     call_curl
     handle_model_response
@@ -576,6 +583,49 @@ over_model_prompt_limit() {
 setup_per_prompt_log_folder() {
     PER_PROMPT_LOG_FOLDER="${TEMP_FOLDER}/prompt${PROMPT_COUNTER}"
     create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
+}
+
+cap_messages_file() {
+    while messages_file_over_byte_cap && can_drop_old_message; do
+        drop_oldest_extra_message
+    done
+    if messages_file_over_byte_cap; then
+        die "one chat turn is larger than the messages cap" \
+            "($MAX_MESSAGES_BYTES bytes)"
+    fi
+}
+
+messages_file_over_byte_cap() {
+    if [ "$(messages_file_byte_count)" -gt "$MAX_MESSAGES_BYTES" ]
+    then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+messages_file_byte_count() {
+    # ASCII JSON: string length is byte count. Avoid wc padding/CRLF.
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -n --rawfile raw "$MESSAGES_FILE" \
+        '$raw | length' | tr -d '\r'
+}
+
+can_drop_old_message() {
+    # jq may emit CRLF; strip so the integer test is safe.
+    if [ "$(jq 'length' "$MESSAGES_FILE" | tr -d '\r')" -gt 3 ]; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+drop_oldest_extra_message() {
+    # Keep system and task (indexes 0 and 1); drop the next oldest.
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG '.[0:2] + .[3:]' \
+        "$MESSAGES_FILE" >"$MESSAGES_NEXT_FILE" ||
+        die "cannot cap chat messages"
+    mv "$MESSAGES_NEXT_FILE" "$MESSAGES_FILE" ||
+        die "cannot update chat messages"
 }
 
 log_messages() {
@@ -652,6 +702,10 @@ handle_model_response() {
         return $LOOP_AGAIN
     fi
     if reply_is_write_request; then
+        run_model_reply
+        return $LOOP_AGAIN
+    fi
+    if reply_is_edit_request; then
         run_model_reply
         return $LOOP_AGAIN
     fi
@@ -737,17 +791,71 @@ run_reply_in_sandboxes() {
             -c 'sed -n "/^# write file: ./,\$p" | sed 1d > "$0" &&
                 printf "wrote file: %s\n" "$0"' \
             "$(first_action_line | sed 's/^# write file: //')"
+    elif reply_is_edit_request; then
+        apply_edit_request \
+            "$(first_action_line | sed 's/^# edit file: //')"
     else
         run_in_configured_sandboxes
     fi
+}
+
+apply_edit_request() {
+    if [ ! -f "$1" ]; then
+        record_edit_failure "$1" "file not found"
+        return
+    fi
+    extract_edit_payload
+    apply_unique_replace "$1" || return
+    SANDBOX_STDIN_FILE="$EDITED_BYTES_FILE"
+    run_in_configured_sandboxes \
+        -c 'cat > "$0" &&
+            printf "edited file: %s\n" "$0"' \
+        "$1"
+    SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
+}
+
+extract_edit_payload() {
+    sed -n '/^# edit file: ./,$p' "$MODEL_RESPONSE_FILE" |
+        sed 1d >"$EDIT_PAYLOAD_FILE" ||
+        die "cannot write edit payload file"
+}
+
+apply_unique_replace() {
+    jq $JQ_BINARY_FLAG -n \
+        --rawfile file "$1" \
+        --rawfile payload "$EDIT_PAYLOAD_FILE" \
+        "$EDIT_APPLY_JQ" >"$EDIT_RESULT_FILE" ||
+        die "cannot apply unique replace"
+    if [ "$(jq $JQ_BINARY_FLAG -j '.ok' \
+            "$EDIT_RESULT_FILE")" != "true" ]; then
+        record_edit_failure "$1" \
+            "$(jq $JQ_BINARY_FLAG -j '.msg' "$EDIT_RESULT_FILE")"
+        return $IS_FALSE
+    fi
+    jq $JQ_BINARY_FLAG -j '.text' "$EDIT_RESULT_FILE" \
+        >"$EDITED_BYTES_FILE" ||
+        die "cannot write edited bytes"
+    return $IS_TRUE
+}
+
+record_edit_failure() {
+    printf 'edit failed: %s: %s\n' "$1" "$2" |
+        tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" ||
+        die "cannot write script exit code"
+    append_script_result
 }
 
 reply_is_write_request() {
     first_action_line | grep -q '^# write file: .'
 }
 
+reply_is_edit_request() {
+    first_action_line | grep -q '^# edit file: .'
+}
+
 first_action_line() {
-    grep -E '^# task complete$|^# write file:|^[^#]' \
+    grep -E '^# task complete$|^# write file:|^# edit file:|^[^#]' \
         "$MODEL_RESPONSE_FILE" |
         head -n 1 |
         grep .  # head succeeds on empty input; this fails then
@@ -763,27 +871,11 @@ record_script_rejection() {
 
 run_in_configured_sandboxes() {
     (
-        if [ -n "$SSA_SANDBOX_USER" ]; then
-            run_as_sandbox_user "$@"
-        else
-            "$SSA_SANDBOX_COMMAND" "$@" <"$MODEL_RESPONSE_FILE"
-        fi 2>&1
+        "$SSA_SANDBOX_COMMAND" "$@" <"$SANDBOX_STDIN_FILE" 2>&1
         echo $? >"$EXIT_CODE_FILE" ||
             die "cannot write script exit code"
     ) | tee "$SCRIPT_OUTPUT_FILE"
     append_script_result
-}
-
-run_as_sandbox_user() {
-    if command -v sudo >/dev/null 2>&1; then
-        sudo -u "$SSA_SANDBOX_USER" -- "$SSA_SANDBOX_COMMAND" "$@" \
-            <"$MODEL_RESPONSE_FILE"
-    elif command -v doas >/dev/null 2>&1; then
-        doas -u "$SSA_SANDBOX_USER" -- "$SSA_SANDBOX_COMMAND" "$@" \
-            <"$MODEL_RESPONSE_FILE"
-    else
-        die "need sudo or doas on PATH to change user; see ssa -h for help"
-    fi
 }
 
 ask_user_enabled() {

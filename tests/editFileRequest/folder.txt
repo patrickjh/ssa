@@ -1,0 +1,20 @@
+editFileRequest — unique SEARCH/REPLACE edits
+
+The model changes an existing file with no heredoc and no quoting:
+first action line is "# edit file: PATH" (leading blank lines and
+# notes skipped). The rest is one SEARCH/REPLACE pair. The old
+string must match exactly once. ssa applies that with jq in the
+harness, then writes the new bytes through the same ask and
+sandbox-command layers as a write request.
+
+Acceptance:
+- Unique replace is byte-for-byte (quotes, dollars, backticks)
+- Path with spaces; leading # notes are not payload
+- Empty new deletes the old block
+- 0 matches or 2+ matches leave the file unchanged; model recovers
+- Missing file fails; a later write or create plus edit recovers
+- "# edit file:" with no path runs as a script
+- Payload containing ``` is not a format error
+- Missing SEARCH/REPLACE markers is a failed edit, not a format error
+- Exit 0 after "# task complete"
+- Fake curl on PATH; no real network

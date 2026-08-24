@@ -1,0 +1,11 @@
+capMessages — trim messages.json before each model prompt
+
+ssa keeps the system prompt, the task, and the newest turns that fit
+in MAX_MESSAGES_BYTES (131072). Oldest extra messages are dropped.
+If system + task + the latest turn is still over the cap, ssa dies.
+
+Acceptance:
+- After several large turns, promptN/messages.json still starts with
+  system then the task, and an early unique marker is gone
+- A single turn larger than the cap is fatal (clear stderr)
+- Fake curl on PATH; no real network
