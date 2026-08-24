@@ -299,8 +299,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   works; probed once at startup) onto `latestModelResponse.txt`
 - Request body is `system` / `user` / `assistant` messages plus
   `SSA_REQUEST_JSON` merged in. Curl uses `--fail`, `--retry`,
-  `--retry-connrefused`, `--retry-max-time`, `--connect-timeout`,
-  and `--max-time`. A failed curl is fatal.
+  `--retry-connrefused`, `--retry-max-time` 120, `--connect-timeout`
+  30, and `--max-time` 900. A failed curl is fatal.
 
 ## Settings summary
 

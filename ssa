@@ -617,7 +617,7 @@ send_curl_json_request() {
     # shellcheck disable=SC2086
     curl -sS --fail \
         --retry 4 --retry-connrefused --retry-max-time 120 \
-        --connect-timeout 30 --max-time 300 \
+        --connect-timeout 30 --max-time 900 \
         -H "Content-Type: application/json" \
         ${AUTH_HEADER_FILE:+-H @"$AUTH_HEADER_FILE"} \
         --data-binary @"$JSON_BODY_FILE" \
