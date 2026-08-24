@@ -264,8 +264,8 @@ not applied (the payload may contain those bytes).
 
 Built-in OpenAI-compatible `/chat/completions` client:
 
-- Required: `OPENAI_URL` (full `http(s)://…/chat/completions`), `-m` /
-  `SSA_MODEL`
+- Required: `OPENAI_URL` (URL curl POSTs the chat-completions body
+  to), `-m` / `SSA_MODEL`
 - Optional: `OPENAI_API_KEY`, `SSA_REQUEST_JSON` (JSON object merged
   into the request body; model and messages from ssa win on key
   conflicts)
@@ -389,8 +389,8 @@ When the user can fix a failure by changing a **user-facing setting**,
 say how: the CLI flag and the matching env var. Pattern:
 
 ```sh
-die "OPENAI_URL not set; use --openai-url or OPENAI_URL with a full " \
-    "http(s)://…/chat/completions URL; see ssa -h for help"
+die "OPENAI_URL not set; use --openai-url or OPENAI_URL; " \
+    "see ssa -h for help"
 ```
 
 Keep hints one short clause after a semicolon. Prefer

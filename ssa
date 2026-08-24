@@ -79,7 +79,7 @@ Options:
           show in ps.
           Sets OPENAI_API_KEY.
   --openai-url URL
-          Full OpenAI style …/chat/completions URL (required).
+          URL curl POSTs the chat-completions request to (required).
           Sets OPENAI_URL.
   --request-json JSON
           JSON object merged into the chat-completions request body
@@ -342,15 +342,8 @@ check_model_is_set() {
 
 check_openai_url() {
     [ -n "$OPENAI_URL" ] ||
-        die "OPENAI_URL not set; use --openai-url or OPENAI_URL with a full " \
-            "http(s)://…/chat/completions URL " \
-            "(e.g. https://api.openai.com/v1/chat/completions);" \
-            " see ssa -h for help"
-    printf '%s' "$OPENAI_URL" |
-        grep -Eq '^https?://[^[:space:]]+/chat/completions$' ||
-        die "OPENAI_URL must be a full http(s)://…/chat/completions " \
-            "OpenAI style URL (got $OPENAI_URL); use --openai-url " \
-            "or OPENAI_URL; see ssa -h for help"
+        die "OPENAI_URL not set; use --openai-url or OPENAI_URL; " \
+            "see ssa -h for help"
 }
 
 check_sandbox_command() {
