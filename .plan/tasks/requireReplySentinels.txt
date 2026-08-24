@@ -1,0 +1,47 @@
+requireReplySentinels — every reply starts with a sentinel
+
+Why:
+Dispatch today is leftover-as-script: skip leading # notes, then
+# write file:, # edit file:, # task complete, or sh -n the rest.
+That makes a new kind (see subAgents.txt) a special case next to
+the default, and a # note can collide with a spawn. Empty
+# write file: (no path) falls through and runs as a script. A
+comments-only reply passes sh -n and runs. Undecided. Do not
+treat this as required work.
+
+Do:
+Decide first. If no: leave script-as-default; do not add an
+optional # script next to bare scripts (two ways to write a
+script is worse). If yes: one breaking change, not a mix.
+
+Uniform shape:
+
+# notes ignored
+# kind[: args]
+payload
+
+Kinds stay the current three plus # script (and later kinds if
+those tasks land). First action line must be a known sentinel;
+anything else is a format error. Payload is everything after that
+line, not the whole reply. Leading notes are not part of the
+script (today they are, because stdin is the full file).
+
+# script is exact, like # task complete. sh -n the payload only.
+Empty payload is a format error. Ask can label the kind instead
+of always "Script from model."
+
+Cost: scripts are the hot path. Extra ceremony is another miss
+for small models; format-error retry can recover. System prompt
+and FORMAT_ERROR_* text must list the sentinels. first_action_line
+only keeps known sentinels (drop ^[^#]).
+
+Related: completeSentinel.txt (maybe # complete). subAgents.txt
+is cheaper if script is not the leftover, but that task stays
+separate.
+
+Tests:
+If no: none. If yes: every canned script reply gets # script.
+emptyWritePathRunsAsScript becomes a format error.
+trailingDoneCommentIsNotDone still runs (done line is in the
+payload). Cover empty # script, notes then # script, and that
+notes before # script are not fed to sh. Fake curl, --no-ask.
