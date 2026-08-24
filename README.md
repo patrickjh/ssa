@@ -91,9 +91,9 @@ Treat that like handing the model your terminal.
   a background child that keeps stdout open will block `tee` unless
   you use `timeout --foreground` (or `setsid`) around `sh`.
 
-  Example (save, `chmod +x`, then export the path). Needs a non-root
-  user and passwordless `sudo`/`doas` for that user. Drop `sudo` or
-  `timeout` if you only want one of those:
+**Example** (save, `chmod +x`, then export the path). Needs a non-root
+user and passwordless `sudo`/`doas` for that user. Drop `sudo` or
+`timeout` if you only want one of those:
 
 ```sh
 #!/bin/sh
@@ -102,6 +102,7 @@ exec sudo -u ssa-sandbox -- timeout --foreground 60 sh "$@"
 
 ```sh
 export SSA_SANDBOX_COMMAND="$HOME/bin/ssa-sandbox"
+ssa fix the failing test
 ```
 
 ## Docs
