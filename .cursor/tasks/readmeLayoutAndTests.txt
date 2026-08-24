@@ -1,11 +1,11 @@
 readmeLayoutAndTests — README tree and how to run tests
 
 Why:
-README layout omits tests/ and oldTests/. The supported entry point
-is not listed.
+README layout omits tests/. The supported entry point is not listed.
 
 Do:
-Add tests/ (and that oldTests/ is archive) to the layout tree. Add:
+Add tests/ to the layout tree. Do not add oldTests/; that folder is
+slated for removal (removeOldTests.txt). Add:
 
   sh tests/runTests.sh
 
