@@ -22,7 +22,7 @@ ssa/
 ├── README.md          # human intro and try-it
 ├── ssa                # the only source file — edit this
 ├── tests/             # live stories + acceptance tests
-│   ├── runTests.sh    # only entry point; per-test temp + trap
+│   ├── runTests.sh    # only entry point; parallel, per-test temp
 │   ├── testUtils.sh   # functions only (sourced; no work on source)
 │   ├── completeSimpleTask/
 │   ├── editLargeFileByChunks/
@@ -56,10 +56,10 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 - Smoke run (needs a real API): set `OPENAI_URL`, `OPENAI_API_KEY` if
   required, and `-m` / `SSA_MODEL`; add `--no-ask` when there is no TTY.
 - Keep temp logs: `--keep-temp` or `SSA_KEEP_TEMP=1`.
-- Live tests: **only** via `sh tests/runTests.sh`. The runner creates a
-  per-test temp folder, exports harness env (`TEST_TEMP_FOLDER`,
-  `TEST_UTILS_FILE`), traps cleanup, then runs each `*.test.sh` as its
-  own process. Test files are top-to-bottom scripts that source
+- Live tests: **only** via `sh tests/runTests.sh`. The runner starts
+  each `*.test.sh` in a background process with its own temp folder
+  and harness env (`TEST_TEMP_FOLDER`, `TEST_UTILS_FILE`), waits,
+  then cleans up. Test files are top-to-bottom scripts that source
   `testUtils.sh` and call its functions; do not run `*.test.sh` alone.
 - When adding agent-loop stories: fake `curl` on `PATH`, canned
   `replyN.txt` as chat-completions JSON, prefer `--no-ask`; skip
