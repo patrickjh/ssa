@@ -85,7 +85,13 @@ Treat that like handing the model your terminal.
   stderr; you approve from `/dev/tty` (`[Y]es` / `[N]o` / `[Q]uit`).
 - Optional **sandbox command**: `--sandbox-command` /
   `SSA_SANDBOX_COMMAND` (default `sh`; use your own wrapper for
-  containers, pledge, jails, etc.).
+  containers, pledge, jails, or a wall-clock timeout).
+  `COMMAND` is one executable (`command -v`), not `timeout 60 sh`.
+  A hung script (`tail -f`) or a background child that keeps stdout
+  open will block `tee` until that wrapper uses `timeout` /
+  `timelimit` and a process group (`timeout --foreground`, or
+  `setsid`) around `sh`, passing `"$@"` through so write/edit `-c`
+  still works.
 
 ## Docs
 

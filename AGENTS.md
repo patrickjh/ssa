@@ -177,6 +177,12 @@ Combine both.
   (SIGUSR1 to `PID`). Custom sandbox commands do not get `PID`
   in their environment. Write turns need sh-style `-c` and `sed`.
   Edit turns need sh-style `-c` and `cat` (jq runs in the harness).
+- Hung scripts are not killed by ssa. Point `--sandbox-command` at a
+  wrapper that runs `timeout` or `timelimit` around `sh`, passing
+  `"$@"` through so write/edit `-c` still works. `COMMAND` is one
+  executable (`command -v`), not `timeout 60 sh`. Use a process
+  group (`timeout --foreground`, or `setsid`): a background child
+  that inherits the pipe keeps `tee` waiting after the parent exits.
 
 ### How the script is run
 
@@ -465,6 +471,7 @@ in one line at the call site.
 | Diagnostic log file | `ssa … 2>run.log` |
 | Keep temp logs | `--keep-temp` or `SSA_KEEP_TEMP=1` |
 | Extra curl flags | `curl` wrapper earlier on `PATH` |
+| Hung script / open pipe | `--sandbox-command` wrapping `timeout` |
 | HTTP(S) proxy | `https_proxy` / `http_proxy` (curl) |
 | Repeat for many tasks | `for task in …; do …; done` |
 
