@@ -1,4 +1,4 @@
-askUserRejectionFeedback — feedback after ask No
+askUserRejectionFeedback — optional reason after ask No
 
 Why:
 Ask No currently appends a fixed rejection ("User chose not to run
@@ -6,27 +6,31 @@ script. Try something else.") with exit 1. The model cannot tell why
 the user refused.
 
 Do:
-When the user answers No, print this on stderr (ask UI, not stdout):
+When the user answers No, print a short prompt on a new line on
+stderr (ask UI, not stdout):
 
-Give the AI model feedback about why you rejected, then press enter
+reason:
 
-Then a blank line, then read one line of feedback from /dev/tty
-(same device as Y/N/Q). Include that line in the user turn in
-messages.json so the next model prompt sees why the idea was
-rejected. Keep the existing rejection text and exit 1; still do not
-run the script. Empty feedback (just Enter) is ok. Yes and Quit are
-unchanged. --no-ask is unchanged. Read failure from /dev/tty stays
-fatal.
+Trailing space after the colon so the cursor sits on that line, same
+as the Y/N/Q prompt. Read one line from /dev/tty. Empty Enter skips
+(no extra text for the model). If they type a reason, put it in the
+user turn in messages.json with a clear prefix (Reason: …) so the
+next model prompt sees why the idea was rejected. Do not tee the
+reason onto stdout as script output.
 
-Log the feedback under promptN/ (for example userFeedback.txt),
-same idea as userAnswer.txt.
+Keep the existing rejection text and exit 1; still do not run the
+script. Yes and Quit are unchanged. --no-ask is unchanged. Read
+failure from /dev/tty stays fatal.
+
+Log the reason under promptN/ (for example userFeedback.txt), same
+idea as userAnswer.txt.
 
 Update the AGENTS.md ask-user No bullet. Keep -h short; no new flag.
 
 Tests:
 Ask needs /dev/tty, so --no-ask fake-curl stories cannot cover this.
 If a pty is easy without extra tools, one story: No on a model
-script, one feedback line, later Yes or done. Assert stderr has the
-feedback prompt, the script did not run, stdout still has the
-rejection text, and --keep-temp messages.json contains the feedback.
-If a pty is not practical, still implement; note the gap.
+script, one reason line, later Yes or done. Assert stderr has
+reason:, the script did not run, stdout still has the rejection
+text (not the typed reason), and --keep-temp messages.json contains
+the reason. If a pty is not practical, still implement; note the gap.
