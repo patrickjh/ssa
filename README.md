@@ -52,11 +52,29 @@ echo "summarize this repo" | ssa \
   -m gpt-4o-mini
 ```
 
-Batch / no TTY: add `--no-ask`. Keep temp logs: `--keep-temp`.
+Batch / no TTY: add `--no-ask`. Keep temp logs: `--keep-temp`. Extra
+request fields (`think`, `max_tokens`, sampling): `--request-json`.
 
 **Unix-shaped.** Handle `cd`, env, and redirects in the shell. Script
 output streams live on **stdout**. Agent messages (ask UI, errors, final
 status) go to **stderr**.
+
+## Local models
+
+Point `OPENAI_URL` at llama.cpp (or another server that honors
+`think: false`). ssa does not default that; pass it in
+`--request-json`. Local `max_tokens` defaults are often 256–2048 and
+will truncate write requests.
+
+```sh
+export OPENAI_URL=http://127.0.0.1:8080/v1/chat/completions
+ssa -m gemma-4-31b \
+  --request-json '{"think":false,"max_tokens":8192,"temperature":1,"top_p":0.95}' \
+  --keep-temp --max-model-prompts 30 \
+  fix the failing test
+```
+
+Add `--no-ask` when there is no TTY.
 
 ## Safety
 
@@ -77,6 +95,15 @@ Treat that like handing the model your terminal.
 - Design and coding style for contributors and coding agents:
   [AGENTS.md](AGENTS.md)
 
+## Tests
+
+```sh
+sh tests/runTests.sh
+```
+
+That is the only supported entry point. Do not run `*.test.sh` files
+alone.
+
 ## Layout
 
 ```
@@ -84,7 +111,8 @@ ssa/
 ├── AGENTS.md   # design + style for coding agents
 ├── LICENSE
 ├── README.md   # this file
-└── ssa         # the agent (single file)
+├── ssa         # the agent (single file)
+└── tests/      # live stories; sh tests/runTests.sh
 ```
 
 ## License
