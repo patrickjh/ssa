@@ -1,0 +1,45 @@
+editReadThroughSandbox — maybe read edit targets via sandbox
+
+Why:
+Edit unique-replace runs in the harness: [ ! -f PATH ], then jq
+--rawfile of that path. Only the successful cat > write goes through
+--sandbox-command. Default sh sees the same cwd and user, so this
+rarely matters. A jail, container, or sudo -u wrapper can disagree:
+the harness may read a host file the sandbox cannot, or miss a file
+that only exists inside the sandbox.
+
+This is a maybe. Closing that split may not be worth the extra
+invoke. Do not treat this as decided work.
+
+Do:
+Decide first. Leaving the read in the harness is fine; if so, a
+short AGENTS.md note that edit reads the target on the harness FS
+and only the write is sandboxed is enough.
+
+If you do move the read, do it in apply_edit_request, not via
+run_in_configured_sandboxes (that helper tees and appends a user
+turn; a successful cat would dump file bytes into messages.json).
+Invoke SSA_SANDBOX_COMMAND directly, path as $0, empty stdin:
+
+  test -f "$0" && cat "$0"
+
+Capture stdout to a temp file and point jq --rawfile at that, then
+the existing cat > write. Non-zero: record_edit_failure using
+stderr (do not map every failure to "file not found"). Ask already
+ran; do not ask again.
+
+Do not only swap in a sandbox test -f. That still leaves jq reading
+the host path. Do not put jq in the sandbox (edit turns need -c and
+cat only). Keep stdout as file bytes: 2>&1 would mix errors into the
+payload. Wrappers that print on stdout (the stubSandboxCommand
+story) would corrupt the replace; they must print on stderr or be
+exec-only like the README sudo example. A fifo can hang cat the
+same way a hung script does.
+
+Tests:
+If you only document, no new story. If you implement: missing file
+still recovers; unique replace still byte-for-byte. A custom
+sandbox that can see a file the harness cannot (or the reverse) is
+the point, but is hard in the fake-curl stories. At least: a
+wrapper that prints on stdout must not be required, or the story
+must use stderr for chatter so cat output stays clean.
