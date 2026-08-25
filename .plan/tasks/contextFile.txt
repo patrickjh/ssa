@@ -1,0 +1,57 @@
+contextFile — extra user context from a file
+
+Why:
+The task is one short request. Repo notes, style rules, or a file
+list often belong in the first model prompt too, without stuffing
+them into argv (ARG_MAX, quoting) or concatenating on stdin.
+Callers can already pipe a blob as the whole task; a dedicated
+path keeps the CLI task short and makes the extra bytes a durable
+turn that message capping will not drop.
+
+This is read-only inject. Do not run the file. Setup scripts stay
+outside ssa (`./setup.sh && ssa …`).
+
+Do:
+Add user-facing `SSA_CONTEXT` and `--context PATH` (flag overrides
+env). Empty value means off, same as `SSA_REQUEST_JSON`. `--context`
+with a missing argument or empty PATH dies like other value flags.
+
+If set: PATH must be a readable regular file (not a directory, not
+missing, not unreadable) or `die` with `--context` / `SSA_CONTEXT`
+in the hint. Relative PATH is vs cwd. Do not search, glob, or
+accept `-` for stdin (stdin is already the task).
+
+Read the file once after temp setup and before `setup_messages_file`
+(too late and the first user message is already sealed). Fold the
+bytes into that same first user message, after the task, with a
+clear delimiter (for example a blank line then `Context:`). Do not
+append a third messages.json turn: `cap_messages_file` keeps indexes
+0 and 1 (system + task); a separate user turn would be droppable or
+would need a cap change. Do not put context in the system prompt
+(that text is the reply contract).
+
+Log a copy next to `task.txt` (`context.txt` under the temp folder)
+so `--keep-temp` shows what was injected. Ask and
+`--sandbox-command` do not apply; this is harness I/O like the
+task, not a model script.
+
+NUL / non-UTF-8: fail closed (jq `--rawfile` cannot hold it), same
+idea as omitted script output. If system + task + context already
+exceed `MAX_MESSAGES_BYTES` (131072), die with a clear message at
+load time rather than on the first model prompt.
+
+Keep `-h` short: one clause that PATH is extra user context and
+empty disables. Update AGENTS.md start / messages / settings. One
+path only; no directory of rules, no repeated `--context`.
+
+Tests:
+Fake curl, `--no-ask`. Story folder e.g. `loadContext`.
+
+- Empty `SSA_CONTEXT` / omitted `--context`: first user turn is the
+  task only; no `context.txt` required
+- `--context` file: `promptN/messages.json` user content is task,
+  delimiter, then file bytes; `--keep-temp` has `context.txt`
+- Missing / unreadable / directory PATH: die before curl, status 1
+- Flag overrides env
+- Cap still keeps system + that first user turn (context stays)
+- Over-cap context file: die with the size error
