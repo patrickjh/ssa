@@ -35,6 +35,12 @@ requireReplySentinels.txt is about: a wrong sentinel dispatches
 and does not format-error retry. Do not rename as a drive-by
 in that task; land them together only if both are yes.
 
+Size:
+0 in `ssa` if you keep `# task complete`. If you switch: about 2 net
+new (0–5), but about 8–15 lines touched (SYSTEM_PROMPT, FORMAT_ERROR_*,
+-h, first_action_line, agent_is_done, status line). Substitutions, not
+new control flow. Tests and AGENTS.md are extra, not in that count.
+
 Tests:
 If no: none. If yes: every canned # task complete becomes
 # complete. Keep

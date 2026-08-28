@@ -13,3 +13,6 @@ for Gemma 4 31B and other coding models.
 - Restoring fence unwrap or the chunk-file / cmp protocol.
 - A second edit shape (unified patch) next to SEARCH/REPLACE.
 - Splitting ssa into lib/ or bin/.
+
+Size:
+0. Do not add these to ssa.

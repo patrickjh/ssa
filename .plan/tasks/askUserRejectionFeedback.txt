@@ -27,6 +27,12 @@ idea as userAnswer.txt.
 
 Update the AGENTS.md ask-user No bullet. Keep -h short; no new flag.
 
+Size:
+About 20 lines to change in `ssa` (15–25). No new flag. A reason:
+prompt, one /dev/tty read, userFeedback.txt, and a Reason: suffix on
+the user turn without teeing onto stdout. record_script_rejection
+grows. Tests and AGENTS.md are extra, not in that count.
+
 Tests:
 Ask needs /dev/tty, so --no-ask fake-curl stories cannot cover this.
 If a pty is easy without extra tools, one story: No on a model

@@ -10,4 +10,9 @@ Do:
 Declare leftovers in the Internal block, or use more explicit names.
 Do not shadow top-level variables.
 
+Size:
+About 1 line to change in `ssa` (1–3): declare REPLY in Internal, or
+read into an already-named path and drop REPLY. Tests and AGENTS.md
+are extra, not in that count.
+
 No user-facing change.

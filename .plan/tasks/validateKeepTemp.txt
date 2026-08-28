@@ -9,6 +9,11 @@ Validate 0|1 like other flags, or document the broader truthy
 behavior. Prefer validate + die with --keep-temp / SSA_KEEP_TEMP
 in the hint.
 
+Size:
+About 8 lines to change in `ssa`: a check_no_ask_setting clone plus
+one call from check_can_run. Docs-only (keep truthy, note in -h) is
+0 in ssa. Tests and AGENTS.md are extra, not in that count.
+
 Tests:
 SSA_KEEP_TEMP=yes ssa ... should die (if you validate), or a comment
 in -h if you keep truthy.

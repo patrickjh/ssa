@@ -53,6 +53,13 @@ with --keep-temp). Update AGENTS.md stop / model / settings.
 This is not a fifth reply shape and is not ask-No feedback
 (askUserRejectionFeedback).
 
+Size:
+About 45 lines to change in `ssa` (40–55). Setting, -h, 0|1 check,
+REVIEW_SYSTEM_PROMPT, review_work, one main call. The
+experiments/ssaWithReview fork is a lower bound (~40). Fail-soft
+empty/unusable 2xx and not mutating the run messages.json add a
+few. Tests and AGENTS.md are extra, not in that count.
+
 Tests:
 Fake curl, --no-ask. Story folder e.g. reviewWork.
 

@@ -45,12 +45,13 @@ empty disables. Update AGENTS.md start / messages / settings. One
 path only; no directory of rules, no repeated `--context`.
 
 Size:
-About 50–70 lines in `ssa`, most likely around 60 (80-column wraps,
-named functions, flag+env die hints). Help is ~6 of that; logic
-closer to 45. Cheap path (copy to context.txt, cat after the task
-into the existing jq `--rawfile`, let jq/cap fail) near 50. Clear
-load-time size error and explicit NUL die toward 70. Message cap
-should not grow. Tests and AGENTS.md are extra, not in that count.
+About 50–70 lines to change in `ssa`, most likely around 60
+(80-column wraps, named functions, flag+env die hints). Help is ~6
+of that; logic closer to 45. Cheap path (copy to context.txt, cat
+after the task into the existing jq `--rawfile`, let jq/cap fail)
+near 50. Clear load-time size error and explicit NUL die toward 70.
+Message cap should not grow. Tests and AGENTS.md are extra, not in
+that count.
 
 Tests:
 Fake curl, `--no-ask`. Story folder e.g. `loadContext`.

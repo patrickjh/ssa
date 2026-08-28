@@ -11,6 +11,12 @@ Decide a policy: reject non-ASCII in the ask display, normalize/escape,
 or document the residual risk. Implement that policy only; do not
 change sandbox bytes.
 
+Size:
+0 in `ssa` if you document residual risk (preferred). About 12
+(8–20) if the ask listing rejects or escapes non-ASCII.
+print_model_script only; sandbox bytes stay unchanged. Tests and
+AGENTS.md are extra, not in that count.
+
 Tests:
 If display changes, an ask-enabled story is hard without a tty. Prefer
 documenting the risk in AGENTS.md ask sandbox unless you add a

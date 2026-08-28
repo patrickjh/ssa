@@ -45,6 +45,14 @@ budget, and what the parent sees. A smaller experiment is
 harness-only re-exec so `ssa --no-ask "$(cat task.txt)"` works
 from a script without a new reply shape.
 
+Size:
+0 in `ssa` until a shape is chosen. Document composition: 0.
+Harness re-exec so a child can auth: about 25 (15–40). A
+`# subagent` shape like write/edit: about 110 (80–150), including
+depth 1, child max prompts, ask-once, stdout+status back, and auth
+without putting OPENAI_API_KEY in the sandbox. Tests and AGENTS.md
+are extra, not in that count.
+
 Tests:
 None until a shape is chosen. Fake curl, --no-ask, skip sudo/doas
 and real /dev/tty. Cover empty prompt / failed spawn, depth 1, and

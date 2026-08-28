@@ -11,4 +11,9 @@ Keep the tested behavior (trailing newlines ignored). Update AGENTS.md
 and -h so they say that explicitly. Do not switch to byte-exact
 comparison unless you change the test.
 
+Size:
+About 1 line to change in `ssa` (0–2): say in -h that trailing
+newlines on # task complete are ignored. No logic change. AGENTS.md
+is extra, not in that count.
+
 No new feature.

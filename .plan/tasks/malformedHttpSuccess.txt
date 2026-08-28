@@ -11,6 +11,14 @@ content stays a format error and the loop continues. Malformed HTTP
 success should die or format-error with a useful message — pick one
 and document it. Bound any retry.
 
+Size:
+About 20 lines to change in `ssa` (15–30). Mostly
+`save_model_reply_to_file` and two wrapped die strings for not-JSON
+vs missing message. Empty content stays a format error (no extra
+loop). Die-on-malformed needs no retry. Format-error-and-continue is
+toward 30 plus a FORMAT_ERROR_* string. Tests and AGENTS.md are
+extra, not in that count.
+
 Tests:
 Fake curl serving non-JSON and JSON without choices; assert stderr
 and exit or recovery as documented.

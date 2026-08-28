@@ -9,4 +9,9 @@ Add a HUP trap if cleanup-on-hangup is expected (same as TERM, or
 exit 129 if you follow that convention). If leaving files on hangup
 is fine, document that and delete this task.
 
+Size:
+About 1 line to change in `ssa` (0–3): a HUP trap next to INT/TERM
+(exit 129 if you follow 128+signal). Mentioning 129 in -h is ~2 more.
+Docs-only is 0. Tests and AGENTS.md are extra, not in that count.
+
 No need for an acceptance test that sends HUP unless it is easy.

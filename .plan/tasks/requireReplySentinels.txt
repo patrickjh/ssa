@@ -60,6 +60,14 @@ script is not the leftover, but that task stays separate.
 System prompt and FORMAT_ERROR_* text must list the sentinels.
 first_action_line only keeps known sentinels (drop ^[^#]).
 
+Size:
+0 in `ssa` if you keep script-as-default. If yes: about 50 lines to
+change (40–70), including SYSTEM_PROMPT, FORMAT_ERROR_*,
+first_action_line, payload extract + temp file, sh -n and sandbox
+stdin on the bytes after `# script`. Ask kind labels add ~5–15.
+Many existing dispatch lines are edits, not only appends. Tests and
+AGENTS.md are extra, not in that count.
+
 Tests:
 If no: none. If yes: every canned script reply gets # script.
 emptyWritePathRunsAsScript becomes a format error.

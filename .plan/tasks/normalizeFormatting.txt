@@ -10,4 +10,7 @@ Do:
   layout can be strict without a shared before-and-after dependency
   (prompt at the top of the answer loop).
 
+Size:
+About 0 net in `ssa` (a handful of lines touched): cleanup_temp_folder
+indent, trailing help spaces, print_ask_prompt into the answer loop.
 No behavior change. Run sh tests/runTests.sh.

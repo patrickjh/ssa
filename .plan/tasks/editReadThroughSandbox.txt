@@ -36,6 +36,12 @@ story) would corrupt the replace; they must print on stderr or be
 exec-only like the README sudo example. A fifo can hang cat the
 same way a hung script does.
 
+Size:
+0 in `ssa` if you only document. About 25 (20–35) if you move the
+read: a sandbox cat into a temp file, invoke SSA_SANDBOX_COMMAND
+directly, then the existing jq replace. apply_edit_request is the
+touch point. Tests and AGENTS.md are extra, not in that count.
+
 Tests:
 If you only document, no new story. If you implement: missing file
 still recovers; unique replace still byte-for-byte. A custom
