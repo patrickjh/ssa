@@ -1,0 +1,70 @@
+reviewWork — post-run model feedback on the transcript
+
+Why:
+After a run, the user only sees script output and a status line.
+A second, off-by-default model call can read the transcript and
+say what would have made the run better (clearer task, fewer
+turns, a write instead of a heredoc, and so on).
+
+Do:
+Add user-facing SSA_REVIEW_WORK and --review-work (flag sets 1;
+flag overrides env). Default 0. Validate 0|1 like SSA_NO_ASK.
+Empty meaning off is not needed; this is a 0|1 switch, same as
+--keep-temp.
+
+When 1: after run_agent_loop returns (done or hit max), before
+finish_agent_loop, build a review request from the current
+messages.json. Swap only the system turn for a new static prompt
+(top-level variable): ask for plain-text feedback on what could
+have made this run better. Keep the task and later turns as the
+transcript. Do not mutate the run's messages.json; copy, then
+swap. Use the already-capped transcript (same MAX_MESSAGES_BYTES);
+do not grow the cap or restore dropped turns.
+
+POST once with the same model, URL, auth, and SSA_REQUEST_JSON
+merge as the agent loop. Do not count this call in
+PROMPT_COUNTER or SSA_MAX_MODEL_PROMPTS. Do not ask. Do not run
+the reply through the sandbox. Do not append the review to
+messages.json. Do not treat the reply as a script, write, edit,
+or done marker.
+
+Write the model text with jq -j (and jq -b when that flag works)
+to $TEMP_FOLDER/feedback.txt, same idea as latestModelResponse.txt.
+Show those bytes on stderr (ask UI / harness, not script stdout)
+before the final status line so pipes of stdout stay script
+output only. Prefix is optional; one short header on stderr is
+enough if a bare blob is unclear.
+
+Log the review HTTP bits under a folder that is not promptN/
+(for example review/ with body.json and response.txt) so the last
+agent prompt's logs are not overwritten.
+
+Fail soft: a failed review curl, empty content, or unusable 2xx
+must not change the run's exit status. Print a short stderr note
+and skip or write that note to feedback.txt. Do not die after a
+successful task. Skip review on die and on SIGINT/SIGTERM
+(cleanup already runs from those traps). Off (0) means zero extra
+curl and no feedback.txt.
+
+Keep -h short: one clause that this asks the model for post-run
+feedback and writes feedback.txt in the temp folder (kept only
+with --keep-temp). Update AGENTS.md stop / model / settings.
+
+This is not a fifth reply shape and is not ask-No feedback
+(askUserRejectionFeedback).
+
+Tests:
+Fake curl, --no-ask. Story folder e.g. reviewWork.
+
+- Default / SSA_REVIEW_WORK=0: same curl count as today; no
+  feedback.txt
+- --review-work after # task complete: extra canned reply is
+  shown on stderr, not stdout; --keep-temp has feedback.txt;
+  messages.json has no review turn; status still
+  "after N model prompts" with N the agent prompts only
+- Flag overrides env
+- Hit max still reviews; exit stays 1
+- Missing extra canned reply (curl fail): stderr note, exit still
+  0 if the task completed
+- Review body.json system text is the review prompt, not the
+  agent script contract; later turns still include the task
