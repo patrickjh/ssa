@@ -7,6 +7,7 @@ set -u
 # Users can set
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENAI_URL="${OPENAI_URL:-}"
+SSA_CONTEXT="${SSA_CONTEXT:-}"
 SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
@@ -16,6 +17,7 @@ SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
 
 # Internal
 AUTH_HEADER_FILE=""
+CONTEXT_FILE=""
 CURL_RESPONSE_FILE=""
 EDITED_BYTES_FILE=""
 EDIT_PAYLOAD_FILE=""
@@ -61,6 +63,9 @@ Options:
   -m, --model VALUE
           OpenAI-style model name for the API (e.g. gpt-4o-mini).
           Sets SSA_MODEL.
+  --context PATH
+          Extra user context from a file; empty disables.
+          Sets SSA_CONTEXT.
   --keep-temp
           Keep per-run temp folder after exit. Useful for debugging.
           Sets SSA_KEEP_TEMP to 1.
@@ -94,6 +99,7 @@ Options:
 Environment:
   OPENAI_API_KEY                See --openai-api-key.
   OPENAI_URL                    See --openai-url.
+  SSA_CONTEXT                   See --context.
   SSA_KEEP_TEMP                 See --keep-temp (0 = discard, 1 = keep).
   SSA_MAX_MODEL_PROMPTS         See --max-model-prompts.
   SSA_MODEL                     See -m / --model.
@@ -230,6 +236,7 @@ parse_arguments() {
         case $1 in
             -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
             -m|--model) set_model "${2-}"; shift 2 ;;
+            --context) set_context "${2-}"; shift 2 ;;
             --keep-temp) SSA_KEEP_TEMP=1; shift ;;
             --max-model-prompts) set_max_model_prompts "${2-}"; shift 2 ;;
             --no-ask) SSA_NO_ASK=1; shift ;;
@@ -248,6 +255,12 @@ set_model() {
     [ -n "${1-}" ] ||
         die "-m / --model found with empty value; see ssa -h for help"
     SSA_MODEL=$1
+}
+
+set_context() {
+    [ -n "${1-}" ] ||
+        die "--context found with empty value; see ssa -h for help"
+    SSA_CONTEXT=$1
 }
 
 set_max_model_prompts() {
@@ -314,6 +327,7 @@ check_can_run() {
     check_openai_url
     check_sandbox_command
     check_request_json
+    check_context
     if ask_user_enabled; then check_prompt_device; fi
 }
 
@@ -367,6 +381,20 @@ check_request_json() {
             "or SSA_REQUEST_JSON; see ssa -h for help"
 }
 
+check_context() {
+    if [ -z "$SSA_CONTEXT" ]; then
+        return 0
+    fi
+    if [ "$SSA_CONTEXT" = "-" ]; then
+        die "--context / SSA_CONTEXT cannot be - (stdin is the task); " \
+            "see ssa -h for help"
+    fi
+    if [ ! -f "$SSA_CONTEXT" ] || [ ! -r "$SSA_CONTEXT" ]; then
+        die "context file not a readable regular file: $SSA_CONTEXT; " \
+            "use --context or SSA_CONTEXT; see ssa -h for help"
+    fi
+}
+
 check_prompt_device() {
     ( exec </dev/tty ) 2>/dev/null ||
         die "need /dev/tty to ask before running scripts; " \
@@ -380,6 +408,7 @@ setup_agent_loop() {
     setup_auth_header_file
     log_openai_url
     log_task
+    log_context
     setup_temp_cleanup
     setup_messages_file
     run_fake_first_turn
@@ -412,6 +441,7 @@ setup_temp_files() {
     MESSAGES_FILE="${TEMP_FOLDER}/messages.json"
     MESSAGES_NEXT_FILE="${TEMP_FOLDER}/messagesNext.json"
     USER_TURN_FILE="${TEMP_FOLDER}/latestUserTurn.txt"
+    CONTEXT_FILE="${TEMP_FOLDER}/context.txt"
     SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
     create_file_no_overwrite "$MODEL_RESPONSE_FILE"
     create_file_no_overwrite "$EDITED_BYTES_FILE"
@@ -421,6 +451,7 @@ setup_temp_files() {
     create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
     create_file_no_overwrite "$MESSAGES_FILE"
     create_file_no_overwrite "$USER_TURN_FILE"
+    create_file_no_overwrite "$CONTEXT_FILE"
 }
 
 setup_auth_header_file() {
@@ -444,6 +475,27 @@ log_task() {
     create_file_no_overwrite "${TEMP_FOLDER}/task.txt"
     printf '%s\n' "$TASK" >"${TEMP_FOLDER}/task.txt" ||
         die "cannot write to temp file: ${TEMP_FOLDER}/task.txt"
+}
+
+log_context() {
+    if [ -z "$SSA_CONTEXT" ]; then
+        return
+    fi
+    cp "$SSA_CONTEXT" "$CONTEXT_FILE" ||
+        die "cannot write to temp file: $CONTEXT_FILE"
+    check_context_is_json_safe
+}
+
+check_context_is_json_safe() {
+    # shellcheck disable=SC2086
+    if jq $JQ_BINARY_FLAG -e -n \
+        --rawfile content "$CONTEXT_FILE" \
+        '$content | contains("\u0000") | not' >/dev/null 2>&1
+    then
+        return
+    fi
+    die "context file is not valid UTF-8 (NUL or binary bytes); " \
+        "use --context or SSA_CONTEXT; see ssa -h for help"
 }
 
 setup_temp_cleanup() {
@@ -485,10 +537,18 @@ setup_messages_file() {
     jq $JQ_BINARY_FLAG -n \
         --rawfile system "$SYSTEM_PROMPT_FILE" \
         --rawfile task "${TEMP_FOLDER}/task.txt" \
+        --rawfile context "$CONTEXT_FILE" \
         '[{role: "system", content: $system},
-          {role: "user", content: $task}]' \
+          {role: "user",
+           content: (if $context == "" then $task
+                     else $task + "\nContext:\n" + $context
+                     end)}]' \
         >"$MESSAGES_FILE" ||
         die "cannot write chat messages"
+    if messages_file_over_byte_cap; then
+        die "system prompt and first user turn exceed the messages " \
+            "cap ($MAX_MESSAGES_BYTES bytes)"
+    fi
 }
 
 run_fake_first_turn() {

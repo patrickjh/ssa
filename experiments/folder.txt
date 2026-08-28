@@ -2,10 +2,10 @@ experiments/ — try-it forks, not product. Current behavior
 lives in ssa -h and AGENTS.md.
 
 folder.txt        this file
-ssaWithReview     ssa plus always-on post-run model feedback
+ssaWithReview     ssa plus --context and always-on post-run feedback
 
 Do not add these binaries to PATH as ssa. Product tests still
 run against ../ssa. To try review:
 
   sh experiments/ssaWithReview --no-ask --keep-temp \
-      -m MODEL task words
+      --context FILE -m MODEL task words
