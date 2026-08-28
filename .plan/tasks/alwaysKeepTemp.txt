@@ -16,10 +16,11 @@ Do:
 Decide first. Preferred: always keep; drop --keep-temp and
 SSA_KEEP_TEMP. Cleanup is the caller (rm -rf "$TMPDIR"/ssa-* or
 TMPDIR=$(mktemp -d)). Keep wiping authHeader.txt. Print the folder
-path on the final stderr status line and on die; a kept path nobody
-is told is barely more useful than a deleted one. Nested runs
-(see subAgents.txt) each get their own ssa-* folder; the path in
-the status / child result is the handle.
+on the final stderr status line and on die as `Run files: PATH`
+(not a bare path); a kept path nobody is told is barely more
+useful than a deleted one. Nested runs (see subAgents.txt) each
+get their own ssa-* folder; that labeled path in the status /
+child result is the handle.
 
 Do not invert the default and keep the flag (still a 0|1 setting
 nobody sets to 0 until /tmp is full). Do not add --discard-temp
@@ -50,6 +51,7 @@ If no: none. If yes: tests that pass --keep-temp to inspect
 promptN/ can drop that flag; get_kept_ssa_folder still finds one
 ssa-* under TEST_TEMP_FOLDER (runner already sets TMPDIR). A run
 without --keep-temp leaves the folder. Unknown --keep-temp dies
-like other unknown flags. Status/die stderr contains the folder
-path. authHeader.txt is still absent after exit. Fake curl,
+like other unknown flags. Status/die stderr contains
+`Run files: PATH` with the kept folder, not a bare path.
+authHeader.txt is still absent after exit. Fake curl,
 --no-ask; skip sudo/doas and real /dev/tty.

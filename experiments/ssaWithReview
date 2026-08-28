@@ -83,8 +83,8 @@ appends the result. Repeat until the first action line is
 # task complete
 or SSA_MAX_MODEL_PROMPTS is hit. Empty or invalid replies are not run.
 After the run, one more model call prints feedback on stderr
-(feedback.txt in the temp folder). The temp folder is kept; its path
-is on the status line.
+(feedback.txt in the temp folder). The temp folder is kept. Status
+and die print Run files: PATH on stderr.
 
 Exit status:
   0       Task complete
@@ -951,26 +951,30 @@ review_work() {
 
 finish_agent_loop() {
     case $LOOP_STATUS in
-    done) printf 'done: task complete after %s model prompts\n%s\n' \
-        "$PROMPT_COUNTER" "$TEMP_FOLDER" >&2; exit 0 ;;
+    done) printf 'done: task complete after %s model prompts\n' \
+        "$PROMPT_COUNTER" >&2; print_temp_folder; exit 0 ;;
     hit\ max) printf \
-        'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n%s\n' \
-        "$SSA_MAX_MODEL_PROMPTS" "$TEMP_FOLDER" >&2; exit 1 ;;
+        'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
+        "$SSA_MAX_MODEL_PROMPTS" >&2; print_temp_folder; exit 1 ;;
     *) die "unknown loop status $LOOP_STATUS" ;;
     esac
 }
 
 die() {
     printf '%s\n' "$*" >&2
-    if [ -n "${TEMP_FOLDER:-}" ]; then
-        printf '%s\n' "$TEMP_FOLDER" >&2
-    fi
+    print_temp_folder
     if [ -n "${PID:-}" ]; then
         kill -USR1 "$PID" 2>/dev/null
     else
         printf 'PID not set; cannot signal parent process\n' >&2
     fi
     exit 1
+}
+
+print_temp_folder() {
+    if [ -n "${TEMP_FOLDER:-}" ]; then
+        printf 'Run files: %s\n' "$TEMP_FOLDER" >&2
+    fi
 }
 
 main "$@"
