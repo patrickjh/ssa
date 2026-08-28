@@ -15,14 +15,20 @@ Decide first. Keep the product Unix-shaped: only shell, each action
 a fresh process, no extra protocol unless quoting or credentials
 force it. Document the choice in AGENTS.md; keep -h short.
 
-One path is composition with existing shapes: write a prompt file,
-then run ssa --no-ask as a script. That matches "do not add what
-the caller's shell can do." It only works if the child can auth
-without putting the key in the sandbox (a wrapper or harness
-re-exec, not export OPENAI_API_KEY into model scripts). If the key
-lands in the sandbox, the model can curl with it too.
+The preferred way might be figuring out some way to allow an
+agent to call ssa: write a prompt file, then run ssa --no-ask as
+a script. That matches "do not add what the caller's shell can
+do" and avoids a fifth reply shape. It only works if the child
+can auth without putting the key in the sandbox (a wrapper or
+harness re-exec, not export OPENAI_API_KEY into model scripts). If
+the key lands in the sandbox, the model can curl with it too.
+Also needed: inherit or export URL, model, and no-ask when the
+parent used flags; a short child result (prompt convention, a
+result file, or the omit path) so inner stdout does not blow
+MAX_MESSAGES_BYTES. A smaller experiment is harness-only re-exec
+so `ssa --no-ask "$(cat task.txt)"` works from a script.
 
-One suggested possibility is a harness flow like write/edit:
+One other possibility is a harness flow like write/edit:
 
 # subagent
 <raw prompt>
@@ -40,14 +46,14 @@ status / exit code as one user turn, not the child's
 messages.json; reuse the omit path for huge or NUL output. One
 spawn per reply. No parallel, no per-child model.
 
-The spawn syntax is the easy part. The decision is ask, depth,
-budget, and what the parent sees. A smaller experiment is
-harness-only re-exec so `ssa --no-ask "$(cat task.txt)"` works
-from a script without a new reply shape.
+The spawn syntax is the easy part of `# subagent`. The decision for
+that shape is ask, depth, budget, and what the parent sees. Prefer
+letting a script call ssa unless quoting or credentials force a
+new kind.
 
 Size:
-0 in `ssa` until a shape is chosen. Document composition: 0.
-Harness re-exec so a child can auth: about 25 (15–40). A
+Preferred (agent can call ssa): 0 if you only document, or about 25
+(15–40) for harness re-exec / auth without a new reply shape. A
 `# subagent` shape like write/edit: about 110 (80–150), including
 depth 1, child max prompts, ask-once, stdout+status back, and auth
 without putting OPENAI_API_KEY in the sandbox. Tests and AGENTS.md
@@ -55,7 +61,9 @@ are extra, not in that count.
 
 Tests:
 None until a shape is chosen. Fake curl, --no-ask, skip sudo/doas
-and real /dev/tty. Cover empty prompt / failed spawn, depth 1, and
-that the parent user turn is a short result (not the child's full
-transcript). Ask-once needs a pty if you keep ask on for the
-parent spawn.
+and real /dev/tty. If an agent can call ssa: a nested --no-ask
+run with canned replies returns a short result, and the key is
+not in the child script's environment. If `# subagent`: cover empty
+prompt / failed spawn, depth 1, and that the parent user turn is a
+short result (not the child's full transcript). Ask-once needs a
+pty if you keep ask on for the parent spawn.
