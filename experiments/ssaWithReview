@@ -8,7 +8,6 @@ set -u
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENAI_URL="${OPENAI_URL:-}"
 SSA_CONTEXT="${SSA_CONTEXT:-}"
-SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
@@ -45,74 +44,47 @@ TASK=""
 TASK_DONE=1
 TEMP_FOLDER=""
 USER_ANSWER_FILE=""
+USER_FEEDBACK_FILE=""
 USER_TURN_FILE=""
 
 HELP_TEXT='ssaWithReview — ssa plus post-run model feedback (experiment).
 A simple AI agent that feels like a unix util. Inspired by mini-swe-agent.
 
-Usage: ssaWithReview [options] task as a string no quotes needed
+Usage: ssaWithReview task as a string no quotes needed
        ssaWithReview -h | --help
 
 Requires POSIX sh, curl, and jq.
-OPENAI_URL and -m / SSA_MODEL are required.
+OPENAI_URL and SSA_MODEL are required.
 OPENAI_API_KEY is required if the provider needs auth.
 
 Options:
   -h, --help
           Show this help and exit.
-  -m, --model VALUE
-          OpenAI-style model name for the API (e.g. gpt-4o-mini).
-          Sets SSA_MODEL.
-  --context PATH
-          Extra user context from a file; empty disables.
-          Sets SSA_CONTEXT.
-  --keep-temp
-          Keep per-run temp folder after exit. Useful for debugging.
-          Sets SSA_KEEP_TEMP to 1.
-  --max-model-prompts N
-          Stop after N model prompts (0 = no limit, default = 20).
-          Sets SSA_MAX_MODEL_PROMPTS to N.
-  --no-ask
-          Do not ask before running the scripts the model creates.
-          (Default is to ask on stderr and wait for user response on
-          /dev/tty).
-          Sets SSA_NO_ASK to 1.
-  --openai-api-key KEY
-          Bearer auth token for the model provider (optional for local
-          servers). Prefer OPENAI_API_KEY in the environment; CLI may
-          show in ps.
-          Sets OPENAI_API_KEY.
-  --openai-url URL
-          URL curl POSTs the chat-completions request to (required).
-          Sets OPENAI_URL.
-  --request-json JSON
-          JSON object merged into the chat-completions request body
-          (for example think, max_tokens, temperature). Model and
-          messages from ssa win if the object also sets those keys.
-          Sets SSA_REQUEST_JSON.
-  --sandbox-command COMMAND
-          Command that receives the model script on stdin and runs the
-          script in a sandbox. Should work like sh. Must support
-          sh-style -c for file write and edit requests. Default is sh.
-          Sets SSA_SANDBOX_COMMAND.
 
 Environment:
-  OPENAI_API_KEY                See --openai-api-key.
-  OPENAI_URL                    See --openai-url.
-  SSA_CONTEXT                   See --context.
-  SSA_KEEP_TEMP                 See --keep-temp (0 = discard, 1 = keep).
-  SSA_MAX_MODEL_PROMPTS         See --max-model-prompts.
-  SSA_MODEL                     See -m / --model.
-  SSA_NO_ASK                    See --no-ask (0 = ask, 1 = no ask).
-  SSA_REQUEST_JSON              See --request-json.
-  SSA_SANDBOX_COMMAND           See --sandbox-command.
+  OPENAI_API_KEY          Bearer token (optional for local servers).
+  OPENAI_URL              URL curl POSTs chat-completions to (required).
+  SSA_CONTEXT             Extra user context from a file like AGENTS.md;
+                          empty disables.
+  SSA_MAX_MODEL_PROMPTS   Stop after N model prompts (0 = no limit,
+                          default = 20).
+  SSA_MODEL               OpenAI-style model name (required).
+  SSA_NO_ASK              0 = ask before running scripts (default);
+                          1 = do not ask.
+  SSA_REQUEST_JSON        JSON object merged into the request body
+                          (think, max_tokens, temperature). Model and
+                          messages from ssa win on key conflicts.
+  SSA_SANDBOX_COMMAND     Command that runs the model script on stdin.
+                          Works like sh. Must support -c for write and
+                          edit. Default is sh.
 
 ssa asks the model for a script, a write, or an edit; runs it; and
 appends the result. Repeat until the first action line is
 # task complete
-or --max-model-prompts is hit. Empty or invalid replies are not run.
+or SSA_MAX_MODEL_PROMPTS is hit. Empty or invalid replies are not run.
 After the run, one more model call prints feedback on stderr
-(feedback.txt in the temp folder; kept only with --keep-temp).
+(feedback.txt in the temp folder). The temp folder is kept; its path
+is on the status line.
 
 Exit status:
   0       Task complete
@@ -235,62 +207,11 @@ parse_arguments() {
     while [ $# -gt 0 ]; do
         case $1 in
             -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
-            -m|--model) set_model "${2-}"; shift 2 ;;
-            --context) set_context "${2-}"; shift 2 ;;
-            --keep-temp) SSA_KEEP_TEMP=1; shift ;;
-            --max-model-prompts) set_max_model_prompts "${2-}"; shift 2 ;;
-            --no-ask) SSA_NO_ASK=1; shift ;;
-            --openai-api-key) set_openai_api_key "${2-}"; shift 2 ;;
-            --openai-url) set_openai_url "${2-}"; shift 2 ;;
-            --request-json) set_request_json "${2-}"; shift 2 ;;
-            --sandbox-command) set_sandbox_command "${2-}"; shift 2 ;;
             --) shift; TASK=$*; return ;;
             -*) die "bad option: $1; see ssa -h for help" ;;
             *) TASK=$*; return ;;
         esac
     done
-}
-
-set_model() {
-    [ -n "${1-}" ] ||
-        die "-m / --model found with empty value; see ssa -h for help"
-    SSA_MODEL=$1
-}
-
-set_context() {
-    [ -n "${1-}" ] ||
-        die "--context found with empty value; see ssa -h for help"
-    SSA_CONTEXT=$1
-}
-
-set_max_model_prompts() {
-    [ -n "${1-}" ] ||
-        die "--max-model-prompts found with empty value; see ssa -h for help"
-    SSA_MAX_MODEL_PROMPTS=$1
-}
-
-set_openai_api_key() {
-    [ -n "${1-}" ] ||
-        die "--openai-api-key found with empty value; see ssa -h for help"
-    OPENAI_API_KEY=$1
-}
-
-set_openai_url() {
-    [ -n "${1-}" ] ||
-        die "--openai-url found with empty value; see ssa -h for help"
-    OPENAI_URL=$1
-}
-
-set_request_json() {
-    [ -n "${1-}" ] ||
-        die "--request-json found with empty value; see ssa -h for help"
-    SSA_REQUEST_JSON=$1
-}
-
-set_sandbox_command() {
-    [ -n "${1-}" ] ||
-        die "--sandbox-command found with empty value; see ssa -h for help"
-    SSA_SANDBOX_COMMAND=$1
 }
 
 check_required_commands() {
@@ -340,35 +261,33 @@ check_task_is_set() {
 check_max_model_prompts() {
     case $SSA_MAX_MODEL_PROMPTS in
     *[!0-9]*) die "SSA_MAX_MODEL_PROMPTS must be a non-negative integer; " \
-        "use --max-model-prompts or SSA_MAX_MODEL_PROMPTS; " \
-        "see ssa -h for help" ;;
+        "set SSA_MAX_MODEL_PROMPTS; see ssa -h for help" ;;
     esac
 }
 
 check_no_ask_setting() {
     case $SSA_NO_ASK in
     0|1) ;;
-    *) die "SSA_NO_ASK must be 0 or 1; use --no-ask or SSA_NO_ASK; " \
+    *) die "SSA_NO_ASK must be 0 or 1; set SSA_NO_ASK; " \
         "see ssa -h for help" ;;
     esac
 }
 
 check_model_is_set() {
     [ -n "$SSA_MODEL" ] ||
-        die "model not set; use -m / --model or SSA_MODEL " \
-            "(e.g. gpt-4o-mini); see ssa -h for help"
+        die "model not set; set SSA_MODEL (e.g. gpt-4o-mini); " \
+            "see ssa -h for help"
 }
 
 check_openai_url() {
     [ -n "$OPENAI_URL" ] ||
-        die "OPENAI_URL not set; use --openai-url or OPENAI_URL; " \
-            "see ssa -h for help"
+        die "OPENAI_URL not set; set OPENAI_URL; see ssa -h for help"
 }
 
 check_sandbox_command() {
     command -v "$SSA_SANDBOX_COMMAND" >/dev/null 2>&1 ||
         die "sandbox command not found: $SSA_SANDBOX_COMMAND; " \
-        "use --sandbox-command or SSA_SANDBOX_COMMAND; see ssa -h for help"
+        "set SSA_SANDBOX_COMMAND; see ssa -h for help"
 }
 
 check_request_json() {
@@ -377,8 +296,8 @@ check_request_json() {
     fi
     printf '%s' "$SSA_REQUEST_JSON" |
         jq -e 'type == "object"' >/dev/null 2>&1 ||
-        die "SSA_REQUEST_JSON must be a JSON object; use --request-json " \
-            "or SSA_REQUEST_JSON; see ssa -h for help"
+        die "SSA_REQUEST_JSON must be a JSON object; " \
+            "set SSA_REQUEST_JSON; see ssa -h for help"
 }
 
 check_context() {
@@ -386,19 +305,19 @@ check_context() {
         return 0
     fi
     if [ "$SSA_CONTEXT" = "-" ]; then
-        die "--context / SSA_CONTEXT cannot be - (stdin is the task); " \
+        die "SSA_CONTEXT cannot be - (stdin is the task); " \
             "see ssa -h for help"
     fi
     if [ ! -f "$SSA_CONTEXT" ] || [ ! -r "$SSA_CONTEXT" ]; then
         die "context file not a readable regular file: $SSA_CONTEXT; " \
-            "use --context or SSA_CONTEXT; see ssa -h for help"
+            "set SSA_CONTEXT; see ssa -h for help"
     fi
 }
 
 check_prompt_device() {
     ( exec </dev/tty ) 2>/dev/null ||
         die "need /dev/tty to ask before running scripts; " \
-        "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+        "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
 }
 
 setup_agent_loop() {
@@ -495,7 +414,7 @@ check_context_is_json_safe() {
         return
     fi
     die "context file is not valid UTF-8 (NUL or binary bytes); " \
-        "use --context or SSA_CONTEXT; see ssa -h for help"
+        "set SSA_CONTEXT; see ssa -h for help"
 }
 
 setup_temp_cleanup() {
@@ -506,9 +425,6 @@ setup_temp_cleanup() {
 
 cleanup_on_exit() {
     cleanup_auth_header_file
-    if [ "$SSA_KEEP_TEMP" = 0 ]; then
-        cleanup_temp_folder
-    fi
 }
 
 cleanup_auth_header_file() {
@@ -520,12 +436,6 @@ cleanup_auth_header_file() {
         rm -f "$AUTH_HEADER_FILE" || :
     fi
     AUTH_HEADER_FILE=""
-}
-
-cleanup_temp_folder() {
-    if [ -n "$TEMP_FOLDER" ]; then
-      rm -rf "$TEMP_FOLDER";
-    fi
 }
 
 setup_messages_file() {
@@ -645,8 +555,7 @@ log_messages() {
 call_curl() {
     build_curl_json_request
     send_curl_json_request ||
-        die "curl failed; check --openai-url or OPENAI_URL, " \
-            "-m / --model or SSA_MODEL, and --openai-api-key or " \
+        die "curl failed; check OPENAI_URL, SSA_MODEL, and " \
             "OPENAI_API_KEY; see ssa -h for help"
     save_model_reply_to_file ||
         die "cannot write to temp file: $MODEL_RESPONSE_FILE"
@@ -876,7 +785,34 @@ record_script_rejection() {
         tee "$SCRIPT_OUTPUT_FILE"
     echo 1 >"$EXIT_CODE_FILE" ||
         die "cannot write script exit code"
-    append_script_result
+    ask_user_for_rejection_reason
+    append_rejection_user_turn
+}
+
+ask_user_for_rejection_reason() {
+    USER_FEEDBACK_FILE="${PER_PROMPT_LOG_FOLDER}/userFeedback.txt"
+    printf 'reason: ' >&2
+    IFS= read -r REPLY </dev/tty ||
+        die "cannot read answer from /dev/tty; " \
+          "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+    printf '%s\n' "$REPLY" >"$USER_FEEDBACK_FILE" ||
+        die "cannot write to temp file: $USER_FEEDBACK_FILE"
+}
+
+append_rejection_user_turn() {
+    {
+        printf 'Output from running the script:\n\n'
+        cat "$SCRIPT_OUTPUT_FILE"
+        if grep -q '[^[:space:]]' "$USER_FEEDBACK_FILE"; then
+            printf '\nReason: %s\n' "$(cat "$USER_FEEDBACK_FILE")"
+        fi
+        printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
+    } >"$USER_TURN_FILE" ||
+        die "cannot write user turn"
+    if ! user_turn_is_json_safe; then
+        write_omitted_script_output
+    fi
+    append_user_turn
 }
 
 run_in_configured_sandboxes() {
@@ -928,7 +864,7 @@ handle_user_answers() {
 read_ask_answer_from_tty() {
     IFS= read -r REPLY </dev/tty ||
         die "cannot read answer from /dev/tty; " \
-        "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+        "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
     printf '%s\n' "$REPLY" >"$USER_ANSWER_FILE" ||
         die "cannot write to temp file: $USER_ANSWER_FILE"
 }
@@ -1015,16 +951,20 @@ review_work() {
 
 finish_agent_loop() {
     case $LOOP_STATUS in
-    done) printf 'done: task complete after %s model prompts\n' \
-        "$PROMPT_COUNTER" >&2; exit 0 ;;
-    hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
-        "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
+    done) printf 'done: task complete after %s model prompts\n%s\n' \
+        "$PROMPT_COUNTER" "$TEMP_FOLDER" >&2; exit 0 ;;
+    hit\ max) printf \
+        'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n%s\n' \
+        "$SSA_MAX_MODEL_PROMPTS" "$TEMP_FOLDER" >&2; exit 1 ;;
     *) die "unknown loop status $LOOP_STATUS" ;;
     esac
 }
 
 die() {
     printf '%s\n' "$*" >&2
+    if [ -n "${TEMP_FOLDER:-}" ]; then
+        printf '%s\n' "$TEMP_FOLDER" >&2
+    fi
     if [ -n "${PID:-}" ]; then
         kill -USR1 "$PID" 2>/dev/null
     else

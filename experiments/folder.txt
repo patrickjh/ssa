@@ -2,10 +2,14 @@ experiments/ — try-it forks, not product. Current behavior
 lives in ssa -h and AGENTS.md.
 
 folder.txt        this file
-ssaWithReview     ssa plus --context and always-on post-run feedback
+ssaWithReview     ssa plus SSA_CONTEXT, always-on post-run
+                  feedback, env-only settings, always-kept
+                  temp, and an optional reason after ask No
 
 Do not add these binaries to PATH as ssa. Product tests still
-run against ../ssa. To try review:
+run against ../ssa. Settings are environment only (-h stays).
+The per-run temp folder is kept; authHeader.txt is still
+wiped. To try review:
 
-  sh experiments/ssaWithReview --no-ask --keep-temp \
-      --context FILE -m MODEL task words
+  SSA_NO_ASK=1 SSA_CONTEXT=FILE SSA_MODEL=MODEL \
+    sh experiments/ssaWithReview task words
