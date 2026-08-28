@@ -12,21 +12,45 @@ shape as required work.
 
 Do:
 Decide first. Keep the product Unix-shaped: only shell, each action
-a fresh process, no extra protocol unless quoting or credentials
-force it. Document the choice in AGENTS.md; keep -h short.
+a fresh process, no extra protocol unless quoting or a short
+result back force it. Document the choice in AGENTS.md; keep -h
+short.
 
-The preferred way might be figuring out some way to allow an
-agent to call ssa: write a prompt file, then run ssa --no-ask as
-a script. That matches "do not add what the caller's shell can
-do" and avoids a fifth reply shape. It only works if the child
-can auth without putting the key in the sandbox (a wrapper or
-harness re-exec, not export OPENAI_API_KEY into model scripts). If
-the key lands in the sandbox, the model can curl with it too.
-Also needed: inherit or export URL, model, and no-ask when the
-parent used flags; a short child result (prompt convention, a
-result file, or the omit path) so inner stdout does not blow
-MAX_MESSAGES_BYTES. A smaller experiment is harness-only re-exec
-so `ssa --no-ask "$(cat task.txt)"` works from a script.
+The preferred way is to let an agent call ssa: write a prompt
+file, then run ssa --no-ask as a script. That matches "do not add
+what the caller's shell can do" and avoids a fifth reply shape.
+
+Auth can stay simple: leave the key and URL in the environment so
+the child is just another ssa. People who do not want sk-… in
+the sandbox point OPENAI_URL at a local reverse proxy and set
+OPENAI_API_KEY to a dummy value (see proxyDocs.txt). The proxy
+holds the real token; parent and child both POST there. Nested
+ssa does not need a wrapper or harness re-exec for credentials.
+If the real key is what is exported, the model can curl with it
+too; that is the caller's choice. Same-user /proc and config
+files can still reveal a key the proxy process holds; a dummy
+plus a proxy on another user or host is the tight version.
+
+Stop unsetting OPENAI_API_KEY (or SSA_KEY if ssaEnvNames.txt
+landed) so the dummy is still there for the child. Do not add a
+second secret name just for nested runs.
+
+Figure out (auth is not these; they still block a simple nested
+ssa even with dummy+proxy):
+
+- Child stdout: the inner loop's script output is the parent's
+  next user turn and can blow MAX_MESSAGES_BYTES. Prompt
+  convention, a result file, the omit path, or something else.
+  Undecided.
+- Child ask: inner ssa defaults to ask-on and wants /dev/tty.
+  Nested scripts need --no-ask / SSA_NO_ASK=1. Who passes that
+  (the model, a wrapper, or the parent exports it)? Nested
+  --no-ask also means the child's scripts skip ask.
+- Flag-started parents: CLI-set OPENAI_URL / SSA_MODEL /
+  SSA_NO_ASK are harness locals and do not reach the child.
+  Env-started parents already pass them through. Export those
+  into the sandbox, require env for nested ssa, or drop flags
+  (envOnlySettings.txt). Undecided.
 
 One other possibility is a harness flow like write/edit:
 
@@ -48,22 +72,27 @@ spawn per reply. No parallel, no per-child model.
 
 The spawn syntax is the easy part of `# subagent`. The decision for
 that shape is ask, depth, budget, and what the parent sees. Prefer
-letting a script call ssa unless quoting or credentials force a
-new kind.
+letting a script call ssa. Credentials do not force a new kind:
+dummy key plus proxy (proxyDocs.txt) is enough. The figure-out
+list (noisy child, ask, flag-started parents) still might.
 
 Size:
-Preferred (agent can call ssa): 0 if you only document, or about 25
-(15–40) for harness re-exec / auth without a new reply shape. A
-`# subagent` shape like write/edit: about 110 (80–150), including
-depth 1, child max prompts, ask-once, stdout+status back, and auth
-without putting OPENAI_API_KEY in the sandbox. Tests and AGENTS.md
+Preferred (agent can call ssa): about 0–15 if you only stop
+unsetting the key, document dummy+proxy, and env-started
+parents already pass URL and model. A bit more if flag-started
+parents must export URL / model / no-ask into the sandbox.
+Harness re-exec for auth is not the goal. A `# subagent` shape
+like write/edit: about 110 (80–150), including depth 1, child
+max prompts, ask-once, stdout+status back. Tests and AGENTS.md
 are extra, not in that count.
 
 Tests:
 None until a shape is chosen. Fake curl, --no-ask, skip sudo/doas
 and real /dev/tty. If an agent can call ssa: a nested --no-ask
-run with canned replies returns a short result, and the key is
-not in the child script's environment. If `# subagent`: cover empty
-prompt / failed spawn, depth 1, and that the parent user turn is a
-short result (not the child's full transcript). Ask-once needs a
-pty if you keep ask on for the parent spawn.
+run with canned replies returns a short result; dummy
+OPENAI_API_KEY (or SSA_KEY) and OPENAI_URL in the environment are
+enough. Do not require the key to be absent from the child
+env. If `# subagent`: cover empty prompt / failed spawn, depth
+1, and that the parent user turn is a short result (not the
+child's full transcript). Ask-once needs a pty if you keep ask
+on for the parent spawn.

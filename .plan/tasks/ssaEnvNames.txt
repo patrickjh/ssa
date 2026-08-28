@@ -1,0 +1,54 @@
+ssaEnvNames — OPENAI_URL / OPENAI_API_KEY become SSA_URL / SSA_KEY
+
+Why:
+ssa is provider-agnostic; the knobs are still branded OpenAI.
+SSA_MODEL already exists. SSA_URL / SSA_KEY / SSA_MODEL would
+read as one family. A generic OPENAI_API_KEY in the shell profile
+would no longer be enough; giving ssa a secret is explicit. Stock
+curl recipes that use $OPENAI_API_KEY then miss the sandbox even
+if the key is still exported (printenv still shows SSA_KEY).
+One breaking change, not a mix.
+
+This is names only. It does not decide whether the key stays in
+the sandbox. Today's unset OPENAI_API_KEY still applies to
+SSA_KEY unless subAgents.txt lands a different rule. Nested ssa
+does not start working just because the names changed.
+
+Do:
+Rename user-facing settings:
+
+  OPENAI_URL      -> SSA_URL      (required)
+  OPENAI_API_KEY  -> SSA_KEY      (optional; Bearer token)
+
+Drop OPENAI_* and --openai-*. No aliases. If flags stay:
+--openai-url -> --url, --openai-api-key -> --key, same pattern as
+--model / --no-ask (flag drops the SSA_ prefix). If
+envOnlySettings.txt lands first, there are no flags; die hints
+name SSA_URL / SSA_KEY only. Do not keep -m as an OpenAI exception.
+
+Alphabetize the Users-can-set block (SSA_KEY with the other
+SSA_* names). Temp log openaiUrl.txt can become url.txt (on-disk
+camelCase). Update HELP_TEXT, README, AGENTS.md (the OPENAI_*
+exception in Settings and CLI goes away; all user-facing env
+vars are SSA_*).
+
+Do not treat OPENAI_BASE_URL or OPENAI_API_KEY as input. Do not
+invent SSA_OPENAI_URL. Do not change the curl body or the
+Authorization: Bearer header. Do not mix this with exporting
+the key for nested ssa (see subAgents.txt).
+
+Size:
+About 0 net lines in ssa (rename). Flag names if they stay:
+parse_arguments arms and die strings. tests/, README, and
+AGENTS.md are extra, not in that count. tests/openaiUrl/ and
+requiredSettings/missingOpenaiUrl can keep their story folders
+or follow the new names; either is fine if the cases still
+match.
+
+Tests:
+Every --openai-url / --openai-api-key / OPENAI_* in
+tests/*/*.test.sh. missingOpenaiUrl becomes missing SSA_URL;
+openaiApiKeyWithoutValue tracks --key if flags stay. showHelp
+expects SSA_URL. Fake curl stories still pass a URL; only the
+setting name changes. Harness still unsets the key after
+writing authHeader.txt unless a later task says otherwise.

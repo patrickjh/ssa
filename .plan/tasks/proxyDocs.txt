@@ -1,0 +1,47 @@
+proxyDocs — README: dummy key, injector, egress
+
+Why:
+People who want a nested ssa (or any script) to call the model
+without putting sk-… in the sandbox can point OPENAI_URL at a
+local reverse proxy and set OPENAI_API_KEY to a dummy value. The
+proxy holds the real Bearer token. The harness never puts the
+master key in messages.json. A one-upstream injector is not an
+open forward proxy and is not an egress firewall: scripts can
+still curl the world unless the sandbox has no other path.
+Competent network admins already know how to force that. ssa
+should not grow a proxy or new flags. README Safety today covers
+ask-user and --sandbox-command only.
+
+Do:
+Add a short subsection under README Safety (plain words; this
+is a human recipe). Cover three layers, not a full Caddyfile:
+
+- Injector: OPENAI_URL is the proxy, OPENAI_API_KEY is dummy or
+  empty. Real secret lives only in the proxy. Bind localhost.
+  Parent and child ssa both POST there.
+- Not an open proxy: one upstream (the model). Dummy key at the
+  injector does not stop curl https://evil.com.
+- Egress: optional. Same machine can allow only the injector
+  (or only the provider) via --sandbox-command / netns /
+  firewall. That is the admin's job. Ask-user still covers
+  local files.
+
+Use the setting names that exist when this lands (OPENAI_*
+today; SSA_URL / SSA_KEY if ssaEnvNames.txt went first). Do not
+put this in -h. Do not add flags, env vars, or code in ssa.
+Do not document https_proxy / CONNECT as the injector (ssa
+POSTs to OPENAI_URL). Do not claim the dummy key is a sandbox.
+One small example of the exports is enough; skip iptables.
+
+readmeHumanLanguage.txt is the plain-words pass. Land this
+inside that rewrite, or after it, so Safety is not rewritten
+twice. subAgents.txt can point here once nested ssa is a
+script: dummy key plus proxy is how the caller keeps sk-… out
+of the sandbox without a fifth reply shape.
+
+Size:
+0 lines in `ssa`. A short README Safety subsection (about one
+screen). No AGENTS.md Design unless one sentence under
+Sandboxing points at README.
+
+No new tests.
