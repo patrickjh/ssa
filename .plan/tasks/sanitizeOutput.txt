@@ -1,0 +1,51 @@
+sanitizeOutput — one display filter for ask listing, review, and other UI
+
+Why:
+Ask listing maps CR to \r, ESC to \e, and other non-print (except
+tab) to ? so the terminal cannot hide a line. The file fed to the
+sandbox is unchanged, so the listing is not the bytes that run.
+Review in experiments/ssaWithReview cats feedback.txt to stderr
+with no mapping. invalid input: prints the tty line raw. Those
+are the same class of bytes: untrusted text on the terminal, not
+the script.
+
+Do:
+Add sanitize_output in ssa. Stdin to stdout; the three existing
+seds from print_model_script (CR, ESC, other non-print except
+tab). No new flags. Do not change sandbox stdin, messages.json,
+keep-temp files, or live script output on stdout.
+
+Call it everywhere the harness prints untrusted bytes to the
+terminal (stderr ask UI / review):
+
+- print_model_script (replace the inline seds)
+- print_invalid_input (the userAnswer.txt line)
+- review_work in experiments/ssaWithReview (feedback.txt; keep
+  the Feedback from model: header as fixed text)
+- When askUserRejectionFeedback prints a reason on stderr, if it
+  does
+- When reviewWork / simplifyReviewWork land in ssa, print
+  feedback through this, not a raw cat
+
+On-disk bytes stay raw (latestModelResponse.txt, feedback.txt,
+userAnswer.txt). File order: sanitize_output below its last
+caller.
+
+Do not try to make run bytes match the listing (that would
+filter the sandbox). Do not take Unicode bidi / homoglyphs
+(hardenAskListingUnicode). One short AGENTS.md ask-sandbox note
+that the listing and review display are escaped; the run is not.
+
+Size:
+About 15 lines to change in ssa (10–20). New function is the
+three seds; callers get a redirect. A few lines in
+experiments/ssaWithReview for review. Tests and AGENTS.md are
+extra, not in that count.
+
+Tests:
+Ask listing needs /dev/tty. Prefer not to add a pty story. Fake
+curl --no-ask: a reply with CR still runs; stdout still has the
+raw CR (proves stdout / sandbox were not filtered). Review
+display has no product test until reviewWork; experiment stays
+untested. If a pty is easy, one ask-Yes story: listing stderr
+shows \r / \e, sandbox file unchanged.

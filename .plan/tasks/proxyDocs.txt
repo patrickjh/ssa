@@ -10,7 +10,9 @@ open forward proxy and is not an egress firewall: scripts can
 still curl the world unless the sandbox has no other path.
 Competent network admins already know how to force that. ssa
 should not grow a proxy or new flags. README Safety today covers
-ask-user and --sandbox-command only.
+ask-user and --sandbox-command only. securityModel.txt is the
+README Safety frame (trust, layers, leftovers); this task is
+only the injector recipe under that.
 
 Do:
 Add a short subsection under README Safety (plain words; this

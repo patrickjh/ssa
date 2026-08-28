@@ -1,0 +1,53 @@
+securityModel — README: how ssa's security actually works
+
+Why:
+README Safety says the model gets your terminal, then ask-user and
+an optional sandbox wrapper. That is the controls, not the model:
+what is trusted, what the two layers stop, and what they do not.
+AGENTS.md Design is wiring (ask tty, stdin to COMMAND, write -c).
+Humans and agents both guess the rest (key file in the temp
+folder, listing vs run, provider sees the transcript, --no-ask).
+
+Do:
+Write the security model in README Safety. Plain words. Do not
+copy Design. Do not put this in -h. Do not add flags, env vars,
+or code in ssa.
+
+Keep the existing ask bullets and the sandbox wrapper example.
+Above or around them, state the model in short sentences:
+
+- The model (and anything in the task, a context file, or output
+  the model already ran) is untrusted. Default COMMAND is sh as
+  you. Ask is the default gate; --no-ask removes it.
+- Two layers: ask, then COMMAND. Combine both. Neither is a
+  network jail by itself. Write/edit paths are your filesystem.
+- The listing (and review, if that has landed) may show escaped
+  CR/ESC/non-print; the sandbox file is raw. See
+  sanitizeOutput / hardenAskListingUnicode.
+- OPENAI_API_KEY is unset for child scripts. During the run it
+  still lives in authHeader.txt under the temp folder, readable
+  by the same user as default sh. Wipe on exit does not help a
+  live script. The provider (OPENAI_URL) sees messages; a second
+  review POST would see them again.
+- Temp logs: default discard vs --keep-temp (or always-keep if
+  that has landed). authHeader.txt is wiped either way when
+  cleanup runs.
+- Real isolation is COMMAND (user, timeout, netns) plus optional
+  egress. Dummy-key injector is proxyDocs, not a sandbox.
+
+readmeHumanLanguage.txt is the plain-words pass; proxyDocs.txt
+is the injector subsection. Land this inside that README rewrite,
+or before proxyDocs, so Safety is not rewritten three times.
+subAgents.txt can point here for nested runs.
+
+AGENTS.md: a few sentences at the start of Sandboxing (or a
+short Security model heading) that match the README claims. Do
+not grow Design into a second essay. Point at README Safety.
+
+Product docs describe ssa, not experiments/ssaWithReview. If
+review, context, or always-keep are still experiment-only, one
+line in experiments/folder.txt is enough for those extras.
+
+Size:
+0 lines in ssa. About one extra screen in README Safety. A short
+AGENTS.md paragraph. No new tests.

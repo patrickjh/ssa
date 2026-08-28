@@ -22,12 +22,14 @@ run better). Keep-temp messages.json may include that ask.
 
 Drop review/ and feedback.txt. Increment PROMPT_COUNTER, call
 setup_per_prompt_log_folder, then call_curl. Logs land in the next
-promptN/. Print from latestModelResponse.txt.
+promptN/. Print from latestModelResponse.txt through
+sanitize_output.
 
 Do not run handle_model_response, ask, or the sandbox. Do not
 append the review reply as a chat turn. Still print
-"Feedback from model:" on stderr, then the reply, then a newline,
-then the existing status line. Still skip review on die and
+"Feedback from model:" on stderr, then the reply through
+sanitize_output (sanitizeOutput.txt; disk file stays raw), then
+a newline, then the existing status line. Still skip review on die and
 SIGINT/SIGTERM. Always on: no flag.
 
 Keep -h to one short clause. Product tests stay on ../ssa.

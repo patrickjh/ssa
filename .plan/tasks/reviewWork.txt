@@ -30,10 +30,11 @@ or done marker.
 
 Write the model text with jq -j (and jq -b when that flag works)
 to $TEMP_FOLDER/feedback.txt, same idea as latestModelResponse.txt.
-Show those bytes on stderr (ask UI / harness, not script stdout)
-before the final status line so pipes of stdout stay script
-output only. Prefix is optional; one short header on stderr is
-enough if a bare blob is unclear.
+Show those bytes on stderr through sanitize_output (ask UI /
+harness, not script stdout; see sanitizeOutput.txt). Files on
+disk stay raw. Do this before the final status line so pipes of
+stdout stay script output only. Prefix is optional; one short
+header on stderr is enough if a bare blob is unclear.
 
 Log the review HTTP bits under a folder that is not promptN/
 (for example review/ with body.json and response.txt) so the last
