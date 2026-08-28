@@ -1,0 +1,55 @@
+alwaysKeepTemp — always keep the per-run temp folder
+
+Why:
+--keep-temp is the wrong polarity. The folder is the run record
+(task, messages copies, curl body/response, ask answers, latest
+script output), not mktemp scratch. You need it after the run that
+already failed; opt-in keep is too late. README recipes and tests
+that inspect harness files already pass --keep-temp. authHeader.txt
+is already wiped on every exit, including keep.
+
+Related: validateKeepTemp (truthy vs 0|1) and trapSighup (INT/TERM
+delete, HUP may leave files) exist only because discard is the
+default. This task decides that story.
+
+Do:
+Decide first. Preferred: always keep; drop --keep-temp and
+SSA_KEEP_TEMP. Cleanup is the caller (rm -rf "$TMPDIR"/ssa-* or
+TMPDIR=$(mktemp -d)). Keep wiping authHeader.txt. Print the folder
+path on the final stderr status line and on die; a kept path nobody
+is told is barely more useful than a deleted one. Nested runs
+(see subAgents.txt) each get their own ssa-* folder; the path in
+the status / child result is the handle.
+
+Do not invert the default and keep the flag (still a 0|1 setting
+nobody sets to 0 until /tmp is full). Do not add --discard-temp
+unless a real batch user needs it. Do not keep-on-failure /
+delete-on-success (more code; a successful run is often the one to
+inspect).
+
+If no: keep discard-by-default, then validateKeepTemp and trapSighup
+are still open. Document that HUP may leave files, or trap HUP.
+
+If yes: remove the flag, env var, cleanup_on_exit discard branch,
+and -h / AGENTS.md / README mentions. Leave the EXIT/INT/TERM
+traps for authHeader wipe (and any other always-on cleanup).
+validateKeepTemp becomes nothing (delete that task). trapSighup
+is "files stay" unless you still want HUP to wipe the key file.
+contextFile and reviewWork logs are then always on disk, not
+"only with --keep-temp".
+
+Size:
+If no: 0 here; validateKeepTemp / trapSighup stay their own sizes.
+If yes: about 25 (15–40) to remove in `ssa` (flag arm, default,
+cleanup branch, help/env lines) plus a few to print the path on
+status and die. Tests, README, and AGENTS.md are extra, not in
+that count.
+
+Tests:
+If no: none. If yes: tests that pass --keep-temp to inspect
+promptN/ can drop that flag; get_kept_ssa_folder still finds one
+ssa-* under TEST_TEMP_FOLDER (runner already sets TMPDIR). A run
+without --keep-temp leaves the folder. Unknown --keep-temp dies
+like other unknown flags. Status/die stderr contains the folder
+path. authHeader.txt is still absent after exit. Fake curl,
+--no-ask; skip sudo/doas and real /dev/tty.
