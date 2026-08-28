@@ -1,0 +1,976 @@
+#!/bin/sh
+# ssaWithReview — experiment fork of ssa with post-run review.
+# Not the product (that is ssa). Help: ssaWithReview -h
+
+set -u
+
+# Users can set
+OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+OPENAI_URL="${OPENAI_URL:-}"
+SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
+SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
+SSA_MODEL="${SSA_MODEL:-}"
+SSA_NO_ASK="${SSA_NO_ASK:-0}"
+SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
+SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
+
+# Internal
+AUTH_HEADER_FILE=""
+CURL_RESPONSE_FILE=""
+EDITED_BYTES_FILE=""
+EDIT_PAYLOAD_FILE=""
+EDIT_RESULT_FILE=""
+EXIT_CODE_FILE=""
+HIT_MAX=2
+IS_FALSE=1
+IS_TRUE=0
+JQ_BINARY_FLAG=""
+JSON_BODY_FILE=""
+LOOP_AGAIN=0
+LOOP_STATUS="stopped"
+MAX_MESSAGES_BYTES=131072
+MESSAGES_FILE=""
+MESSAGES_NEXT_FILE=""
+MODEL_RESPONSE_FILE=""
+PER_PROMPT_LOG_FOLDER=""
+PID=$$
+PROMPT_COUNTER=0
+REQUEST_EXTRA_FILE=""
+SANDBOX_STDIN_FILE=""
+SCRIPT_OUTPUT_FILE=""
+SYSTEM_PROMPT_FILE=""
+TASK=""
+TASK_DONE=1
+TEMP_FOLDER=""
+USER_ANSWER_FILE=""
+USER_TURN_FILE=""
+
+HELP_TEXT='ssaWithReview — ssa plus post-run model feedback (experiment).
+A simple AI agent that feels like a unix util. Inspired by mini-swe-agent.
+
+Usage: ssaWithReview [options] task as a string no quotes needed
+       ssaWithReview -h | --help
+
+Requires POSIX sh, curl, and jq.
+OPENAI_URL and -m / SSA_MODEL are required.
+OPENAI_API_KEY is required if the provider needs auth.
+
+Options:
+  -h, --help
+          Show this help and exit.
+  -m, --model VALUE
+          OpenAI-style model name for the API (e.g. gpt-4o-mini).
+          Sets SSA_MODEL.
+  --keep-temp
+          Keep per-run temp folder after exit. Useful for debugging.
+          Sets SSA_KEEP_TEMP to 1.
+  --max-model-prompts N
+          Stop after N model prompts (0 = no limit, default = 20).
+          Sets SSA_MAX_MODEL_PROMPTS to N.
+  --no-ask
+          Do not ask before running the scripts the model creates.
+          (Default is to ask on stderr and wait for user response on
+          /dev/tty).
+          Sets SSA_NO_ASK to 1.
+  --openai-api-key KEY
+          Bearer auth token for the model provider (optional for local
+          servers). Prefer OPENAI_API_KEY in the environment; CLI may
+          show in ps.
+          Sets OPENAI_API_KEY.
+  --openai-url URL
+          URL curl POSTs the chat-completions request to (required).
+          Sets OPENAI_URL.
+  --request-json JSON
+          JSON object merged into the chat-completions request body
+          (for example think, max_tokens, temperature). Model and
+          messages from ssa win if the object also sets those keys.
+          Sets SSA_REQUEST_JSON.
+  --sandbox-command COMMAND
+          Command that receives the model script on stdin and runs the
+          script in a sandbox. Should work like sh. Must support
+          sh-style -c for file write and edit requests. Default is sh.
+          Sets SSA_SANDBOX_COMMAND.
+
+Environment:
+  OPENAI_API_KEY                See --openai-api-key.
+  OPENAI_URL                    See --openai-url.
+  SSA_KEEP_TEMP                 See --keep-temp (0 = discard, 1 = keep).
+  SSA_MAX_MODEL_PROMPTS         See --max-model-prompts.
+  SSA_MODEL                     See -m / --model.
+  SSA_NO_ASK                    See --no-ask (0 = ask, 1 = no ask).
+  SSA_REQUEST_JSON              See --request-json.
+  SSA_SANDBOX_COMMAND           See --sandbox-command.
+
+ssa asks the model for a script, a write, or an edit; runs it; and
+appends the result. Repeat until the first action line is
+# task complete
+or --max-model-prompts is hit. Empty or invalid replies are not run.
+After the run, one more model call prints feedback on stderr
+(feedback.txt in the temp folder; kept only with --keep-temp).
+
+Exit status:
+  0       Task complete
+  1       Failure (bad arguments, ssa failure, or max model prompts).
+  130     Interrupted (SIGINT).
+  143     Terminated (SIGTERM).
+
+Example:
+  ssaWithReview why is apt not updating?
+'
+
+SYSTEM_PROMPT='You help users solve tasks with POSIX sh. Each turn you get
+prior commands and their output. Continue from there. Reply with only
+one of the four shapes below. Do not wrap the reply in markdown or
+code fences. Put reasoning in # comments. Prefer scripts that will
+not hang.
+
+A POSIX sh script:
+
+# comment: list files in this folder
+ls -la
+
+A write request (preferred for new file bytes; no quoting). Leading
+blank lines and # notes are skipped. The first action line is this
+comment with the path filled in; every line after that is the raw
+file:
+
+# write file: hello.txt
+hello
+world
+
+Do not put a script after the write file line. One file per reply.
+If you need mkdir first, send that as a script turn, then the write.
+A script may also write files with a heredoc or printf.
+
+An edit request (preferred for changing existing file bytes). The
+old string must match exactly once:
+
+# edit file: hello.txt
+<<<<<<< SEARCH
+hello
+=======
+hello
+world
+>>>>>>> REPLACE
+
+Or the done line when the task is complete (leading blank lines and
+# notes are ignored):
+
+# task complete
+'
+
+REVIEW_SYSTEM_PROMPT='Read this run transcript. Reply with plain text about
+what changes could make the next run better.'
+
+FORMAT_ERROR_EMPTY='Format error: empty reply. Use a script, a write '\
+'request, an edit, or # task complete.'
+
+FORMAT_ERROR_NOT_SHELL='Format error: not valid POSIX sh. No markdown. '\
+'First line a script, # write file: PATH, # edit file: PATH, or '\
+'# task complete.'
+
+OUTPUT_OMITTED_NOT_UTF8='Output omitted: not valid UTF-8 (NUL or binary '\
+'bytes).'
+
+EDIT_APPLY_JQ='
+($payload | split("<<<<<<< SEARCH\n")) as $a
+| if ($a | length) != 2 or $a[0] != "" then
+    {ok: false, msg: "missing SEARCH/REPLACE markers"}
+  else
+    ($a[1] | split("\n=======\n")) as $b
+    | if ($b | length) != 2 then
+        {ok: false, msg: "missing SEARCH/REPLACE markers"}
+      else
+        ($b[1] |
+          if startswith(">>>>>>> REPLACE") then
+            ["", ltrimstr(">>>>>>> REPLACE")]
+          else split("\n>>>>>>> REPLACE")
+          end
+        ) as $c
+        | if ($c | length) != 2 then
+            {ok: false, msg: "missing SEARCH/REPLACE markers"}
+          elif $c[1] != "" and $c[1] != "\n" then
+            {ok: false, msg: "missing SEARCH/REPLACE markers"}
+          elif $b[0] == "" then
+            {ok: false, msg: "old string is empty"}
+          else
+            ($file | split($b[0])) as $p
+            | if ($p | length) != 2 then
+                {ok: false,
+                 msg: ("old string matched "
+                   + (($p | length) - 1 | tostring)
+                   + " times (need 1)")}
+              else
+                {ok: true, text: ($p[0] + $c[0] + $p[1])}
+              end
+          end
+      end
+  end
+'
+
+main() {
+    trap handle_die_signal USR1
+    parse_arguments "$@"
+    check_required_commands
+    read_task_from_stdin_if_needed
+    check_can_run
+    setup_agent_loop
+    run_agent_loop
+    review_work
+    finish_agent_loop
+}
+
+handle_die_signal() {
+    cleanup_on_exit
+    exit 1
+}
+
+parse_arguments() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
+            -m|--model) set_model "${2-}"; shift 2 ;;
+            --keep-temp) SSA_KEEP_TEMP=1; shift ;;
+            --max-model-prompts) set_max_model_prompts "${2-}"; shift 2 ;;
+            --no-ask) SSA_NO_ASK=1; shift ;;
+            --openai-api-key) set_openai_api_key "${2-}"; shift 2 ;;
+            --openai-url) set_openai_url "${2-}"; shift 2 ;;
+            --request-json) set_request_json "${2-}"; shift 2 ;;
+            --sandbox-command) set_sandbox_command "${2-}"; shift 2 ;;
+            --) shift; TASK=$*; return ;;
+            -*) die "bad option: $1; see ssa -h for help" ;;
+            *) TASK=$*; return ;;
+        esac
+    done
+}
+
+set_model() {
+    [ -n "${1-}" ] ||
+        die "-m / --model found with empty value; see ssa -h for help"
+    SSA_MODEL=$1
+}
+
+set_max_model_prompts() {
+    [ -n "${1-}" ] ||
+        die "--max-model-prompts found with empty value; see ssa -h for help"
+    SSA_MAX_MODEL_PROMPTS=$1
+}
+
+set_openai_api_key() {
+    [ -n "${1-}" ] ||
+        die "--openai-api-key found with empty value; see ssa -h for help"
+    OPENAI_API_KEY=$1
+}
+
+set_openai_url() {
+    [ -n "${1-}" ] ||
+        die "--openai-url found with empty value; see ssa -h for help"
+    OPENAI_URL=$1
+}
+
+set_request_json() {
+    [ -n "${1-}" ] ||
+        die "--request-json found with empty value; see ssa -h for help"
+    SSA_REQUEST_JSON=$1
+}
+
+set_sandbox_command() {
+    [ -n "${1-}" ] ||
+        die "--sandbox-command found with empty value; see ssa -h for help"
+    SSA_SANDBOX_COMMAND=$1
+}
+
+check_required_commands() {
+    check_command cat
+    check_command cp
+    check_command curl
+    check_command date
+    check_command grep
+    check_command head
+    check_command jq
+    check_command mkdir
+    check_command rm
+    check_command sed
+    check_command tee
+}
+
+check_command() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 not found on PATH"
+}
+
+read_task_from_stdin_if_needed() {
+    if [ -n "$TASK" ]; then return 0; fi
+    if [ -t 0 ]; then return 0; fi
+    TASK=$(cat) ||
+        die "cannot read task from stdin; pass task as words after CLI " \
+          "options or pipe task to stdin; see ssa -h for help"
+}
+
+check_can_run() {
+    check_task_is_set
+    check_max_model_prompts
+    check_no_ask_setting
+    check_model_is_set
+    check_openai_url
+    check_sandbox_command
+    check_request_json
+    if ask_user_enabled; then check_prompt_device; fi
+}
+
+check_task_is_set() {
+    [ -n "$TASK" ] ||
+        die "no task; pass task as words after CLI options or pipe task on " \
+          "stdin; see ssa -h for help"
+}
+
+check_max_model_prompts() {
+    case $SSA_MAX_MODEL_PROMPTS in
+    *[!0-9]*) die "SSA_MAX_MODEL_PROMPTS must be a non-negative integer; " \
+        "use --max-model-prompts or SSA_MAX_MODEL_PROMPTS; " \
+        "see ssa -h for help" ;;
+    esac
+}
+
+check_no_ask_setting() {
+    case $SSA_NO_ASK in
+    0|1) ;;
+    *) die "SSA_NO_ASK must be 0 or 1; use --no-ask or SSA_NO_ASK; " \
+        "see ssa -h for help" ;;
+    esac
+}
+
+check_model_is_set() {
+    [ -n "$SSA_MODEL" ] ||
+        die "model not set; use -m / --model or SSA_MODEL " \
+            "(e.g. gpt-4o-mini); see ssa -h for help"
+}
+
+check_openai_url() {
+    [ -n "$OPENAI_URL" ] ||
+        die "OPENAI_URL not set; use --openai-url or OPENAI_URL; " \
+            "see ssa -h for help"
+}
+
+check_sandbox_command() {
+    command -v "$SSA_SANDBOX_COMMAND" >/dev/null 2>&1 ||
+        die "sandbox command not found: $SSA_SANDBOX_COMMAND; " \
+        "use --sandbox-command or SSA_SANDBOX_COMMAND; see ssa -h for help"
+}
+
+check_request_json() {
+    if [ -z "$SSA_REQUEST_JSON" ]; then
+        return 0
+    fi
+    printf '%s' "$SSA_REQUEST_JSON" |
+        jq -e 'type == "object"' >/dev/null 2>&1 ||
+        die "SSA_REQUEST_JSON must be a JSON object; use --request-json " \
+            "or SSA_REQUEST_JSON; see ssa -h for help"
+}
+
+check_prompt_device() {
+    ( exec </dev/tty ) 2>/dev/null ||
+        die "need /dev/tty to ask before running scripts; " \
+        "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+}
+
+setup_agent_loop() {
+    setup_jq_binary_flag
+    setup_temp_folder
+    setup_temp_files
+    setup_auth_header_file
+    log_openai_url
+    log_task
+    setup_temp_cleanup
+    setup_messages_file
+    run_fake_first_turn
+    LOOP_STATUS="stopped"
+}
+
+setup_jq_binary_flag() {
+    # Some jq builds write CRLF unless -b (binary stdout) is set.
+    # jq 1.6 and older lack -b, so only use it when it works.
+    JQ_BINARY_FLAG=""
+    if jq -b -n '""' >/dev/null 2>&1; then
+        JQ_BINARY_FLAG="-b"
+    fi
+}
+
+setup_temp_folder() {
+    TEMP_FOLDER="${TMPDIR:-/tmp}/ssa-${LOGNAME:-user}-$(date \
+        +%Y-%m-%d_%H.%M.%S)-$PID"
+    ( umask 077; mkdir "$TEMP_FOLDER" ) ||
+        die "cannot create temp folder"
+}
+
+setup_temp_files() {
+    MODEL_RESPONSE_FILE="${TEMP_FOLDER}/latestModelResponse.txt"
+    EDITED_BYTES_FILE="${TEMP_FOLDER}/latestEditedBytes.txt"
+    EDIT_PAYLOAD_FILE="${TEMP_FOLDER}/latestEditPayload.txt"
+    EDIT_RESULT_FILE="${TEMP_FOLDER}/latestEditResult.json"
+    EXIT_CODE_FILE="${TEMP_FOLDER}/latestScriptExitCode.txt"
+    SCRIPT_OUTPUT_FILE="${TEMP_FOLDER}/latestScriptOutput.txt"
+    MESSAGES_FILE="${TEMP_FOLDER}/messages.json"
+    MESSAGES_NEXT_FILE="${TEMP_FOLDER}/messagesNext.json"
+    USER_TURN_FILE="${TEMP_FOLDER}/latestUserTurn.txt"
+    SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
+    create_file_no_overwrite "$MODEL_RESPONSE_FILE"
+    create_file_no_overwrite "$EDITED_BYTES_FILE"
+    create_file_no_overwrite "$EDIT_PAYLOAD_FILE"
+    create_file_no_overwrite "$EDIT_RESULT_FILE"
+    create_file_no_overwrite "$EXIT_CODE_FILE"
+    create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
+    create_file_no_overwrite "$MESSAGES_FILE"
+    create_file_no_overwrite "$USER_TURN_FILE"
+}
+
+setup_auth_header_file() {
+    if [ -n "$OPENAI_API_KEY" ]; then
+        AUTH_HEADER_FILE="${TEMP_FOLDER}/authHeader.txt"
+        create_file_no_overwrite "$AUTH_HEADER_FILE"
+        printf 'Authorization: Bearer %s\n' "$OPENAI_API_KEY" \
+            >"$AUTH_HEADER_FILE" ||
+            die "cannot write auth header file"
+    fi
+    unset OPENAI_API_KEY
+}
+
+log_openai_url() {
+    create_file_no_overwrite "${TEMP_FOLDER}/openaiUrl.txt"
+    printf '%s' "$OPENAI_URL" >"${TEMP_FOLDER}/openaiUrl.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/openaiUrl.txt"
+}
+
+log_task() {
+    create_file_no_overwrite "${TEMP_FOLDER}/task.txt"
+    printf '%s\n' "$TASK" >"${TEMP_FOLDER}/task.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/task.txt"
+}
+
+setup_temp_cleanup() {
+    trap cleanup_on_exit EXIT
+    trap 'cleanup_on_exit; exit 130' INT
+    trap 'cleanup_on_exit; exit 143' TERM
+}
+
+cleanup_on_exit() {
+    cleanup_auth_header_file
+    if [ "$SSA_KEEP_TEMP" = 0 ]; then
+        cleanup_temp_folder
+    fi
+}
+
+cleanup_auth_header_file() {
+    if [ -z "$AUTH_HEADER_FILE" ]; then
+        return
+    fi
+    if [ -f "$AUTH_HEADER_FILE" ]; then
+        : >"$AUTH_HEADER_FILE" || :
+        rm -f "$AUTH_HEADER_FILE" || :
+    fi
+    AUTH_HEADER_FILE=""
+}
+
+cleanup_temp_folder() {
+    if [ -n "$TEMP_FOLDER" ]; then
+      rm -rf "$TEMP_FOLDER";
+    fi
+}
+
+setup_messages_file() {
+    SYSTEM_PROMPT_FILE="${TEMP_FOLDER}/systemPrompt.txt"
+    create_file_no_overwrite "$SYSTEM_PROMPT_FILE"
+    printf '%s\n' "$SYSTEM_PROMPT" >"$SYSTEM_PROMPT_FILE" ||
+        die "cannot write system prompt"
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -n \
+        --rawfile system "$SYSTEM_PROMPT_FILE" \
+        --rawfile task "${TEMP_FOLDER}/task.txt" \
+        '[{role: "system", content: $system},
+          {role: "user", content: $task}]' \
+        >"$MESSAGES_FILE" ||
+        die "cannot write chat messages"
+}
+
+run_fake_first_turn() {
+    setup_per_prompt_log_folder
+    printf '%s\n' 'echo starting the agent' >"$MODEL_RESPONSE_FILE" ||
+        die "cannot write fake first turn response"
+    append_assistant_turn
+    run_model_reply
+}
+
+run_agent_loop() {
+    while :; do
+        PROMPT_COUNTER=$((PROMPT_COUNTER + 1))
+        prompt_model_then_run_script
+        case $? in
+            $TASK_DONE) LOOP_STATUS="done"; break ;;
+            $HIT_MAX) LOOP_STATUS="hit max"; break ;;
+            $LOOP_AGAIN) continue ;;
+            *) die "unknown loop status $?" ;;
+        esac
+    done
+}
+
+prompt_model_then_run_script() {
+    if over_model_prompt_limit; then return $HIT_MAX; fi
+    setup_per_prompt_log_folder
+    cap_messages_file
+    log_messages
+    call_curl
+    handle_model_response
+}
+
+over_model_prompt_limit() {
+    if [ "$SSA_MAX_MODEL_PROMPTS" -le 0 ]; then return $IS_FALSE; fi
+    if [ "$PROMPT_COUNTER" -gt "$SSA_MAX_MODEL_PROMPTS" ]; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+setup_per_prompt_log_folder() {
+    PER_PROMPT_LOG_FOLDER="${TEMP_FOLDER}/prompt${PROMPT_COUNTER}"
+    create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
+}
+
+cap_messages_file() {
+    while messages_file_over_byte_cap && can_drop_old_message; do
+        drop_oldest_extra_message
+    done
+    if messages_file_over_byte_cap; then
+        die "one chat turn is larger than the messages cap" \
+            "($MAX_MESSAGES_BYTES bytes)"
+    fi
+}
+
+messages_file_over_byte_cap() {
+    if [ "$(messages_file_byte_count)" -gt "$MAX_MESSAGES_BYTES" ]
+    then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+messages_file_byte_count() {
+    # ASCII JSON: string length is byte count. Avoid wc padding/CRLF.
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -n --rawfile raw "$MESSAGES_FILE" \
+        '$raw | length' | tr -d '\r'
+}
+
+can_drop_old_message() {
+    # jq may emit CRLF; strip so the integer test is safe.
+    if [ "$(jq 'length' "$MESSAGES_FILE" | tr -d '\r')" -gt 3 ]; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+drop_oldest_extra_message() {
+    # Keep system and task (indexes 0 and 1); drop the next oldest.
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG '.[0:2] + .[3:]' \
+        "$MESSAGES_FILE" >"$MESSAGES_NEXT_FILE" ||
+        die "cannot cap chat messages"
+    mv "$MESSAGES_NEXT_FILE" "$MESSAGES_FILE" ||
+        die "cannot update chat messages"
+}
+
+log_messages() {
+    cp "$MESSAGES_FILE" "${PER_PROMPT_LOG_FOLDER}/messages.json" ||
+        die "cannot copy messages to ${PER_PROMPT_LOG_FOLDER}/messages.json"
+}
+
+call_curl() {
+    build_curl_json_request
+    send_curl_json_request ||
+        die "curl failed; check --openai-url or OPENAI_URL, " \
+            "-m / --model or SSA_MODEL, and --openai-api-key or " \
+            "OPENAI_API_KEY; see ssa -h for help"
+    save_model_reply_to_file ||
+        die "cannot write to temp file: $MODEL_RESPONSE_FILE"
+}
+
+build_curl_json_request() {
+    JSON_BODY_FILE="${PER_PROMPT_LOG_FOLDER}/body.json"
+    create_file_no_overwrite "$JSON_BODY_FILE"
+    REQUEST_EXTRA_FILE="${PER_PROMPT_LOG_FOLDER}/requestExtra.json"
+    create_file_no_overwrite "$REQUEST_EXTRA_FILE"
+    if [ -n "$SSA_REQUEST_JSON" ]; then
+        printf '%s\n' "$SSA_REQUEST_JSON" >"$REQUEST_EXTRA_FILE" ||
+            die "cannot write request JSON extra"
+    else
+        printf '%s\n' '{}' >"$REQUEST_EXTRA_FILE" ||
+            die "cannot write request JSON extra"
+    fi
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -n \
+        --arg model "$SSA_MODEL" \
+        --slurpfile messages "$MESSAGES_FILE" \
+        --slurpfile extra "$REQUEST_EXTRA_FILE" \
+        '$extra[0] + {model: $model, messages: $messages[0]}' \
+        >"$JSON_BODY_FILE" || die 'cannot build curl request JSON'
+}
+
+send_curl_json_request() {
+    CURL_RESPONSE_FILE="${PER_PROMPT_LOG_FOLDER}/response.txt"
+    create_file_no_overwrite "$CURL_RESPONSE_FILE"
+    # shellcheck disable=SC2086
+    curl -sS --fail \
+        --retry 4 --retry-connrefused --retry-max-time 120 \
+        --connect-timeout 30 --max-time 900 \
+        -H "Content-Type: application/json" \
+        ${AUTH_HEADER_FILE:+-H @"$AUTH_HEADER_FILE"} \
+        --data-binary @"$JSON_BODY_FILE" \
+        -o "$CURL_RESPONSE_FILE" \
+        "$OPENAI_URL"
+}
+
+save_model_reply_to_file() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -j '.choices[0].message.content // empty' \
+        "$CURL_RESPONSE_FILE" >"$MODEL_RESPONSE_FILE"
+}
+
+create_dir_no_overwrite() {
+    ( umask 077; mkdir "$1" ) ||
+        die "could not create directory: $1"
+}
+
+create_file_no_overwrite() {
+    ( umask 077; set -C; : >"$1" ) ||
+        die "could not create file: $1"
+}
+
+handle_model_response() {
+    append_assistant_turn
+    if agent_is_done; then return $TASK_DONE; fi
+    if reply_is_blank; then
+        record_format_error "$FORMAT_ERROR_EMPTY"
+        return $LOOP_AGAIN
+    fi
+    if reply_is_write_request; then
+        run_model_reply
+        return $LOOP_AGAIN
+    fi
+    if reply_is_edit_request; then
+        run_model_reply
+        return $LOOP_AGAIN
+    fi
+    if reply_has_fence_line; then
+        record_format_error "$FORMAT_ERROR_NOT_SHELL"
+        return $LOOP_AGAIN
+    fi
+    if reply_has_thinking_tags; then
+        record_format_error "$FORMAT_ERROR_NOT_SHELL"
+        return $LOOP_AGAIN
+    fi
+    if reply_is_valid_shell; then
+        run_model_reply
+        return $LOOP_AGAIN
+    fi
+    record_format_error "$FORMAT_ERROR_NOT_SHELL"
+    return $LOOP_AGAIN
+}
+
+append_assistant_turn() {
+    append_json_message assistant "$MODEL_RESPONSE_FILE"
+}
+
+agent_is_done() {
+    if [ "$(first_action_line)" = '# task complete' ]; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+reply_is_blank() {
+    if grep -q '[^[:space:]]' "$MODEL_RESPONSE_FILE"; then
+        return $IS_FALSE
+    fi
+    return $IS_TRUE
+}
+
+reply_has_fence_line() {
+    if grep -q '^```' "$MODEL_RESPONSE_FILE"; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+reply_has_thinking_tags() {
+    if grep -qF -- '<think>' "$MODEL_RESPONSE_FILE" ||
+        grep -qF -- '</think>' "$MODEL_RESPONSE_FILE" ||
+        grep -qF -- '<|channel>thought' "$MODEL_RESPONSE_FILE"
+    then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+record_format_error() {
+    printf '%s\n' "$1" | tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" ||
+        die "cannot write script exit code"
+    printf '%s\n' "$1" >"$USER_TURN_FILE" ||
+        die "cannot write format error"
+    append_user_turn
+}
+
+reply_is_valid_shell() {
+    if sh -n "$MODEL_RESPONSE_FILE" >/dev/null 2>&1; then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+run_model_reply() {
+    if ask_user_enabled; then
+        ask_user_to_approve_script || {
+            record_script_rejection
+            return
+        }
+    fi
+    run_reply_in_sandboxes
+}
+
+run_reply_in_sandboxes() {
+    if reply_is_write_request; then
+        run_in_configured_sandboxes \
+            -c 'sed -n "/^# write file: ./,\$p" | sed 1d > "$0" &&
+                printf "wrote file: %s\n" "$0"' \
+            "$(first_action_line | sed 's/^# write file: //')"
+    elif reply_is_edit_request; then
+        apply_edit_request \
+            "$(first_action_line | sed 's/^# edit file: //')"
+    else
+        run_in_configured_sandboxes
+    fi
+}
+
+apply_edit_request() {
+    if [ ! -f "$1" ]; then
+        record_edit_failure "$1" "file not found"
+        return
+    fi
+    extract_edit_payload
+    apply_unique_replace "$1" || return
+    SANDBOX_STDIN_FILE="$EDITED_BYTES_FILE"
+    run_in_configured_sandboxes \
+        -c 'cat > "$0" &&
+            printf "edited file: %s\n" "$0"' \
+        "$1"
+    SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
+}
+
+extract_edit_payload() {
+    sed -n '/^# edit file: ./,$p' "$MODEL_RESPONSE_FILE" |
+        sed 1d >"$EDIT_PAYLOAD_FILE" ||
+        die "cannot write edit payload file"
+}
+
+apply_unique_replace() {
+    jq $JQ_BINARY_FLAG -n \
+        --rawfile file "$1" \
+        --rawfile payload "$EDIT_PAYLOAD_FILE" \
+        "$EDIT_APPLY_JQ" >"$EDIT_RESULT_FILE" ||
+        die "cannot apply unique replace"
+    if [ "$(jq $JQ_BINARY_FLAG -j '.ok' \
+            "$EDIT_RESULT_FILE")" != "true" ]; then
+        record_edit_failure "$1" \
+            "$(jq $JQ_BINARY_FLAG -j '.msg' "$EDIT_RESULT_FILE")"
+        return $IS_FALSE
+    fi
+    jq $JQ_BINARY_FLAG -j '.text' "$EDIT_RESULT_FILE" \
+        >"$EDITED_BYTES_FILE" ||
+        die "cannot write edited bytes"
+    return $IS_TRUE
+}
+
+record_edit_failure() {
+    printf 'edit failed: %s: %s\n' "$1" "$2" |
+        tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" ||
+        die "cannot write script exit code"
+    append_script_result
+}
+
+reply_is_write_request() {
+    first_action_line | grep -q '^# write file: .'
+}
+
+reply_is_edit_request() {
+    first_action_line | grep -q '^# edit file: .'
+}
+
+first_action_line() {
+    grep -E '^# task complete$|^# write file:|^# edit file:|^[^#]' \
+        "$MODEL_RESPONSE_FILE" |
+        head -n 1 |
+        grep .  # head succeeds on empty input; this fails then
+}
+
+record_script_rejection() {
+    printf 'User chose not to run script. Try something else.\n' |
+        tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" ||
+        die "cannot write script exit code"
+    append_script_result
+}
+
+run_in_configured_sandboxes() {
+    (
+        "$SSA_SANDBOX_COMMAND" "$@" <"$SANDBOX_STDIN_FILE" 2>&1
+        echo $? >"$EXIT_CODE_FILE" ||
+            die "cannot write script exit code"
+    ) | tee "$SCRIPT_OUTPUT_FILE"
+    append_script_result
+}
+
+ask_user_enabled() {
+    if [ "$SSA_NO_ASK" = 0 ]; then return $IS_TRUE; fi
+    return $IS_FALSE
+}
+
+ask_user_to_approve_script() {
+    USER_ANSWER_FILE="${PER_PROMPT_LOG_FOLDER}/userAnswer.txt"
+    print_model_script
+    print_ask_prompt
+    handle_user_answers
+}
+
+print_model_script() {
+    printf 'Script from model:\n' >&2
+    # Show the script safely for ask review (file on disk unchanged).
+    cat "$MODEL_RESPONSE_FILE" |
+    # Carriage return can overwrite the line; show as \r.
+    sed -e "s/$(printf '\r')/\\\\r/g" |
+    # ESC starts ANSI/CSI sequences; show as \e.
+    sed -e "s/$(printf '\033')/\\\\e/g" |
+    # Other non-print bytes (keep tab); show as ?.
+    sed -e "s/[^[:print:]$(printf '\t')]/?/g" >&2 ||
+        die "cannot show model script"
+}
+
+handle_user_answers() {
+    while true; do
+        read_ask_answer_from_tty
+        case $(cat "$USER_ANSWER_FILE") in
+        y|Y|yes|YES) return 0 ;;
+        n|N|no|NO) return 1 ;;
+        q|Q|quit|QUIT) die 'User chose to quit.' ;;
+        *) print_invalid_input; print_ask_prompt ;;
+        esac
+    done
+}
+
+read_ask_answer_from_tty() {
+    IFS= read -r REPLY </dev/tty ||
+        die "cannot read answer from /dev/tty; " \
+        "use --no-ask or SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+    printf '%s\n' "$REPLY" >"$USER_ANSWER_FILE" ||
+        die "cannot write to temp file: $USER_ANSWER_FILE"
+}
+
+print_invalid_input() {
+    printf 'invalid input: %s\n' "$(cat "$USER_ANSWER_FILE")" >&2
+}
+
+print_ask_prompt() {
+    printf '\nRun this script? [Y]es / [N]o / [Q]uit ' >&2
+}
+
+append_script_result() {
+    {
+        printf 'Output from running the script:\n\n'
+        cat "$SCRIPT_OUTPUT_FILE"
+        printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
+    } >"$USER_TURN_FILE" ||
+        die "cannot write user turn"
+    if ! user_turn_is_json_safe; then
+        write_omitted_script_output
+    fi
+    append_user_turn
+}
+
+user_turn_is_json_safe() {
+    # shellcheck disable=SC2086
+    if jq $JQ_BINARY_FLAG -e -n \
+        --rawfile content "$USER_TURN_FILE" \
+        '$content | contains("\u0000") | not' >/dev/null 2>&1
+    then
+        return $IS_TRUE
+    fi
+    return $IS_FALSE
+}
+
+write_omitted_script_output() {
+    {
+        printf '%s\n\n' "$OUTPUT_OMITTED_NOT_UTF8"
+        printf 'Script exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
+    } >"$USER_TURN_FILE" ||
+        die "cannot write user turn"
+}
+
+append_user_turn() {
+    append_json_message user "$USER_TURN_FILE"
+}
+
+append_json_message() {
+    # $1 = role, $2 = content file
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG \
+        --arg role "$1" \
+        --rawfile content "$2" \
+        '. + [{role: $role, content: $content}]' \
+        "$MESSAGES_FILE" >"$MESSAGES_NEXT_FILE" ||
+        die "cannot append chat message"
+    mv "$MESSAGES_NEXT_FILE" "$MESSAGES_FILE" ||
+        die "cannot update chat messages"
+}
+
+review_work() {
+    PER_PROMPT_LOG_FOLDER="${TEMP_FOLDER}/review"
+    create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
+    MODEL_RESPONSE_FILE="${TEMP_FOLDER}/feedback.txt"
+    create_file_no_overwrite "$MODEL_RESPONSE_FILE"
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG --arg prompt "$REVIEW_SYSTEM_PROMPT" \
+        '.[0].content = $prompt' "$MESSAGES_FILE" \
+        >"${PER_PROMPT_LOG_FOLDER}/messages.json" || {
+        printf 'review failed\n' >&2
+        return
+    }
+    MESSAGES_FILE="${PER_PROMPT_LOG_FOLDER}/messages.json"
+    build_curl_json_request
+    if send_curl_json_request && save_model_reply_to_file; then
+        printf 'Feedback from model:\n' >&2
+        cat "$MODEL_RESPONSE_FILE" >&2
+        printf '\n' >&2
+    else
+        printf 'review failed\n' >&2
+    fi
+}
+
+finish_agent_loop() {
+    case $LOOP_STATUS in
+    done) printf 'done: task complete after %s model prompts\n' \
+        "$PROMPT_COUNTER" >&2; exit 0 ;;
+    hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
+        "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
+    *) die "unknown loop status $LOOP_STATUS" ;;
+    esac
+}
+
+die() {
+    printf '%s\n' "$*" >&2
+    if [ -n "${PID:-}" ]; then
+        kill -USR1 "$PID" 2>/dev/null
+    else
+        printf 'PID not set; cannot signal parent process\n' >&2
+    fi
+    exit 1
+}
+
+main "$@"
