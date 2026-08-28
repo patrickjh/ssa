@@ -1,0 +1,43 @@
+simplifyReviewWork — fewer lines for the post-run review
+
+Why:
+experiments/ssaWithReview already always reviews after the loop.
+The extra POST is wrapped in fail-soft, a copy-and-swap of
+messages.json, a review/ folder, and feedback.txt. Those rules
+are not required for a useful review and cost most of the new
+lines.
+
+Do:
+Slim review_work in experiments/ssaWithReview. Do not grow product
+ssa to match the thick fork. Prefer reuse over a parallel HTTP
+path.
+
+Drop fail-soft: put die back in send_curl_json_request and
+save_model_reply_to_file (same as product ssa), and call call_curl
+from review. A failed review curl is then a harness failure.
+
+Drop the jq copy-and-swap of the system turn. Append a user turn
+with append_json_message (plain-text ask: what would make the next
+run better). Keep-temp messages.json may include that ask.
+
+Drop review/ and feedback.txt. Increment PROMPT_COUNTER, call
+setup_per_prompt_log_folder, then call_curl. Logs land in the next
+promptN/. Print from latestModelResponse.txt.
+
+Do not run handle_model_response, ask, or the sandbox. Do not
+append the review reply as a chat turn. Still print
+"Feedback from model:" on stderr, then the reply, then a newline,
+then the existing status line. Still skip review on die and
+SIGINT/SIGTERM. Always on: no flag.
+
+Keep -h to one short clause. Product tests stay on ../ssa.
+
+Size:
+About −15 lines in experiments/ssaWithReview (net toward ~10–15
+above product ssa). review_work shrinks; call_curl / send / save
+go back to the product shape. No new flag.
+
+Tests:
+None in tests/ until this is product. Smoke: --no-ask --keep-temp,
+stderr has Feedback from model: then the status line, extra curl
+is promptN+1, stdout is still script output only.
