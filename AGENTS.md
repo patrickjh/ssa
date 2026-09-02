@@ -163,7 +163,11 @@ Combine both.
   `[Y]es / [N]o / [Q]uit` prompt on stderr; read the answer from
   `/dev/tty`.
 - Yes → run the script (other layers). No → rejection text on stdout,
-  status `1` (loop continues). Quit → `die`.
+  status `1` (loop continues); then `reason:` on stderr and one line
+  from `/dev/tty` (empty skips). A typed reason is logged to
+  `promptN/userFeedback.txt` and appended as `Reason: …` on the user
+  turn, not on stdout. Quit → `die`. Fake-curl `SSA_NO_ASK=1` stories
+  cannot cover this tty read.
 - Ask listing and other harness UI of untrusted bytes show CR as
   `\r`, ESC as `\e`, and other non-print (except tab) as `?`. The
   file fed to the sandbox and live script stdout are unchanged.

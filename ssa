@@ -743,7 +743,19 @@ record_script_rejection() {
         tee "$SCRIPT_OUTPUT_FILE"
     echo 1 >"$EXIT_CODE_FILE" ||
         die "cannot write script exit code"
+    ask_user_for_rejection_reason
     append_script_result
+}
+
+ask_user_for_rejection_reason() {
+    printf 'reason: ' >&2
+    IFS= read -r REPLY </dev/tty ||
+        die "cannot read answer from /dev/tty; " \
+        "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+    printf '%s\n' "$REPLY" \
+        >"${PER_PROMPT_LOG_FOLDER}/userFeedback.txt" ||
+        die "cannot write to temp file: " \
+        "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt"
 }
 
 run_in_configured_sandboxes() {
@@ -808,6 +820,7 @@ append_script_result() {
     {
         printf 'Output from running the script:\n\n'
         cat "$SCRIPT_OUTPUT_FILE"
+        print_user_rejection_reason
         printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
     } >"$USER_TURN_FILE" ||
         die "cannot write user turn"
@@ -815,6 +828,16 @@ append_script_result() {
         write_omitted_script_output
     fi
     append_user_turn
+}
+
+print_user_rejection_reason() {
+    if [ -f "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt" ] &&
+        grep -q '[^[:space:]]' \
+            "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt"
+    then
+        printf '\nReason: %s\n' \
+            "$(cat "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt")"
+    fi
 }
 
 user_turn_is_json_safe() {
