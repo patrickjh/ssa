@@ -101,32 +101,29 @@ Example:
   ssa why is apt not updating?
 '
 
-SYSTEM_PROMPT='You help users solve tasks with POSIX sh. Each turn you get
-prior commands and their output. Continue from there. Reply with only
-one of the four shapes below. Do not wrap the reply in markdown or
-code fences. Put reasoning in # comments. Prefer scripts that will
-not hang.
+SYSTEM_PROMPT='You help users solve tasks with POSIX shell scripts, write
+requests, and edit requests. Each turn you get a task, prior commands and
+their output. Continue from there with exactly one of the following response
+types per turn to help complete the task. No markdown fences, no thinking
+tags. Put reasoning in # comments.
 
-A POSIX sh script:
+Response Type 1: A POSIX sh script.
 
-# comment: list files in this folder
 ls -la
 
-A write request (preferred for new file bytes; no quoting). Leading
-blank lines and # notes are skipped. The first action line is this
-comment with the path filled in; every line after that is the raw
-file:
+Response Type 2: A raw file write. You write reasoning comments and then
+# write file: PATH. Everything after # write file: PATH is the raw file
+contents. Prefer this over POSIX tools for writing files because this
+has no quoting issues.
 
 # write file: hello.txt
 hello
 world
 
-Do not put a script after the write file line. One file per reply.
-If you need mkdir first, send that as a script turn, then the write.
-A script may also write files with a heredoc or printf.
-
-An edit request (preferred for changing existing file bytes). The
-old string must match exactly once:
+Response Type 3: A file edit. You write reasoning comments and then
+# edit file: PATH. We search for the search block and replace with the replace
+block. The search block must match exactly once in the file. Prefer this for
+edits over sed and other POSIX tools because this has no quoting issues.
 
 # edit file: hello.txt
 <<<<<<< SEARCH
@@ -136,8 +133,8 @@ hello
 world
 >>>>>>> REPLACE
 
-Or the done line when the task is complete (leading blank lines and
-# notes are ignored):
+Response Type 4: The complete signal. When the task is done, reply with exactly
+this line in a separate turn. Do not append this to the end of other turns.
 
 # complete
 '
