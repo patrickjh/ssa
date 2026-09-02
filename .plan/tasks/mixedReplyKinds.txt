@@ -1,7 +1,7 @@
 mixedReplyKinds — one reply, one kind
 
 Why:
-Gemma 4 31B (ssaWithReview runs) often concatenates two system-prompt
+Gemma 4 31B often concatenates two system-prompt
 examples into one reply: a # write file: PATH block and a # comment:
 script block. The prompt already says one of four shapes and "Do not
 put a script after the write file line." First-wins still treats that

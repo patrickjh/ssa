@@ -36,9 +36,8 @@ per `*.test.sh`, wrap under the name, no checklists). Do not
 start a new Style section. Do not make runTests.sh check the
 note.
 
-Leave `.plan/folder.txt` and `experiments/folder.txt` as they
-are (blurb plus a padded file map). Those trees are not test
-stories.
+Leave `.plan/folder.txt` as it is (blurb plus a padded file
+map). That tree is not a test story.
 
 Rewrite every `tests/*/folder.txt` to this shape. Trim the
 ones that currently copy Design. Point at a short folder

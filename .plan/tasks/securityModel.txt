@@ -45,10 +45,6 @@ AGENTS.md: a few sentences at the start of Sandboxing (or a
 short Security model heading) that match the README claims. Do
 not grow Design into a second essay. Point at README Safety.
 
-Product docs describe ssa, not experiments/ssaWithReview. If
-review, context, or always-keep are still experiment-only, one
-line in experiments/folder.txt is enough for those extras.
-
 Size:
 0 lines in ssa. About one extra screen in README Safety. A short
 AGENTS.md paragraph. No new tests.
