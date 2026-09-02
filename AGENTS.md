@@ -103,17 +103,19 @@ repeat) with:
 
 1. **Start** — Parse `-h` and the task, validate settings and tools (`curl`,
    `jq`, `head`, …), create temp folder, write system prompt and task
-   into `messages.json`, create `prompt0/`, seed with a bootstrap
-   `echo starting the agent` (ask-user applies when enabled).
+   into `messages.json` (if `SSA_CONTEXT` is set, that file is appended
+   to the first user turn after `Context:`), create `prompt0/`, seed
+   with a bootstrap `echo starting the agent` (ask-user applies when
+   enabled).
 2. **Loop** — For each model prompt (`prompt1+`), cap `messages.json`
-   to `MAX_MESSAGES_BYTES` (keep the system prompt, the task, and
-   the newest turns; die if one turn is still over the cap), copy it
-   to `promptN/messages.json` (temp log only), run `call_curl` against
-   `messages.json` (system / user / assistant roles); treat the reply
-   as the script. If done marker, stop; if write request (first action
-   line `# write file: PATH`, after leading blank lines and `#` notes),
-   write everything after that line to PATH through the ask / command
-   layers; if edit request (first action line
+   to `MAX_MESSAGES_BYTES` (keep the system prompt, the first user
+   turn, and the newest turns; die if one turn is still over the cap),
+   copy it to `promptN/messages.json` (temp log only), run `call_curl`
+   against `messages.json` (system / user / assistant roles); treat
+   the reply as the script. If done marker, stop; if write request
+   (first action line `# write file: PATH`, after leading blank lines
+   and `#` notes), write everything after that line to PATH through
+   the ask / command layers; if edit request (first action line
    `# edit file: PATH`), apply one unique SEARCH/REPLACE in the
    harness then write through the same layers; if the reply is empty,
    has a markdown fence line, has thinking tags (`<think>` or
@@ -288,7 +290,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   curl argv does not contain it. `authHeader.txt` is overwritten and
   removed on every exit (including `SSA_KEEP_TEMP=1`).
 - Once per run, writes `OPENAI_URL` to `$TEMP_FOLDER/openaiUrl.txt`
-  and the task to `$TEMP_FOLDER/task.txt` (log only)
+  and the task to `$TEMP_FOLDER/task.txt` (log only). If `SSA_CONTEXT`
+  is set, a copy of that file is `$TEMP_FOLDER/context.txt`.
 - Temp working files include `authHeader.txt` while the run needs it
   (always deleted on exit), `messages.json`, `latestModelResponse.txt`,
   `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d
@@ -296,8 +299,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   Output that `jq --rawfile` cannot hold, or that contains a NUL, is
   omitted from that user turn; stdout is unchanged.
 - Before each **model** prompt (`prompt1+`), the harness caps
-  `messages.json` to `MAX_MESSAGES_BYTES` (system prompt, task,
-  and newest turns; die if one remaining turn is still over the cap),
+  `messages.json` to `MAX_MESSAGES_BYTES` (system prompt, first user
+  turn, and newest turns; die if one remaining turn is still over the cap),
   then copies it to `$TEMP_FOLDER/promptN/messages.json` for
   debugging (`SSA_KEEP_TEMP=1`). `prompt0/` is created for the fake-first
   bootstrap (no curl / no messages copy). `N` matches
@@ -321,6 +324,7 @@ Built-in OpenAI-compatible `/chat/completions` client:
 |---------|---------|
 | `OPENAI_API_KEY` | empty (optional) |
 | `OPENAI_URL` | unset (required) |
+| `SSA_CONTEXT` | empty (off) |
 | `SSA_KEEP_TEMP` | `0` (discard) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
 | `SSA_MODEL` | unset (required) |

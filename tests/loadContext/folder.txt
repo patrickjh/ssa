@@ -1,0 +1,3 @@
+SSA_CONTEXT appends a file to the first user turn after Context:.
+Empty disables. Missing, dash, directory, NUL, and over-cap die.
+The cap keeps that first user turn.
