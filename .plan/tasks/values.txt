@@ -1,0 +1,55 @@
+values — ranked values.txt like ssf
+
+Why:
+ssf keeps a ranked stack in design/values.txt. When two values
+disagree, the higher one wins. Goals and wiring do not get a
+vote in that fight. ssa has Design and Style in AGENTS.md, but
+no ranked list, so later tasks (review, context, nested ssa,
+flags vs env) argue from taste. A values file would pick a
+side the same way ssf does.
+
+This is a ranking for people and agents working on ssa. It is
+not a new setting, flag, or reply shape.
+
+Do:
+Write `values.txt` at the repo root (ssa has no design/
+folder). Same shape as ssf's design/values.txt:
+
+- Title, then a short note that the list is ranked and the
+  higher item wins when two disagree.
+- Numbered values in complete sentences. Each name, then a
+  short paragraph of what it means for this agent (one POSIX
+  sh file, shell as the only tool, ask, temp logs). Do not
+  copy factory talk (orchestrate.sh, idea/ok.txt, wait_apply,
+  .ssf/work, parallel workers).
+- A "When they conflict" section of concrete fights, still
+  in complete sentences. Higher beats lower. Do not hide the
+  order.
+
+Start from ssf's five unless a real ssa fight needs a
+different order. Rewrite the body for ssa:
+
+  1. Understandable
+  2. Reviewable
+  3. Good code
+  4. Cheap
+  5. Simple
+
+Keep the project small enough that an average programmer can
+follow a run. Extra files or steps are fine when they make
+the run followable or leave a record (keep-temp, promptN/,
+messages.json). Do not drop the trail to save tokens. Among
+designs that already satisfy the first four, pick the simpler
+one. Do not add flags or env vars the caller's shell can do.
+Do not grow ssa into a factory (ssf is the caller).
+
+Add `values.txt` to the Layout tree in AGENTS.md. One sentence
+near the top of AGENTS.md (or Design): when Style or Design
+and a value disagree, values.txt wins. Do not copy the ranking
+into -h, README, or Style. Do not split AGENTS.md into
+design/. Do not add a goals.txt unless a later task asks.
+doNot.txt stays a product fence, not a value.
+
+Size:
+0 lines in `ssa`. One new `values.txt`. A few lines in
+AGENTS.md. No new tests.

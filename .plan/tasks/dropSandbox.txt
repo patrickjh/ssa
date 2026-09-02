@@ -1,0 +1,47 @@
+dropSandbox — remove --sandbox-command / SSA_SANDBOX_COMMAND
+
+Why:
+The sandbox command is a second run layer (default sh) so callers
+can swap in a jail, sudo -u, or timeout wrapper. Ask is the real
+default gate. Default COMMAND is already sh as you. Isolation that
+matters is wrapping ssa itself (container, pledge, a different
+user for the whole process). A per-script COMMAND that must speak
+sh -c for writes and edits is extra surface: flag, env, setter,
+PATH check, README wrapper, and tests/sandboxCommand/. Hung
+scripts are still not killed; the wrapper does not change that
+unless the caller supplies timeout. Drop the layer. Ask stays.
+
+Do:
+Remove SSA_SANDBOX_COMMAND, --sandbox-command, set_sandbox_command,
+and check_sandbox_command. Always run with sh: scripts on stdin,
+writes and edits still sh -c with PATH as $0 (sed / cat, same
+contract, no interpolation). Ask still wraps that run. Do not add
+a flag for "no sandbox"; there is no COMMAND left to choose.
+
+Rename run_in_configured_sandboxes, run_reply_in_sandboxes, and
+SANDBOX_STDIN_FILE so names are not leftover "sandbox". Keep the
+tee / exit-code / append_script_result behavior.
+
+Hung scripts, jails, extra users: wrap ssa in the caller's shell
+(timeout, sudo, container), not a per-script executable. Move that
+row in the Shell-not-agent table. Do not invent a timeout flag.
+
+When this lands, delete editReadThroughSandbox.txt (the harness
+vs COMMAND split is gone). Update AGENTS.md (drop the Sandbox
+command section; two layers become ask then sh). Update -h and
+README Safety: no wrapper example. Ask remains the in-process
+gate. Open docs tasks must not restore COMMAND (see notes on
+readmeHumanLanguage, securityModel, proxyDocs, subAgents).
+
+Size:
+About 30 lines removed from `ssa` (25–40): setting, -h, env line,
+parse arm, setter, check. Run helper hardcodes sh and gets a
+plainer name. Tests, README, and AGENTS.md are extra, not in
+that count.
+
+Tests:
+Delete tests/sandboxCommand/ and
+tests/missingCliValue/sandboxCommandWithoutValue.test.sh.
+Write/edit stories still pass (they already use default sh).
+showHelp must not mention --sandbox-command. Fake curl,
+--no-ask. Unknown --sandbox-command becomes a bad option.

@@ -13,7 +13,8 @@ Write the security model in README Safety. Plain words. Do not
 copy Design. Do not put this in -h. Do not add flags, env vars,
 or code in ssa.
 
-Keep the existing ask bullets and the sandbox wrapper example.
+Keep the existing ask bullets and the sandbox wrapper example
+unless dropSandbox.txt has landed (then no COMMAND; wrap ssa).
 Above or around them, state the model in short sentences:
 
 - The model (and anything in the task, a context file, or output

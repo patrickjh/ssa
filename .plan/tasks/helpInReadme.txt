@@ -36,9 +36,8 @@ readmeHumanLanguage.txt says do not change ssa or -h; that task
 is the plain-words rewrite. Land that first, or fold the usage
 move into it so README is rewritten once. helpExitStatus.txt is
 one line if -h still exits 0; it is nothing if HELP_TEXT goes
-away and the stub still exits 0. envOnlySettings.txt keeps -h
-even if other flags die; this task is only about help text, not
-about dropping --model / --no-ask.
+away and the stub still exits 0. Settings are env only; -h remains.
+This task is only about help text.
 
 Size:
 If no: 0. If reduce: about 40–50 lines removed from HELP_TEXT,

@@ -24,7 +24,7 @@ add_model_reply 2 <<'REPLY'
 # task complete
 REPLY
 
-run_ssa_task --sandbox-command "$STUB" print a greeting then stop
+SSA_SANDBOX_COMMAND="$STUB" run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'STUB_SANDBOX_COMMAND_RAN'
 expect_stdout_has 'hello-from-script'

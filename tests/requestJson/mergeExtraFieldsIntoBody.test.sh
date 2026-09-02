@@ -16,9 +16,9 @@ add_model_reply 2 <<'REPLY'
 # task complete
 REPLY
 
-run_ssa_task --keep-temp \
-    --request-json '{"think":false,"max_tokens":8192,"model":"fromExtra"}' \
-    print a greeting then stop
+SSA_KEEP_TEMP=1 \
+    SSA_REQUEST_JSON='{"think":false,"max_tokens":8192,"model":"fromExtra"}' \
+    run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'hello-from-script'
 

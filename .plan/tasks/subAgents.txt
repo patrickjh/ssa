@@ -63,7 +63,8 @@ contain those). Empty tail fails the turn, like a bad edit, and
 does not spawn. Optional: # subagent: short label for the ask
 banner and promptN/ logs, so a bare # comment is not a spawn.
 Ask once on the prompt, then run the child with --no-ask. Child
-inherits model, URL, key, sandbox, and request JSON; fresh temp
+inherits model, URL, key, and request JSON (and sandbox unless
+dropSandbox.txt has landed); fresh temp
 and messages.json. Depth 1 (child # subagent fails). Cap the
 child's --max-model-prompts. Return child's stdout plus the final
 status / exit code as one user turn, not the child's

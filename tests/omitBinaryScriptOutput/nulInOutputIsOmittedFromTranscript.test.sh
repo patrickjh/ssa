@@ -16,7 +16,7 @@ add_model_reply 2 <<'REPLY'
 # task complete
 REPLY
 
-run_ssa_task --keep-temp print a nul then stop
+SSA_KEEP_TEMP=1 run_ssa_task print a nul then stop
 expect_exit 0
 expect_stderr_has 'done: task complete after 2 model prompts'
 expect_stdout_lacks 'Output omitted:'

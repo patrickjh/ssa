@@ -36,7 +36,7 @@ add_model_reply 5 <<'REPLY'
 # task complete
 REPLY
 
-run_ssa_task --keep-temp print markers then stop
+SSA_KEEP_TEMP=1 run_ssa_task print markers then stop
 expect_exit 0
 expect_stdout_has 'unique-early-marker'
 expect_stderr_has 'done: task complete after 5 model prompts'

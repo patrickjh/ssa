@@ -16,7 +16,7 @@ add_model_reply 2 <<'REPLY'
 # task complete
 REPLY
 
-run_ssa_task --keep-temp print a greeting then stop
+SSA_KEEP_TEMP=1 run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'hello-from-script'
 

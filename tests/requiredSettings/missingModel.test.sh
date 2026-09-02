@@ -1,11 +1,11 @@
 #!/bin/sh
-# No -m / --model and no SSA_MODEL: usage error before the loop.
+# No SSA_MODEL: usage error before the loop.
 
 set -u
 . "$TEST_UTILS_FILE"
 
 unset SSA_MODEL
-run_ssa --openai-url 'http://fake.test/chat/completions' --no-ask a task
+OPENAI_URL='http://fake.test/chat/completions' SSA_NO_ASK=1 run_ssa a task
 expect_exit 1
 expect_stderr_has 'model not set'
-expect_stderr_has '-m / --model'
+expect_stderr_has 'SSA_MODEL'

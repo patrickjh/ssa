@@ -141,9 +141,10 @@ run_ssa_task() {
     # Run an agent loop against the fake model, from WORK_FOLDER.
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
-    ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" sh "$(get_ssa_path)" \
-        --openai-url 'http://fake.test/chat/completions' \
-        --model fakeModel --no-ask "$@" ) \
+    ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
+        OPENAI_URL='http://fake.test/chat/completions' \
+        SSA_MODEL=fakeModel SSA_NO_ASK=1 \
+        sh "$(get_ssa_path)" "$@" ) \
         </dev/null \
         >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
     SSA_EXIT_CODE=$?
@@ -153,9 +154,10 @@ run_ssa_task_from_stdin() {
     # Like run_ssa_task, but the task is stdin (no argv words).
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
-    ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" sh "$(get_ssa_path)" \
-        --openai-url 'http://fake.test/chat/completions' \
-        --model fakeModel --no-ask "$@" ) \
+    ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
+        OPENAI_URL='http://fake.test/chat/completions' \
+        SSA_MODEL=fakeModel SSA_NO_ASK=1 \
+        sh "$(get_ssa_path)" "$@" ) \
         >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
     SSA_EXIT_CODE=$?
 }

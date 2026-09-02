@@ -1,2 +1,0 @@
-A value-taking flag with no following argument is a usage error,
-same as an explicit empty string. Exit 1 before the agent loop.

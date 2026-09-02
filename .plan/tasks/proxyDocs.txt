@@ -7,8 +7,9 @@ local reverse proxy and set OPENAI_API_KEY to a dummy value. The
 proxy holds the real Bearer token. The harness never puts the
 master key in messages.json. A one-upstream injector is not an
 open forward proxy and is not an egress firewall: scripts can
-still curl the world unless the sandbox has no other path.
-Competent network admins already know how to force that. ssa
+still curl the world unless egress is elsewhere (COMMAND today;
+wrap ssa if dropSandbox.txt has landed). Competent network
+admins already know how to force that. ssa
 should not grow a proxy or new flags. README Safety today covers
 ask-user and --sandbox-command only. securityModel.txt is the
 README Safety frame (trust, layers, leftovers); this task is
@@ -25,8 +26,8 @@ is a human recipe). Cover three layers, not a full Caddyfile:
   injector does not stop curl https://evil.com.
 - Egress: optional. Same machine can allow only the injector
   (or only the provider) via --sandbox-command / netns /
-  firewall. That is the admin's job. Ask-user still covers
-  local files.
+  firewall, or by wrapping ssa if dropSandbox.txt has landed.
+  That is the admin's job. Ask-user still covers local files.
 
 Use the setting names that exist when this lands (OPENAI_*
 today; SSA_URL / SSA_KEY if ssaEnvNames.txt went first). Do not

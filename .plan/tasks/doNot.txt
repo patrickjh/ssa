@@ -6,9 +6,9 @@ for Gemma 4 31B and other coding models.
 - Native JSON tool calling (tools / tool_calls / apply_patch in JSON).
   jq can parse that envelope; file bytes inside JSON strings reintroduce
   the quoting problem "# write file:" exists to avoid. Do not send a
-  tools array in --request-json or Gemma will emit JSON regardless of
+  tools array in SSA_REQUEST_JSON or Gemma will emit JSON regardless of
   the system prompt.
-- Default think:false inside ssa. Callers pass it with --request-json.
+- Default think:false inside ssa. Callers pass it with SSA_REQUEST_JSON.
 - Thinking-on plus stripping thoughts from history.
 - Restoring fence unwrap or the chunk-file / cmp protocol.
 - A second edit shape (unified patch) next to SEARCH/REPLACE.

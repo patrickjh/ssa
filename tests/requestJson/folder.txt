@@ -1,2 +1,2 @@
---request-json / SSA_REQUEST_JSON merges a JSON object into the
+SSA_REQUEST_JSON merges a JSON object into the
 chat-completions body. Invalid JSON is a usage error.

@@ -10,7 +10,7 @@ model **only shell**, run each step in a **fresh process**, keep a
 - POSIX `sh`, plus `curl` and `jq` on `PATH`
 - Linux and macOS work as usual; on Windows use WSL (ssa targets POSIX
   systems only)
-- A chat-completions URL in `OPENAI_URL` (or `--openai-url`). Curl
+- A chat-completions URL in `OPENAI_URL`. Curl
   POSTs the OpenAI-style body there; the path need not end in
   `/chat/completions`.
 
@@ -34,27 +34,18 @@ Or download the `ssa` file alone, `chmod +x`, and put its folder on
 ```sh
 export OPENAI_API_KEY="sk-..."
 export OPENAI_URL="https://api.openai.com/v1/chat/completions"
-ssa -m gpt-4o-mini summarize this repo
-```
-
-Or with flags:
-
-```sh
-export OPENAI_API_KEY="sk-..."
-ssa --openai-url "https://api.openai.com/v1/chat/completions" \
-  -m gpt-4o-mini summarize this repo
+export SSA_MODEL=gpt-4o-mini
+ssa summarize this repo
 ```
 
 Task on stdin:
 
 ```sh
-echo "summarize this repo" | ssa \
-  --openai-url "https://api.openai.com/v1/chat/completions" \
-  -m gpt-4o-mini
+echo "summarize this repo" | ssa
 ```
 
-Batch / no TTY: add `--no-ask`. Keep temp logs: `--keep-temp`. Extra
-request fields (`think`, `max_tokens`, sampling): `--request-json`.
+Batch / no TTY: `SSA_NO_ASK=1`. Keep temp logs: `SSA_KEEP_TEMP=1`. Extra
+request fields (`think`, `max_tokens`, sampling): `SSA_REQUEST_JSON`.
 
 **Unix-shaped.** Handle `cd`, env, and redirects in the shell. Script
 output streams live on **stdout**. Agent messages (ask UI, errors, final
@@ -64,18 +55,19 @@ status) go to **stderr**.
 
 Point `OPENAI_URL` at llama.cpp (or another server that honors
 `think: false`). ssa does not default that; pass it in
-`--request-json`. Local `max_tokens` defaults are often 256–2048 and
+`SSA_REQUEST_JSON`. Local `max_tokens` defaults are often 256–2048 and
 will truncate write requests.
 
 ```sh
 export OPENAI_URL=http://127.0.0.1:8080/v1/chat/completions
-ssa -m gemma-4-31b \
-  --request-json '{"think":false,"max_tokens":8192,"temperature":1,"top_p":0.95}' \
-  --keep-temp --max-model-prompts 30 \
-  fix the failing test
+export SSA_MODEL=gemma-4-31b
+export SSA_REQUEST_JSON='{"think":false,"max_tokens":8192,"temperature":1,"top_p":0.95}'
+export SSA_KEEP_TEMP=1
+export SSA_MAX_MODEL_PROMPTS=30
+ssa fix the failing test
 ```
 
-Add `--no-ask` when there is no TTY.
+Add `SSA_NO_ASK=1` when there is no TTY.
 
 ## Safety
 
@@ -84,12 +76,12 @@ Treat that like handing the model your terminal.
 
 - **Ask-user approval is on by default** — each model script is shown on
   stderr; you approve from `/dev/tty` (`[Y]es` / `[N]o` / `[Q]uit`).
-- Optional **sandbox command**: `--sandbox-command` /
-  `SSA_SANDBOX_COMMAND` (default `sh`). `COMMAND` is one executable
-  (`command -v`), not `timeout 60 sh`. Write/edit turns pass `-c`,
-  so the wrapper must forward `"$@"`. A hung script (`tail -f`) or
-  a background child that keeps stdout open will block `tee` unless
-  you use `timeout --foreground` (or `setsid`) around `sh`.
+- Optional **sandbox command**: `SSA_SANDBOX_COMMAND` (default `sh`).
+  `COMMAND` is one executable (`command -v`), not `timeout 60 sh`.
+  Write/edit turns pass `-c`, so the wrapper must forward `"$@"`. A hung
+  script (`tail -f`) or a background child that keeps stdout open will
+  block `tee` unless you use `timeout --foreground` (or `setsid`)
+  around `sh`.
 
 **Example** (save, `chmod +x`, then export the path). Needs a non-root
 user and passwordless `sudo`/`doas` for that user. Drop `sudo` or

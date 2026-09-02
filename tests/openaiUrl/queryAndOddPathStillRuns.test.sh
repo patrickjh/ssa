@@ -17,9 +17,10 @@ add_model_reply 2 <<'REPLY'
 REPLY
 
 require_test_temp_folder
-( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" sh "$(get_ssa_path)" \
-    --openai-url 'http://fake.test/openai?api-version=1' \
-    --model fakeModel --no-ask print a greeting then stop ) \
+( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
+    OPENAI_URL='http://fake.test/openai?api-version=1' \
+    SSA_MODEL=fakeModel SSA_NO_ASK=1 \
+    sh "$(get_ssa_path)" print a greeting then stop ) \
     </dev/null \
     >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
 SSA_EXIT_CODE=$?

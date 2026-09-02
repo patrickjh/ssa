@@ -9,7 +9,8 @@ the harness may read a host file the sandbox cannot, or miss a file
 that only exists inside the sandbox.
 
 This is a maybe. Closing that split may not be worth the extra
-invoke. Do not treat this as decided work.
+invoke. Do not treat this as decided work. If dropSandbox.txt
+has landed, delete this file instead (no COMMAND left).
 
 Do:
 Decide first. Leaving the read in the harness is fine; if so, a

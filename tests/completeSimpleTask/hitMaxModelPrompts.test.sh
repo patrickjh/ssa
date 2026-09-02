@@ -1,5 +1,5 @@
 #!/bin/sh
-# Model never sends "# task complete". Stop after --max-model-prompts.
+# Model never sends "# task complete". Stop after SSA_MAX_MODEL_PROMPTS.
 
 set -u
 . "$TEST_UTILS_FILE"
@@ -15,6 +15,6 @@ add_model_reply 2 <<'REPLY'
 printf 'still working\n'
 REPLY
 
-run_ssa_task --max-model-prompts 2 never finish this task
+SSA_MAX_MODEL_PROMPTS=2 run_ssa_task never finish this task
 expect_exit 1
 expect_stderr_has 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (2)'
