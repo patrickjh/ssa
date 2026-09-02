@@ -84,7 +84,7 @@ or SSA_MAX_MODEL_PROMPTS is hit. Empty or invalid replies are not run.
 After the run, one more model call prints feedback on stderr.
 
 Exit status:
-  0       Task complete
+  0       Task complete or requested help.
   1       Failure (bad arguments, ssa failure, or max model prompts).
   130     Interrupted (SIGINT).
   143     Terminated (SIGTERM).
