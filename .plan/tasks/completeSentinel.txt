@@ -1,51 +1,33 @@
-completeSentinel — maybe # complete instead of # task complete
+completeSentinel — # complete instead of # task complete
 
 Why:
-The done marker is two words. If replies always use a sentinel
-(see requireReplySentinels.txt), the no-arg kinds can be one
-word each: # script, # complete, and later # subagent. Write and
-edit still need a path (# write file: PATH, # edit file: PATH)
-unless a later task shortens those too. Undecided. Do not treat
-this as required work.
+The done marker is two words. A one-word sentinel matches
+# write file: / # edit file: as a short first action line.
+Decided: switch to exact # complete. Do not wait for
+requireReplySentinels.
 
 Do:
-Decide first. Either keep # task complete (exact match, leading
-notes skipped, trailing newlines ignored) or switch to exact
-# complete the same way.
+Replace # task complete with # complete everywhere it is a
+done marker (exact match, leading notes skipped, trailing
+newlines ignored). System prompt, FORMAT_ERROR_* text, -h
+loop sentence, AGENTS.md stop rule, first_action_line,
+agent_is_done, and the status line. Prefer one short status
+phrase (do not keep "task complete" in the UI). Do not accept
+both markers.
 
-If you switch: system prompt, FORMAT_ERROR_* text, -h loop
-sentence, AGENTS.md stop rule, first_action_line, agent_is_done,
-and the done: task complete status line. Prefer one short
-status phrase; do not keep "task complete" in the UI if the
-sentinel is # complete unless that line would get unclear.
-Do not accept both markers.
-
-A bare # complete is easier to type and to list with the other
-one-word sentinels. Gemma 4 31B (see doNot.txt) is unlikely to
-hurt more from this rename: write/edit already need an exact
-sentinel, and a shorter done line is easier to copy from the
-prompt than # task complete. The Gemma-sensitive change is
-required # script on the hot path (requireReplySentinels.txt),
-not this marker.
-
-# complete is also a more ordinary comment; a script note that
-says # complete would become a done marker if it is the first
-action line. That is the same class of collision
-requireReplySentinels.txt is about: a wrong sentinel dispatches
-and does not format-error retry. Do not rename as a drive-by
-in that task; land them together only if both are yes.
+A script note that says # complete as the first action line
+becomes done. Same class of collision as today's sentinels.
+Do not add a format-error retry for that here.
 
 Size:
-0 in `ssa` if you keep `# task complete`. If you switch: about 2 net
-new (0–5), but about 8–15 lines touched (SYSTEM_PROMPT, FORMAT_ERROR_*,
--h, first_action_line, agent_is_done, status line). Substitutions, not
-new control flow. Tests and AGENTS.md are extra, not in that count.
+About 2 net new (0–5), about 8–15 lines touched. Substitutions,
+not new control flow. Tests and AGENTS.md are extra, not in
+that count.
 
 Tests:
-If no: none. If yes: every canned # task complete becomes
-# complete. Keep
+Every canned # task complete becomes # complete. Keep
 tests/completeSimpleTask/doneAfterLeadingComments.test.sh and
 doneWithTrailingNewlines.test.sh. trailingDoneCommentIsNotDone
 still not done when # complete is only in the payload. Fake
-curl, --no-ask. Status line and expect_stderr_has strings must
-match whatever -h / stderr still print.
+curl, SSA_NO_ASK=1. Status line and expect_stderr_has strings
+must match whatever -h / stderr still print.

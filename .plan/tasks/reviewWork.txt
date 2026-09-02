@@ -2,77 +2,56 @@ reviewWork — post-run model feedback on the transcript
 
 Why:
 After a run, the user only sees script output and a status line.
-A second, off-by-default model call can read the transcript and
-say what would have made the run better (clearer task, fewer
-turns, a write instead of a heredoc, and so on).
+One more model call can read the transcript and say what would
+have made the next run better (clearer task, fewer turns, a write
+instead of a heredoc). Always on. No SSA_REVIEW_WORK. Settings
+are env only.
+
+Do not grow product ssa to match experiments/ssaWithReview
+(fail-soft, review/ folder, feedback.txt, jq copy-and-swap of
+the system turn). Prefer reuse over a parallel HTTP path.
 
 Do:
-Add user-facing SSA_REVIEW_WORK and --review-work (flag sets 1;
-flag overrides env). Default 0. Validate 0|1 like SSA_NO_ASK.
-Empty meaning off is not needed; this is a 0|1 switch, same as
---keep-temp.
+After run_agent_loop returns (done or hit max), before
+finish_agent_loop, append a user turn with append_json_message
+(plain-text ask: what would make the next run better). Use the
+already-capped transcript; do not grow the cap or restore dropped
+turns. Increment PROMPT_COUNTER, call setup_per_prompt_log_folder,
+then call_curl. Logs land in the next promptN/.
 
-When 1: after run_agent_loop returns (done or hit max), before
-finish_agent_loop, build a review request from the current
-messages.json. Swap only the system turn for a new static prompt
-(top-level variable): ask for plain-text feedback on what could
-have made this run better. Keep the task and later turns as the
-transcript. Do not mutate the run's messages.json; copy, then
-swap. Use the already-capped transcript (same MAX_MESSAGES_BYTES);
-do not grow the cap or restore dropped turns.
+Do not run handle_model_response, ask, or the sandbox. Do not
+append the review reply as a chat turn. Do not treat the reply as
+a script, write, edit, or done marker. Skip review on die and on
+SIGINT/SIGTERM.
 
-POST once with the same model, URL, auth, and SSA_REQUEST_JSON
-merge as the agent loop. Do not count this call in
-PROMPT_COUNTER or SSA_MAX_MODEL_PROMPTS. Do not ask. Do not run
-the reply through the sandbox. Do not append the review to
-messages.json. Do not treat the reply as a script, write, edit,
-or done marker.
+Print "Feedback from model:" on stderr, then the reply through
+sanitize_output (sanitizeOutput.txt; latestModelResponse.txt stays
+raw), then a newline, then the existing status line. Stdout stays
+script output only.
 
-Write the model text with jq -j (and jq -b when that flag works)
-to $TEMP_FOLDER/feedback.txt, same idea as latestModelResponse.txt.
-Show those bytes on stderr through sanitize_output (ask UI /
-harness, not script stdout; see sanitizeOutput.txt). Files on
-disk stay raw. Do this before the final status line so pipes of
-stdout stay script output only. Prefix is optional; one short
-header on stderr is enough if a bare blob is unclear.
+A failed review curl uses call_curl as today (harness failure).
+Fail-soft (keep the task exit status) is the alternative if you
+do not want a finished task to become exit 1.
 
-Log the review HTTP bits under a folder that is not promptN/
-(for example review/ with body.json and response.txt) so the last
-agent prompt's logs are not overwritten.
-
-Fail soft: a failed review curl, empty content, or unusable 2xx
-must not change the run's exit status. Print a short stderr note
-and skip or write that note to feedback.txt. Do not die after a
-successful task. Skip review on die and on SIGINT/SIGTERM
-(cleanup already runs from those traps). Off (0) means zero extra
-curl and no feedback.txt.
-
-Keep -h short: one clause that this asks the model for post-run
-feedback and writes feedback.txt in the temp folder (kept only
-with --keep-temp). Update AGENTS.md stop / model / settings.
-
-This is not a fifth reply shape and is not ask-No feedback
-(askUserRejectionFeedback).
+Keep -h to one short clause. Update AGENTS.md stop / model /
+settings. This is not a fifth reply shape and is not ask-No
+feedback (askUserRejectionFeedback). After this lands in ssa,
+the experiment is optional try-it; do not copy its thick
+review_work.
 
 Size:
-About 45 lines to change in `ssa` (40–55). Setting, -h, 0|1 check,
-REVIEW_SYSTEM_PROMPT, review_work, one main call. The
-experiments/ssaWithReview fork is a lower bound (~40). Fail-soft
-empty/unusable 2xx and not mutating the run messages.json add a
-few. Tests and AGENTS.md are extra, not in that count.
+About 15 lines to change in ssa (10–25). review_work, one main
+call, a short user-turn string, one -h clause. No new setting.
+Tests and AGENTS.md are extra, not in that count.
 
 Tests:
-Fake curl, --no-ask. Story folder e.g. reviewWork.
+Fake curl, SSA_NO_ASK=1. Story folder e.g. reviewWork.
 
-- Default / SSA_REVIEW_WORK=0: same curl count as today; no
-  feedback.txt
-- --review-work after # task complete: extra canned reply is
-  shown on stderr, not stdout; --keep-temp has feedback.txt;
-  messages.json has no review turn; status still
+- After # task complete: extra canned reply on stderr, not
+  stdout; prefix Feedback from model:; status still
   "after N model prompts" with N the agent prompts only
-- Flag overrides env
-- Hit max still reviews; exit stays 1
-- Missing extra canned reply (curl fail): stderr note, exit still
-  0 if the task completed
-- Review body.json system text is the review prompt, not the
-  agent script contract; later turns still include the task
+- Extra curl is promptN+1 (SSA_KEEP_TEMP=1); messages.json has
+  the review ask, not the review reply
+- Hit max still reviews; exit stays 1 unless review curl dies
+- Missing extra canned reply: curl dies (exit 1), not a
+  silent skip

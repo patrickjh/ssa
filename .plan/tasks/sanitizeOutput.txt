@@ -24,8 +24,8 @@ terminal (stderr ask UI / review):
   the Feedback from model: header as fixed text)
 - When askUserRejectionFeedback prints a reason on stderr, if it
   does
-- When reviewWork / simplifyReviewWork land in ssa, print
-  feedback through this, not a raw cat
+- When reviewWork lands in ssa, print feedback through this, not
+  a raw cat
 
 On-disk bytes stay raw (latestModelResponse.txt, feedback.txt,
 userAnswer.txt). File order: sanitize_output below its last
@@ -44,7 +44,7 @@ extra, not in that count.
 
 Tests:
 Ask listing needs /dev/tty. Prefer not to add a pty story. Fake
-curl --no-ask: a reply with CR still runs; stdout still has the
+curl SSA_NO_ASK=1: a reply with CR still runs; stdout still has the
 raw CR (proves stdout / sandbox were not filtered). Review
 display has no product test until reviewWork; experiment stays
 untested. If a pty is easy, one ask-Yes story: listing stderr
