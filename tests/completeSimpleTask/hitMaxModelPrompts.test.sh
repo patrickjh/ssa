@@ -17,4 +17,5 @@ REPLY
 
 SSA_MAX_MODEL_PROMPTS=2 run_ssa_task never finish this task
 expect_exit 1
+expect_stderr_has 'Feedback from model:'
 expect_stderr_has 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (2)'

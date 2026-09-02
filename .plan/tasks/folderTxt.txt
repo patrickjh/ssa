@@ -1,0 +1,51 @@
+folderTxt — one shape for tests/*/folder.txt
+
+Why:
+AGENTS.md only says `folder.txt` explaining the folder. The
+files now mix three jobs: a short scope note, a stem title plus
+Acceptance checklist, and a title that repeats the folder name.
+writeFileRequest and editFileRequest restate Design. completeSimpleTask
+enumerates cases in prose. The runner never reads these notes;
+they are for a human browsing tests/.
+
+Do:
+One shape for every `tests/<story>/folder.txt`:
+
+- 1–5 lines of high-level prose: the slice this folder owns.
+  Not Design, not shared harness rules (fake curl, SSA_NO_ASK,
+  no TTY). Not a case list.
+- A blank line.
+- Then every `*.test.sh` in that folder, alphabetically by
+  filename. Name on its own line; 1–2 lines of description
+  wrapped under it (long camelCase names will not fit a padded
+  column at 80 characters). The line is the contract that case
+  proves (exit, file unchanged, loop continues), not a restating
+  of the stem.
+- Do not list folder.txt itself.
+- Do not use an Acceptance: bullet list. The file list replaced
+  that. If the blurb would say "also covers…", drop it; that
+  belongs on a file line.
+
+Keep the `#` comment at the top of each `*.test.sh` (that is
+for when the file is open). Same meaning as the folder.txt
+line; if they diverge, the test comment wins.
+
+When adding a test, add a line. Put two or three sentences
+under the tests layout in AGENTS.md (blurb length, one entry
+per `*.test.sh`, wrap under the name, no checklists). Do not
+start a new Style section. Do not make runTests.sh check the
+note.
+
+Leave `.plan/folder.txt` and `experiments/folder.txt` as they
+are (blurb plus a padded file map). Those trees are not test
+stories.
+
+Rewrite every `tests/*/folder.txt` to this shape. Trim the
+ones that currently copy Design. Point at a short folder
+(showHelp or badOption) once rewritten.
+
+Do not change ssa, tests, or -h.
+
+Size:
+0 lines in `ssa`. AGENTS.md plus the test folder notes.
+No new tests.

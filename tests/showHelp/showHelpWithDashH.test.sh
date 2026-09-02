@@ -10,4 +10,5 @@ expect_stdout_has '-h, --help'
 expect_stdout_has 'OPENAI_URL'
 expect_stdout_has 'SSA_REQUEST_JSON'
 expect_stdout_has 'think, max_tokens'
+expect_stdout_has 'feedback'
 expect_stderr_empty

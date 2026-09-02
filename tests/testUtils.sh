@@ -130,6 +130,18 @@ add_model_reply() {
         fail "cannot write canned reply $1"
 }
 
+add_default_review_reply() {
+    # Next unused replyN.txt is the post-run review (always-on curl).
+    [ "${SSA_TEST_NO_REVIEW_REPLY:-0}" = 1 ] && return 0
+    [ -n "${REPLIES_FOLDER:-}" ] || fail "call setup_fake_model first"
+    N=1
+    while [ -f "$REPLIES_FOLDER/reply$N.txt" ]; do
+        N=$((N + 1))
+    done
+    [ "$N" -gt 1 ] || return 0
+    printf '%s\n' 'canned review' | add_model_reply "$N"
+}
+
 setup_work_folder() {
     # Folder the agent runs in; model scripts touch files here.
     require_test_temp_folder
@@ -141,6 +153,7 @@ run_ssa_task() {
     # Run an agent loop against the fake model, from WORK_FOLDER.
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
+    add_default_review_reply
     ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
         OPENAI_URL='http://fake.test/chat/completions' \
         SSA_MODEL=fakeModel SSA_NO_ASK=1 \
@@ -154,6 +167,7 @@ run_ssa_task_from_stdin() {
     # Like run_ssa_task, but the task is stdin (no argv words).
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
+    add_default_review_reply
     ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
         OPENAI_URL='http://fake.test/chat/completions' \
         SSA_MODEL=fakeModel SSA_NO_ASK=1 \

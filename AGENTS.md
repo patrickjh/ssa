@@ -130,6 +130,11 @@ repeat) with:
    (`head -n 1`), and fails if none remain (`grep .`). Exit `1` on
    harness failure or max model prompts. SIGINT / SIGTERM →
    `130` / `143`.
+4. **Review** — After the loop (done or hit max), append a user turn
+   asking what would have made this run go better, POST once more (not
+   counted in `SSA_MAX_MODEL_PROMPTS` or the status prompt count),
+   print the reply on stderr through `sanitize_output`, and do not
+   run it. Skip on die / INT / TERM. A failed review curl is fatal.
 
 ## Environment
 
@@ -299,9 +304,11 @@ Built-in OpenAI-compatible `/chat/completions` client:
 - Model replies are extracted with `jq -j` (and `jq -b` when that flag
   works; probed once at startup) onto `latestModelResponse.txt`
 - Request body is `system` / `user` / `assistant` messages plus
-  `SSA_REQUEST_JSON` merged in. Curl uses `--fail`, `--retry`,
-  `--retry-connrefused`, `--retry-max-time` 120, `--connect-timeout`
-  30, and `--max-time` 900. A failed curl is fatal.
+  `SSA_REQUEST_JSON` merged in. After the agent loop, one more POST
+  asks for plain-text feedback (not a script). Curl uses `--fail`,
+  `--retry`, `--retry-connrefused`, `--retry-max-time` 120,
+  `--connect-timeout` 30, and `--max-time` 900. A failed curl is
+  fatal.
 
 ## Settings summary
 
@@ -321,8 +328,8 @@ Unknown `-*` is a bad option, not a task word. Per-run overrides:
 `VAR=value ssa …`.
 
 **Streams:** script output and help on **stdout**; ask UI (script listing,
-prompts, invalid-input lines), harness errors, and the final status line on
-**stderr**.
+prompts, invalid-input lines), review feedback, harness errors, and the
+final status line on **stderr**.
 
 ---
 

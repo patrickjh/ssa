@@ -16,6 +16,7 @@ add_model_reply 2 <<'REPLY'
 # task complete
 REPLY
 
+add_default_review_reply
 require_test_temp_folder
 ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
     OPENAI_URL='http://fake.test/openai?api-version=1' \

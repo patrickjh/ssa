@@ -1,0 +1,40 @@
+shortFunctions — keep function bodies short
+
+Why:
+Most helpers in ssa are already small. Four are over 15 lines
+(count from `name() {` through the closing `}`):
+
+  handle_model_response     30  reply-kind dispatch
+  setup_temp_files          20  path list plus create
+  build_curl_json_request   20  extra JSON plus jq merge
+  apply_unique_replace      17  jq apply, check .ok, write bytes
+
+send_curl_json_request is 15 already. Later jobs
+(mixedReplyKinds, reviewWork) grow the dispatch, so split it
+before they land if this runs.
+
+Do:
+Split until every function is 15 lines or fewer. Extract helpers
+that have one job and a long, explicit name. Keep call-order
+layout. No behavior change.
+
+Leave list functions as lists. setup_temp_files and
+check_required_commands grow when a path or tool is added, not
+when the job gets harder. A second function is fine when it is
+a real job (create the files after the paths are bound). Do not
+loop over names just to shrink a list. Do not split into part1 /
+part2.
+
+Do not delete comments or un-wrap 80-column lines to fit the
+count. values.txt is the ranking if it has landed; do not argue
+from a numeric cap against Understandable.
+
+Ask before adding it to Style. It may stay a one-shot reshape,
+or it may become a standing rule next to the 80-character line
+cap (same 15-line count, same list-function exception). Do not
+copy the ranking into -h or README.
+
+Size:
+About 0 net in `ssa` (20–40 lines touched, 2–4 new functions).
+AGENTS.md Style is extra if the rule lands. No behavior change.
+Run sh tests/runTests.sh.
