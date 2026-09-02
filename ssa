@@ -78,8 +78,7 @@ Environment:
                           edit. Default is sh.
 
 ssa asks the model for a script, a write, or an edit; runs it; and
-appends the result. Repeat until the first action line is
-# task complete
+appends the result. Repeat until model returns # task complete
 or SSA_MAX_MODEL_PROMPTS is hit. Empty or invalid replies are not run.
 After the run, one more model call prints feedback on stderr.
 
