@@ -128,13 +128,13 @@ repeat) with:
    `first_action_line` keeps `# task complete`, `# write file:…`,
    `# edit file:…`, or a non-`#` line (`grep -E`), takes the first
    (`head -n 1`), and fails if none remain (`grep .`). Exit `1` on
-   harness failure or max model prompts. SIGINT / SIGTERM →
-   `130` / `143`.
+   harness failure or max model prompts. SIGHUP / SIGINT /
+   SIGTERM → `129` / `130` / `143`.
 4. **Review** — After the loop (done or hit max), append a user turn
    asking what would have made this run go better, POST once more (not
    counted in `SSA_MAX_MODEL_PROMPTS` or the status prompt count),
    print the reply on stderr through `sanitize_output`, and do not
-   run it. Skip on die / INT / TERM. A failed review curl is fatal.
+   run it. Skip on die / HUP / INT / TERM. A failed review curl is fatal.
 
 ## Environment
 
@@ -351,8 +351,8 @@ unless this file documents a deliberate exception.
 Examples: requested help (`-h`, `--help`) on **stdout**; interleaved
 script output live on **stdout**; `die` messages and the final status on
 **stderr**; exit `0` on success; exit `1` on harness failure or max model
-prompts; exit `130` / `143` on SIGINT / SIGTERM (no status line; temp
-cleanup unless `SSA_KEEP_TEMP=1`).
+prompts; exit `129` / `130` / `143` on SIGHUP / SIGINT / SIGTERM (no
+status line; temp cleanup unless `SSA_KEEP_TEMP=1`).
 
 ## Simple words
 
