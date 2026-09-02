@@ -10,12 +10,12 @@ model **only shell**, run each step in a **fresh process**, keep a
 - POSIX `sh`, plus `curl` and `jq` on `PATH`
 - Linux and macOS work as usual; on Windows use WSL (ssa targets POSIX
   systems only)
-- A chat-completions URL in `OPENAI_URL`. Curl
+- A chat-completions URL in `SSA_URL`. Curl
   POSTs the OpenAI-style body there; the path need not end in
   `/chat/completions`.
 
 Any OpenAI-compatible endpoint works (OpenAI, local proxies, and similar
-providers). Set `OPENAI_API_KEY` when the provider requires auth.
+providers). Set `SSA_KEY` when the provider requires auth.
 
 ## Install
 
@@ -32,8 +32,8 @@ Or download the `ssa` file alone, `chmod +x`, and put its folder on
 ## Try it
 
 ```sh
-export OPENAI_API_KEY="sk-..."
-export OPENAI_URL="https://api.openai.com/v1/chat/completions"
+export SSA_KEY="sk-..."
+export SSA_URL="https://api.openai.com/v1/chat/completions"
 export SSA_MODEL=gpt-4o-mini
 ssa summarize this repo
 ```
@@ -53,13 +53,13 @@ status) go to **stderr**.
 
 ## Local models
 
-Point `OPENAI_URL` at llama.cpp (or another server that honors
+Point `SSA_URL` at llama.cpp (or another server that honors
 `think: false`). ssa does not default that; pass it in
 `SSA_REQUEST_JSON`. Local `max_tokens` defaults are often 256–2048 and
 will truncate write requests.
 
 ```sh
-export OPENAI_URL=http://127.0.0.1:8080/v1/chat/completions
+export SSA_URL=http://127.0.0.1:8080/v1/chat/completions
 export SSA_MODEL=gemma-4-31b
 export SSA_REQUEST_JSON='{"think":false,"max_tokens":8192,"temperature":1,"top_p":0.95}'
 export SSA_KEEP_TEMP=1

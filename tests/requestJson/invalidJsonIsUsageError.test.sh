@@ -5,7 +5,7 @@
 set -u
 . "$TEST_UTILS_FILE"
 
-OPENAI_URL='http://fake.test/chat/completions' \
+SSA_URL='http://fake.test/chat/completions' \
     SSA_MODEL=fakeModel \
     SSA_REQUEST_JSON='not-json' \
     run_ssa a task

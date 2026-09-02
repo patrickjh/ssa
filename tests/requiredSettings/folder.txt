@@ -1,2 +1,2 @@
-OPENAI_URL and SSA_MODEL are required at startup. Missing
+SSA_URL and SSA_MODEL are required at startup. Missing
 either is a usage error (exit 1) before the agent loop starts.

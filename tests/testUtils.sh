@@ -155,7 +155,7 @@ run_ssa_task() {
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
     add_default_review_reply
     ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
-        OPENAI_URL='http://fake.test/chat/completions' \
+        SSA_URL='http://fake.test/chat/completions' \
         SSA_MODEL=fakeModel SSA_NO_ASK=1 \
         sh "$(get_ssa_path)" "$@" ) \
         </dev/null \
@@ -169,7 +169,7 @@ run_ssa_task_from_stdin() {
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
     add_default_review_reply
     ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
-        OPENAI_URL='http://fake.test/chat/completions' \
+        SSA_URL='http://fake.test/chat/completions' \
         SSA_MODEL=fakeModel SSA_NO_ASK=1 \
         sh "$(get_ssa_path)" "$@" ) \
         >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"

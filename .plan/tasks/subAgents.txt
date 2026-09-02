@@ -3,8 +3,8 @@ subAgents — figure out how nested agents should work
 Why:
 Large tasks want a fresh messages.json and a short result back,
 without dumping the child's whole loop into the parent. The model
-cannot honestly re-enter ssa today: OPENAI_API_KEY is unset so
-scripts never see it; CLI-set OPENAI_URL / SSA_MODEL are unexported
+cannot honestly re-enter ssa today: SSA_KEY is unset so
+scripts never see it; SSA_URL / SSA_MODEL are unexported
 harness locals; inner ssa defaults to ask-on and wants /dev/tty;
 child stdout is every inner script's output, which can blow
 MAX_MESSAGES_BYTES. This is undecided. Do not treat a fifth reply
@@ -22,8 +22,8 @@ what the caller's shell can do" and avoids a fifth reply shape.
 
 Auth can stay simple: leave the key and URL in the environment so
 the child is just another ssa. People who do not want sk-… in
-the sandbox point OPENAI_URL at a local reverse proxy and set
-OPENAI_API_KEY to a dummy value (see proxyDocs.txt). The proxy
+the sandbox point SSA_URL at a local reverse proxy and set
+SSA_KEY to a dummy value (see proxyDocs.txt). The proxy
 holds the real token; parent and child both POST there. Nested
 ssa does not need a wrapper or harness re-exec for credentials.
 If the real key is what is exported, the model can curl with it
@@ -31,8 +31,7 @@ too; that is the caller's choice. Same-user /proc and config
 files can still reveal a key the proxy process holds; a dummy
 plus a proxy on another user or host is the tight version.
 
-Stop unsetting OPENAI_API_KEY (or SSA_KEY if ssaEnvNames.txt
-landed) so the dummy is still there for the child. Do not add a
+Stop unsetting SSA_KEY so the dummy is still there for the child. Do not add a
 second secret name just for nested runs.
 
 Figure out (auth is not these; they still block a simple nested
@@ -46,7 +45,7 @@ ssa even with dummy+proxy):
   Nested scripts need --no-ask / SSA_NO_ASK=1. Who passes that
   (the model, a wrapper, or the parent exports it)? Nested
   --no-ask also means the child's scripts skip ask.
-- Flag-started parents: CLI-set OPENAI_URL / SSA_MODEL /
+- Flag-started parents: CLI-set SSA_URL / SSA_MODEL /
   SSA_NO_ASK are harness locals and do not reach the child.
   Env-started parents already pass them through. Export those
   into the sandbox, require env for nested ssa, or drop flags
@@ -91,7 +90,7 @@ Tests:
 None until a shape is chosen. Fake curl, --no-ask, skip sudo/doas
 and real /dev/tty. If an agent can call ssa: a nested --no-ask
 run with canned replies returns a short result; dummy
-OPENAI_API_KEY (or SSA_KEY) and OPENAI_URL in the environment are
+SSA_KEY and SSA_URL in the environment are
 enough. Do not require the key to be absent from the child
 env. If `# subagent`: cover empty prompt / failed spawn, depth
 1, and that the parent user turn is a short result (not the

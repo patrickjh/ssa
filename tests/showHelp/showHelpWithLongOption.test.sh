@@ -7,5 +7,5 @@ set -u
 run_ssa --help
 expect_exit 0
 expect_stdout_has '-h, --help'
-expect_stdout_has 'OPENAI_URL'
+expect_stdout_has 'SSA_URL'
 expect_stderr_empty

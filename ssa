@@ -6,15 +6,15 @@
 set -u
 
 # Users can set
-OPENAI_API_KEY="${OPENAI_API_KEY:-}"
-OPENAI_URL="${OPENAI_URL:-}"
 SSA_CONTEXT="${SSA_CONTEXT:-}"
 SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
+SSA_KEY="${SSA_KEY:-}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
 SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
 SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
+SSA_URL="${SSA_URL:-}"
 
 # Internal
 unset PID PROMPT_COUNTER TEMP_FOLDER
@@ -59,20 +59,19 @@ Usage: ssa task as a string no quotes needed
        ssa -h | --help
 
 Requires POSIX sh, curl, and jq.
-OPENAI_URL and SSA_MODEL are required.
-OPENAI_API_KEY is required if the provider needs auth.
+SSA_MODEL and SSA_URL are required.
+SSA_KEY is required if the provider needs auth.
 
 Options:
   -h, --help
           Show this help and exit.
 
 Environment:
-  OPENAI_API_KEY          Bearer token (optional for local servers).
-  OPENAI_URL              URL curl POSTs chat-completions to (required).
   SSA_CONTEXT             Extra user context from a file (empty
                           disables).
   SSA_KEEP_TEMP           Keep per-run temp folder (0 = discard,
                           1 = keep, default = 0).
+  SSA_KEY                 Bearer token (optional for local servers).
   SSA_MAX_MODEL_PROMPTS   Stop after N model prompts (0 = no limit,
                           default = 20).
   SSA_MODEL               OpenAI-style model name (required).
@@ -84,6 +83,7 @@ Environment:
   SSA_SANDBOX_COMMAND     Command that runs the model script on stdin.
                           Works like sh. Must support -c for write and
                           edit. Default is sh.
+  SSA_URL                 URL curl POSTs chat-completions to (required).
 
 ssa asks the model for a script, a write, or an edit; runs it; and
 appends the result. Repeat until model returns # complete
@@ -249,7 +249,7 @@ check_can_run() {
     check_max_model_prompts
     check_no_ask_setting
     check_model_is_set
-    check_openai_url
+    check_url_is_set
     check_sandbox_command
     check_request_json
     check_context
@@ -283,9 +283,9 @@ check_model_is_set() {
             "see ssa -h for help"
 }
 
-check_openai_url() {
-    [ -n "$OPENAI_URL" ] ||
-        die "OPENAI_URL not set; set OPENAI_URL; see ssa -h for help"
+check_url_is_set() {
+    [ -n "$SSA_URL" ] ||
+        die "SSA_URL not set; set SSA_URL; see ssa -h for help"
 }
 
 check_sandbox_command() {
@@ -325,7 +325,7 @@ setup_agent_loop() {
     setup_temp_folder
     setup_temp_files
     setup_auth_header_file
-    log_openai_url
+    log_url
     log_task
     log_context
     setup_temp_cleanup
@@ -374,20 +374,20 @@ setup_temp_files() {
 }
 
 setup_auth_header_file() {
-    if [ -n "$OPENAI_API_KEY" ]; then
+    if [ -n "$SSA_KEY" ]; then
         AUTH_HEADER_FILE="${TEMP_FOLDER}/authHeader.txt"
         create_file_no_overwrite "$AUTH_HEADER_FILE"
-        printf 'Authorization: Bearer %s\n' "$OPENAI_API_KEY" \
+        printf 'Authorization: Bearer %s\n' "$SSA_KEY" \
             >"$AUTH_HEADER_FILE" ||
             die "cannot write auth header file"
     fi
-    unset OPENAI_API_KEY
+    unset SSA_KEY
 }
 
-log_openai_url() {
-    create_file_no_overwrite "${TEMP_FOLDER}/openaiUrl.txt"
-    printf '%s' "$OPENAI_URL" >"${TEMP_FOLDER}/openaiUrl.txt" ||
-        die "cannot write to temp file: ${TEMP_FOLDER}/openaiUrl.txt"
+log_url() {
+    create_file_no_overwrite "${TEMP_FOLDER}/url.txt"
+    printf '%s' "$SSA_URL" >"${TEMP_FOLDER}/url.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/url.txt"
 }
 
 log_task() {
@@ -600,9 +600,9 @@ send_curl_json_request() {
         ${AUTH_HEADER_FILE:+-H @"$AUTH_HEADER_FILE"} \
         --data-binary @"$JSON_BODY_FILE" \
         -o "$CURL_RESPONSE_FILE" \
-        "$OPENAI_URL" ||
-        die "curl failed; check OPENAI_URL, SSA_MODEL, and " \
-            "OPENAI_API_KEY; see ssa -h for help"
+        "$SSA_URL" ||
+        die "curl failed; check SSA_URL, SSA_MODEL, and " \
+            "SSA_KEY; see ssa -h for help"
 }
 
 save_model_reply_to_file() {

@@ -6,7 +6,7 @@ set -u
 
 require_test_temp_folder
 mkdir "$TEST_TEMP_FOLDER/ctxdir" || fail "cannot mkdir ctxdir"
-OPENAI_URL='http://fake.test/chat/completions' \
+SSA_URL='http://fake.test/chat/completions' \
     SSA_MODEL=fakeModel \
     SSA_NO_ASK=1 \
     SSA_CONTEXT="$TEST_TEMP_FOLDER/ctxdir" \

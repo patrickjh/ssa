@@ -55,7 +55,7 @@ checks, resolve paths, or set up state — callers invoke helpers such as
   take the first action line of a model reply).
 - ssa targets **POSIX systems only**. On Windows use WSL.
 - Help: `./ssa -h` (or `sh ssa -h`).
-- Smoke run (needs a real API): set `OPENAI_URL`, `OPENAI_API_KEY` if
+- Smoke run (needs a real API): set `SSA_URL`, `SSA_KEY` if
   required, and `SSA_MODEL`; add `SSA_NO_ASK=1` when there is no TTY.
 - Keep temp logs: `SSA_KEEP_TEMP=1`.
 - Live tests: **only** via `sh tests/runTests.sh`. The runner starts
@@ -277,19 +277,19 @@ not applied (the payload may contain those bytes).
 
 Built-in OpenAI-compatible `/chat/completions` client:
 
-- Required: `OPENAI_URL` (URL curl POSTs the chat-completions body
+- Required: `SSA_URL` (URL curl POSTs the chat-completions body
   to), `SSA_MODEL`
-- Optional: `OPENAI_API_KEY`, `SSA_REQUEST_JSON` (JSON object merged
+- Optional: `SSA_KEY`, `SSA_REQUEST_JSON` (JSON object merged
   into the request body; model and messages from ssa win on key
   conflicts)
 - Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
   `--curl-args`). curl also honors `https_proxy` and related env vars.
-- At setup, if `OPENAI_API_KEY` is set, write
+- At setup, if `SSA_KEY` is set, write
   `$TEMP_FOLDER/authHeader.txt` for curl `-H @file`, then
-  `unset OPENAI_API_KEY` so model scripts do not inherit the key and
+  `unset SSA_KEY` so model scripts do not inherit the key and
   curl argv does not contain it. `authHeader.txt` is overwritten and
   removed on every exit (including `SSA_KEEP_TEMP=1`).
-- Once per run, writes `OPENAI_URL` to `$TEMP_FOLDER/openaiUrl.txt`
+- Once per run, writes `SSA_URL` to `$TEMP_FOLDER/url.txt`
   and the task to `$TEMP_FOLDER/task.txt` (log only). If `SSA_CONTEXT`
   is set, a copy of that file is `$TEMP_FOLDER/context.txt`.
 - Temp working files include `authHeader.txt` while the run needs it
@@ -322,15 +322,15 @@ Built-in OpenAI-compatible `/chat/completions` client:
 
 | Setting | Default |
 |---------|---------|
-| `OPENAI_API_KEY` | empty (optional) |
-| `OPENAI_URL` | unset (required) |
 | `SSA_CONTEXT` | empty (off) |
 | `SSA_KEEP_TEMP` | `0` (discard) |
+| `SSA_KEY` | empty (optional) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
 | `SSA_MODEL` | unset (required) |
 | `SSA_NO_ASK` | `0` (ask) |
 | `SSA_REQUEST_JSON` | empty |
 | `SSA_SANDBOX_COMMAND` | `sh` |
+| `SSA_URL` | unset (required) |
 
 Settings are environment only. The only flags are `-h` / `--help`.
 Unknown `-*` is a bad option, not a task word. Per-run overrides:
@@ -374,8 +374,8 @@ tool names stay as-is (`curl`, `jq`, `-f`, etc.).
 
 - **Variables** use `UPPER_CASE` (settings, run state, and locals).
 - **Functions** use `lower_case`.
-- **User-facing settings** use the `SSA_` prefix (except OpenAI’s
-  `OPENAI_*`). Internal run state does not.
+- **User-facing settings** use the `SSA_` prefix. Internal run
+  state does not.
 - **Top-level variable blocks** (`# Users can set` and `# Internal`) keep
   names **alphabetically ordered** within each block. Do not alphabetize
   large string constants (help text, prompts) with those lists.
@@ -397,8 +397,8 @@ names inside helpers.
 
 ## Settings and CLI
 
-Every **user-facing setting** is an environment variable (`OPENAI_*`,
-`SSA_*`). The only flags are `-h` / `--help`. Unknown `-*` is a bad
+Every **user-facing setting** is an environment variable (`SSA_*`).
+The only flags are `-h` / `--help`. Unknown `-*` is a bad
 option, not a task word. Document settings in `-h`. Short forms are
 rare (`-h` only). Internal run state is not a setting.
 
@@ -408,7 +408,7 @@ When the user can fix a failure by changing a **user-facing setting**,
 say how: name the env var. Pattern:
 
 ```sh
-die "OPENAI_URL not set; set OPENAI_URL; see ssa -h for help"
+die "SSA_URL not set; set SSA_URL; see ssa -h for help"
 ```
 
 Keep hints one short clause after a semicolon. Prefer

@@ -2,8 +2,8 @@ proxyDocs — README: dummy key, injector, egress
 
 Why:
 People who want a nested ssa (or any script) to call the model
-without putting sk-… in the sandbox can point OPENAI_URL at a
-local reverse proxy and set OPENAI_API_KEY to a dummy value. The
+without putting sk-… in the sandbox can point SSA_URL at a
+local reverse proxy and set SSA_KEY to a dummy value. The
 proxy holds the real Bearer token. The harness never puts the
 master key in messages.json. A one-upstream injector is not an
 open forward proxy and is not an egress firewall: scripts can
@@ -19,7 +19,7 @@ Do:
 Add a short subsection under README Safety (plain words; this
 is a human recipe). Cover three layers, not a full Caddyfile:
 
-- Injector: OPENAI_URL is the proxy, OPENAI_API_KEY is dummy or
+- Injector: SSA_URL is the proxy, SSA_KEY is dummy or
   empty. Real secret lives only in the proxy. Bind localhost.
   Parent and child ssa both POST there.
 - Not an open proxy: one upstream (the model). Dummy key at the
@@ -29,11 +29,10 @@ is a human recipe). Cover three layers, not a full Caddyfile:
   firewall, or by wrapping ssa if dropSandbox.txt has landed.
   That is the admin's job. Ask-user still covers local files.
 
-Use the setting names that exist when this lands (OPENAI_*
-today; SSA_URL / SSA_KEY if ssaEnvNames.txt went first). Do not
+Use SSA_URL / SSA_KEY. Do not
 put this in -h. Do not add flags, env vars, or code in ssa.
 Do not document https_proxy / CONNECT as the injector (ssa
-POSTs to OPENAI_URL). Do not claim the dummy key is a sandbox.
+POSTs to SSA_URL). Do not claim the dummy key is a sandbox.
 One small example of the exports is enough; skip iptables.
 
 readmeHumanLanguage.txt is the plain-words pass. Land this

@@ -7,7 +7,7 @@ set -u
 require_test_temp_folder
 printf '\0' >"$TEST_TEMP_FOLDER/nul-context.txt" ||
     fail "cannot write nul context file"
-OPENAI_URL='http://fake.test/chat/completions' \
+SSA_URL='http://fake.test/chat/completions' \
     SSA_MODEL=fakeModel \
     SSA_NO_ASK=1 \
     SSA_CONTEXT="$TEST_TEMP_FOLDER/nul-context.txt" \

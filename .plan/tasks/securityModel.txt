@@ -25,10 +25,10 @@ Above or around them, state the model in short sentences:
 - The listing (and review, if that has landed) may show escaped
   CR/ESC/non-print; the sandbox file is raw. See
   sanitizeOutput / hardenAskListingUnicode.
-- OPENAI_API_KEY is unset for child scripts. During the run it
+- SSA_KEY is unset for child scripts. During the run it
   still lives in authHeader.txt under the temp folder, readable
   by the same user as default sh. Wipe on exit does not help a
-  live script. The provider (OPENAI_URL) sees messages; a second
+  live script. The provider (SSA_URL) sees messages; a second
   review POST would see them again.
 - Temp logs: default discard vs --keep-temp (or always-keep if
   that has landed). authHeader.txt is wiped either way when

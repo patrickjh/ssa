@@ -19,7 +19,7 @@ REPLY
 add_default_review_reply
 require_test_temp_folder
 ( cd "$WORK_FOLDER" && TMPDIR="$TEST_TEMP_FOLDER" \
-    OPENAI_URL='http://fake.test/openai?api-version=1' \
+    SSA_URL='http://fake.test/openai?api-version=1' \
     SSA_MODEL=fakeModel SSA_NO_ASK=1 \
     sh "$(get_ssa_path)" print a greeting then stop ) \
     </dev/null \

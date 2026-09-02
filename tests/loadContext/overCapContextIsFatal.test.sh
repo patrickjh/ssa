@@ -9,7 +9,7 @@ require_test_temp_folder
 awk 'BEGIN { for (i = 0; i < 140000; i++) printf "x" }' \
     >"$TEST_TEMP_FOLDER/huge-context.txt" ||
     fail "cannot write huge context file"
-OPENAI_URL='http://fake.test/chat/completions' \
+SSA_URL='http://fake.test/chat/completions' \
     SSA_MODEL=fakeModel \
     SSA_NO_ASK=1 \
     SSA_CONTEXT="$TEST_TEMP_FOLDER/huge-context.txt" \

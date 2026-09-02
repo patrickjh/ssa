@@ -1,4 +1,4 @@
-openaiUrl — OPENAI_URL is only required to be set
+openaiUrl — SSA_URL is only required to be set
 
 Curl POSTs the chat-completions body to whatever URL is given.
 There is no path-shape check. A query string or a proxy path that
