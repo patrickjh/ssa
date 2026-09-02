@@ -48,7 +48,7 @@ cat chunks/* > big.txt.new && mv big.txt.new big.txt && rm -r chunks
 REPLY
 
 add_model_reply 4 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 cat >"$TEST_TEMP_FOLDER/expected.txt" <<'EXPECTED'
@@ -64,7 +64,7 @@ EXPECTED
 
 run_ssa_task change the beta section of big.txt
 expect_exit 0
-expect_stderr_has 'done: task complete after 4 model prompts'
+expect_stderr_has 'done: after 4 model prompts'
 expect_stdout_has 'chunks/000020'
 expect_file_equals "$WORK_FOLDER/big.txt" "$TEST_TEMP_FOLDER/expected.txt"
 expect_no_file "$WORK_FOLDER/chunks"

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Leading # notes and blank lines before "# task complete" still count
+# Leading # notes and blank lines before "# complete" still count
 # as done.
 
 set -u
@@ -15,10 +15,10 @@ REPLY
 add_model_reply 2 <<'REPLY'
 # greeting printed
 
-# task complete
+# complete
 REPLY
 
 run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'hello-from-script'
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'

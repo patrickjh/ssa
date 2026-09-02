@@ -1,5 +1,5 @@
 #!/bin/sh
-# After # task complete, review text is on stderr, not stdout.
+# After # complete, review text is on stderr, not stdout.
 # Status N is still the agent prompt count.
 
 set -u
@@ -13,7 +13,7 @@ printf 'hello-from-script\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 add_model_reply 3 <<'REPLY'
@@ -26,4 +26,4 @@ expect_stdout_has 'hello-from-script'
 expect_stdout_lacks 'use a write request next time'
 expect_stderr_has 'Feedback from model:'
 expect_stderr_has 'use a write request next time'
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'

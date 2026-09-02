@@ -29,9 +29,8 @@ edit, done). Make the copy harder to mix:
 - Keep the write/edit/done examples short. Do not grow the
   prompt into an essay.
 
-Do not add # script (requireReplySentinels.txt). Do not rename
-# task complete here (completeSentinel.txt); use whichever done
-line is current. Do not change FORMAT_ERROR_* unless a sentence
+Do not add # script (requireReplySentinels.txt). The done line is
+# complete. Do not change FORMAT_ERROR_* unless a sentence
 now contradicts the prompt. Do not change first_action_line,
 reply_is_*, or handle_model_response. Keep -h short; this is not
 help text. Do not copy the new prompt into -h or README.

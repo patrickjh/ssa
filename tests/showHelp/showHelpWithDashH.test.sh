@@ -13,4 +13,5 @@ expect_stdout_has 'SSA_CONTEXT'
 expect_stdout_has 'think, max_tokens'
 expect_stdout_has 'feedback'
 expect_stdout_has 'requested help'
+expect_stdout_has '# complete'
 expect_stderr_empty

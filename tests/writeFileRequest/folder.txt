@@ -19,5 +19,5 @@ Acceptance:
 - Path with spaces ("# write file: my file.txt") writes that file
 - Leading # notes and blank lines before the write sentinel are not
   part of the file
-- Exit 0 after "# task complete"
+- Exit 0 after "# complete"
 - Fake curl on PATH; no real network

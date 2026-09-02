@@ -20,7 +20,7 @@ delete me
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 printf '%s\n' 'keep' 'keep2' >"$TEST_TEMP_FOLDER/expected.txt" ||
@@ -28,7 +28,7 @@ printf '%s\n' 'keep' 'keep2' >"$TEST_TEMP_FOLDER/expected.txt" ||
 
 run_ssa_task delete a line from notes.txt
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_has 'edited file: notes.txt'
 expect_file_equals "$WORK_FOLDER/notes.txt" \
     "$TEST_TEMP_FOLDER/expected.txt"

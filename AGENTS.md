@@ -124,10 +124,10 @@ repeat) with:
    layers; capture script output, then append it to `messages.json`
    (if jq cannot hold it, or it contains a NUL, omit those bytes and
    append a short note plus the exit code instead).
-3. **Stop** — Exit `0` when the first action line is `# task complete`
+3. **Stop** — Exit `0` when the first action line is `# complete`
    (leading blank lines and `#` notes skipped; trailing newlines
-   ignored: `[ "$(first_action_line)" = '# task complete' ]`).
-   `first_action_line` keeps `# task complete`, `# write file:…`,
+   ignored: `[ "$(first_action_line)" = '# complete' ]`).
+   `first_action_line` keeps `# complete`, `# write file:…`,
    `# edit file:…`, or a non-`#` line (`grep -E`), takes the first
    (`head -n 1`), and fails if none remain (`grep .`). Exit `1` on
    harness failure or max model prompts. SIGHUP / SIGINT /

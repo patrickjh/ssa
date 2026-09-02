@@ -12,7 +12,7 @@ printf 'hello-from-script\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 SSA_TEST_NO_REVIEW_REPLY=1 run_ssa_task print a greeting then stop

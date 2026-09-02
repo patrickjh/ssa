@@ -86,12 +86,12 @@ Environment:
                           edit. Default is sh.
 
 ssa asks the model for a script, a write, or an edit; runs it; and
-appends the result. Repeat until model returns # task complete
+appends the result. Repeat until model returns # complete
 or SSA_MAX_MODEL_PROMPTS is hit. Empty or invalid replies are not run.
 After the run, one more model call prints feedback on stderr.
 
 Exit status:
-  0       Task complete or requested help.
+  0       Complete or requested help.
   1       Failure (bad arguments, ssa failure, or max model prompts).
   129     Hangup (SIGHUP).
   130     Interrupted (SIGINT).
@@ -139,15 +139,15 @@ world
 Or the done line when the task is complete (leading blank lines and
 # notes are ignored):
 
-# task complete
+# complete
 '
 
 FORMAT_ERROR_EMPTY='Format error: empty reply. Use a script, a write '\
-'request, an edit, or # task complete.'
+'request, an edit, or # complete.'
 
 FORMAT_ERROR_NOT_SHELL='Format error: not valid POSIX sh. No markdown. '\
 'First line a script, # write file: PATH, # edit file: PATH, or '\
-'# task complete.'
+'# complete.'
 
 REVIEW_ASK='Reply with plain text: what would have made this run go better?'
 
@@ -658,7 +658,7 @@ append_assistant_turn() {
 }
 
 agent_is_done() {
-    if [ "$(first_action_line)" = '# task complete' ]; then
+    if [ "$(first_action_line)" = '# complete' ]; then
         return $IS_TRUE
     fi
     return $IS_FALSE
@@ -784,7 +784,7 @@ reply_is_edit_request() {
 }
 
 first_action_line() {
-    grep -E '^# task complete$|^# write file:|^# edit file:|^[^#]' \
+    grep -E '^# complete$|^# write file:|^# edit file:|^[^#]' \
         "$MODEL_RESPONSE_FILE" |
         head -n 1 |
         grep .  # head succeeds on empty input; this fails then
@@ -958,7 +958,7 @@ sanitize_output() {
 
 finish_agent_loop() {
     case $LOOP_STATUS in
-    done) printf 'done: task complete after %s model prompts\n' \
+    done) printf 'done: after %s model prompts\n' \
         "$PROMPT_COUNTER" >&2; exit 0 ;;
     hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
         "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;

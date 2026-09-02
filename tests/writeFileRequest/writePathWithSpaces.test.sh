@@ -13,7 +13,7 @@ hello from a spaced path
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 cat >"$TEST_TEMP_FOLDER/expected.txt" <<'EXPECTED'
@@ -22,7 +22,7 @@ EXPECTED
 
 run_ssa_task create my file.txt
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_has 'wrote file: my file.txt'
 expect_file_equals "$WORK_FOLDER/my file.txt" \
     "$TEST_TEMP_FOLDER/expected.txt"

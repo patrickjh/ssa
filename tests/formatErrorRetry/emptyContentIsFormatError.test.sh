@@ -1,6 +1,6 @@
 #!/bin/sh
 # HTTP 200 with empty message content is a format error, then the
-# model can recover with # task complete.
+# model can recover with # complete.
 
 set -u
 . "$TEST_UTILS_FILE"
@@ -13,10 +13,10 @@ add_model_reply_json 1 <<'JSON'
 JSON
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'Format error: empty reply'
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'

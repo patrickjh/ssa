@@ -20,7 +20,7 @@ other
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 printf '%s\n' 'same' 'same' >"$TEST_TEMP_FOLDER/expected.txt" ||
@@ -28,7 +28,7 @@ printf '%s\n' 'same' 'same' >"$TEST_TEMP_FOLDER/expected.txt" ||
 
 run_ssa_task do not replace a repeated line
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_has 'edit failed:'
 expect_stdout_has '2 times (need 1)'
 expect_stdout_lacks 'edited file:'

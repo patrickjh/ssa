@@ -13,11 +13,11 @@ printf 'a\rb\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 run_ssa_task print a carriage return then stop
 expect_exit 0
 grep -q "$(printf 'a\rb')" "$TEST_TEMP_FOLDER/stdout.txt" ||
     fail "stdout should contain a raw CR from the script"
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'

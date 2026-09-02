@@ -35,13 +35,13 @@ echo unique-fourth-marker
 REPLY
 
 add_model_reply 5 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 SSA_CONTEXT=notes.txt SSA_KEEP_TEMP=1 \
     run_ssa_task print markers then stop
 expect_exit 0
-expect_stderr_has 'done: task complete after 5 model prompts'
+expect_stderr_has 'done: after 5 model prompts'
 
 SNAP="$(get_kept_ssa_folder)/prompt5/messages.json"
 [ -f "$SNAP" ] || fail "missing snapshot: $SNAP"

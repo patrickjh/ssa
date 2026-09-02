@@ -21,7 +21,7 @@ int main(void) {
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 cat >"$TEST_TEMP_FOLDER/expected.c" <<'EXPECTED'
@@ -36,6 +36,6 @@ EXPECTED
 
 run_ssa_task create hello.c with a greeting
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_has 'wrote file: hello.c'
 expect_file_equals "$WORK_FOLDER/hello.c" "$TEST_TEMP_FOLDER/expected.c"

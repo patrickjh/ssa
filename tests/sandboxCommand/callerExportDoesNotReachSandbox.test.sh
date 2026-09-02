@@ -15,7 +15,7 @@ printf 'TEMP_FOLDER=%s\n' "${TEMP_FOLDER-unset}"
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 export PID=from-caller
@@ -26,4 +26,4 @@ expect_exit 0
 expect_stdout_has 'PID=unset'
 expect_stdout_has 'PROMPT_COUNTER=unset'
 expect_stdout_has 'TEMP_FOLDER=unset'
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'

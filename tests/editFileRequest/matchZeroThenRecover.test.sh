@@ -30,7 +30,7 @@ gamma
 REPLY
 
 add_model_reply 3 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 printf 'gamma\n' >"$TEST_TEMP_FOLDER/expected.txt" ||
@@ -38,7 +38,7 @@ printf 'gamma\n' >"$TEST_TEMP_FOLDER/expected.txt" ||
 
 run_ssa_task change alpha to gamma
 expect_exit 0
-expect_stderr_has 'done: task complete after 3 model prompts'
+expect_stderr_has 'done: after 3 model prompts'
 expect_stdout_has 'edit failed:'
 expect_stdout_has '0 times (need 1)'
 expect_stdout_has 'edited file: notes.txt'

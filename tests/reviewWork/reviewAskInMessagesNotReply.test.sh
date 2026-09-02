@@ -13,7 +13,7 @@ printf 'hello-from-script\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 add_model_reply 3 <<'REPLY'

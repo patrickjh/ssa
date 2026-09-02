@@ -18,7 +18,7 @@ new line three
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 printf 'new line one\nnew line two\nnew line three\n' \
@@ -27,6 +27,6 @@ printf 'new line one\nnew line two\nnew line three\n' \
 
 run_ssa_task rewrite notes.txt
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_has 'wrote file: notes.txt'
 expect_file_equals "$WORK_FOLDER/notes.txt" "$TEST_TEMP_FOLDER/expected.txt"

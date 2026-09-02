@@ -13,12 +13,12 @@ printf '\377'
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 SSA_KEEP_TEMP=1 run_ssa_task print invalid utf-8 then stop
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_lacks 'Output omitted:'
 
 BAD_COUNT=$(tr -cd '\377' <"$TEST_TEMP_FOLDER/stdout.txt" | wc -c)

@@ -9,7 +9,7 @@ as a write: everything after the sentinel is file bytes, so the
 script never runs and the file is polluted. Ask can catch it; --no-ask
 cannot. Reverse mix (script line then a write sentinel) runs as a
 script; the write is a shell comment. Same class as a trailing
-# task complete in a script (trailingDoneCommentIsNotDone). Undecided.
+# complete in a script (trailingDoneCommentIsNotDone). Undecided.
 Do not treat this as required work.
 
 Do:
@@ -28,7 +28,7 @@ If the prompt is not enough, pick one closed rule, not a heuristic
 "looks like a script":
 
 - Format-error when two known action sentinels appear
-  (# write file:, # edit file:, # task complete, and # script if
+  (# write file:, # edit file:, # complete, and # script if
   that task lands) anywhere in the reply. Cheap. Misses
   "# write file:" plus a bare ls with only "# comment:" notes,
   because "# comment:" is not an action sentinel.
@@ -56,7 +56,7 @@ Tests:
 None if this stays prompt-only (clearerSystemPrompt.txt). If a
 harness rule lands: fake curl, SSA_NO_ASK=1. Write then
 "# comment:" / ls is a format error or a polluted write, matching
-the decision. Two writes, write then # task complete, edit then a
+the decision. Two writes, write then # complete, edit then a
 script sentinel. A write whose file bytes are exactly
 "# comment:\nls -la\n" is the false-positive case: either that
 test exists (must still write) or the rule admits it cannot tell.

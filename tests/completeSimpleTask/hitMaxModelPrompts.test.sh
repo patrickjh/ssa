@@ -1,5 +1,5 @@
 #!/bin/sh
-# Model never sends "# task complete". Stop after SSA_MAX_MODEL_PROMPTS.
+# Model never sends "# complete". Stop after SSA_MAX_MODEL_PROMPTS.
 
 set -u
 . "$TEST_UTILS_FILE"

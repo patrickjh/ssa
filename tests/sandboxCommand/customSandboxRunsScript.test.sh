@@ -21,11 +21,11 @@ printf 'hello-from-script\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 SSA_SANDBOX_COMMAND="$STUB" run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'STUB_SANDBOX_COMMAND_RAN'
 expect_stdout_has 'hello-from-script'
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'

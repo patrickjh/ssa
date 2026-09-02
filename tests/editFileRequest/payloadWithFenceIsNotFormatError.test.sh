@@ -22,7 +22,7 @@ fenced
 REPLY
 
 add_model_reply 2 <<'REPLY'
-# task complete
+# complete
 REPLY
 
 cat >"$TEST_TEMP_FOLDER/expected.md" <<'EXPECTED'
@@ -33,7 +33,7 @@ EXPECTED
 
 run_ssa_task put a fence in notes.md
 expect_exit 0
-expect_stderr_has 'done: task complete after 2 model prompts'
+expect_stderr_has 'done: after 2 model prompts'
 expect_stdout_has 'edited file: notes.md'
 expect_stdout_lacks 'Format error'
 expect_file_equals "$WORK_FOLDER/notes.md" \

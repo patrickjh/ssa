@@ -2,7 +2,7 @@ requireReplySentinels — every reply starts with a sentinel
 
 Why:
 Dispatch today is leftover-as-script: skip leading # notes, then
-# write file:, # edit file:, # task complete, or sh -n the rest.
+# write file:, # edit file:, # complete, or sh -n the rest.
 That makes a new kind (see subAgents.txt) a special case next to
 the default, and a # note can collide with a spawn. Empty
 # write file: (no path) falls through and runs as a script. A
@@ -26,7 +26,7 @@ anything else is a format error. Payload is everything after that
 line, not the whole reply. Leading notes are not part of the
 script (today they are, because stdin is the full file).
 
-# script is exact, like # task complete. sh -n the payload only.
+# script is exact, like # complete. sh -n the payload only.
 Empty payload is a format error. Ask can label the kind instead
 of always "Script from model."
 

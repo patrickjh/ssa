@@ -16,5 +16,5 @@ Acceptance:
 - "# edit file:" with no path runs as a script
 - Payload containing ``` is not a format error
 - Missing SEARCH/REPLACE markers is a failed edit, not a format error
-- Exit 0 after "# task complete"
+- Exit 0 after "# complete"
 - Fake curl on PATH; no real network

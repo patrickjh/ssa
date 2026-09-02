@@ -10,5 +10,5 @@ Acceptance:
 - Overwrite one chunk and join yields the expected full file,
   including blank-line separators
 - Chunk folder removed after join
-- Exit 0 after "# task complete"
+- Exit 0 after "# complete"
 - Fake curl on PATH; no real network
