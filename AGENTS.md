@@ -159,8 +159,9 @@ Combine both.
   `/dev/tty`.
 - Yes → run the script (other layers). No → rejection text on stdout,
   status `1` (loop continues). Quit → `die`.
-- Ask listing shows CR as `\r`, ESC as `\e`, and other non-print
-  bytes (except tab) as `?`. The file fed to the sandbox is unchanged.
+- Ask listing and other harness UI of untrusted bytes show CR as
+  `\r`, ESC as `\e`, and other non-print (except tab) as `?`. The
+  file fed to the sandbox and live script stdout are unchanged.
 - Invalid answers print `invalid input: …` on stderr and re-prompt.
 - Answers are logged to `promptN/userAnswer.txt` when ask runs.
 - Requires an openable `/dev/tty` when ask is enabled. Read failure

@@ -13,14 +13,10 @@ script; the write is a shell comment. Same class as a trailing
 Do not treat this as required work.
 
 Do:
-Prefer a clearer SYSTEM_PROMPT so the model emits one shape. The
-"# comment:" example next to "# write file:" is the copy source;
-Gemma treats both as headers to include. Try that first: drop or
-rename the labeled "# comment:" line, keep "Put reasoning in #
-comments", make "exactly one shape per reply" hard to miss, maybe
-shorter examples. Do not grow the prompt into an essay. Smoke with
-Gemma 4 31B before adding harness rules. If the prompt change is
-enough, stop there.
+Prompt rewrite is clearerSystemPrompt.txt. If that landed, skip
+the prompt try. If models still concatenate, smoke with Gemma 4
+31B before adding harness rules. If the prompt change is enough,
+stop there. Do not grow the prompt into an essay here.
 
 Harness detection is the fallback, not the goal. A write/edit
 payload is raw bytes: a file may contain "# comment:", "ls -la",
@@ -45,24 +41,24 @@ Wrong-kind dispatch without retry is the same warning as
 requireReplySentinels.txt. Land after or with that task if # script
 becomes a kind; the mix exists today without it.
 
-Related: requireReplySentinels.txt (missing/wrong sentinel).
+Related: clearerSystemPrompt.txt (prompt-only).
+requireReplySentinels.txt (missing/wrong sentinel).
 completeSentinel.txt (done line as a second kind). doNot.txt
 (Gemma envelopes).
 
 Size:
-Prompt-only: a few lines in SYSTEM_PROMPT (keep -h short; this is
-not help text). 0 harness. Format-error on a second action
-sentinel: about 10–20 (predicate, FORMAT_ERROR_* line,
-handle_model_response before write/edit run). Tests and AGENTS.md
-extra.
+0 if clearerSystemPrompt.txt was enough. Format-error on a
+second action sentinel: about 10–20 (predicate, FORMAT_ERROR_*
+line, handle_model_response before write/edit run). Tests and
+AGENTS.md extra.
 
 Tests:
-Prompt-only: none unless canned replies copied "# comment:" and
-that example goes away. If a harness rule lands: fake curl,
---no-ask. Write then "# comment:" / ls is a format error or a
-polluted write, matching the decision. Two writes, write then
-# task complete, edit then a script sentinel. A write whose file
-bytes are exactly "# comment:\nls -la\n" is the false-positive
-case: either that test exists (must still write) or the rule
-admits it cannot tell. Cover notes-then-write
-(writeAfterLeadingComments) still succeeding.
+None if this stays prompt-only (clearerSystemPrompt.txt). If a
+harness rule lands: fake curl, SSA_NO_ASK=1. Write then
+"# comment:" / ls is a format error or a polluted write, matching
+the decision. Two writes, write then # task complete, edit then a
+script sentinel. A write whose file bytes are exactly
+"# comment:\nls -la\n" is the false-positive case: either that
+test exists (must still write) or the rule admits it cannot tell.
+Cover notes-then-write (writeAfterLeadingComments) still
+succeeding.

@@ -766,13 +766,7 @@ ask_user_to_approve_script() {
 print_model_script() {
     printf 'Script from model:\n' >&2
     # Show the script safely for ask review (file on disk unchanged).
-    cat "$MODEL_RESPONSE_FILE" |
-    # Carriage return can overwrite the line; show as \r.
-    sed -e "s/$(printf '\r')/\\\\r/g" |
-    # ESC starts ANSI/CSI sequences; show as \e.
-    sed -e "s/$(printf '\033')/\\\\e/g" |
-    # Other non-print bytes (keep tab); show as ?.
-    sed -e "s/[^[:print:]$(printf '\t')]/?/g" >&2 ||
+    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 ||
         die "cannot show model script"
 }
 
@@ -797,7 +791,21 @@ read_ask_answer_from_tty() {
 }
 
 print_invalid_input() {
-    printf 'invalid input: %s\n' "$(cat "$USER_ANSWER_FILE")" >&2
+    printf 'invalid input: ' >&2
+    sanitize_output <"$USER_ANSWER_FILE" >&2 ||
+        die "cannot show invalid input"
+}
+
+sanitize_output() {
+    # Carriage return can overwrite the line; show as \r.
+    CR_AS_SLASH_R="s/$(printf '\r')/\\\\r/g"
+    # ESC starts ANSI/CSI sequences; show as \e.
+    ESC_AS_SLASH_E="s/$(printf '\033')/\\\\e/g"
+    # Other non-print bytes (keep tab); show as ?.
+    NONPRINT_AS_QUESTION="s/[^[:print:]$(printf '\t')]/?/g"
+    sed -e "$CR_AS_SLASH_R" |
+        sed -e "$ESC_AS_SLASH_E" |
+        sed -e "$NONPRINT_AS_QUESTION"
 }
 
 print_ask_prompt() {

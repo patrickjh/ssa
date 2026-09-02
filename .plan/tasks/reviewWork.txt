@@ -25,9 +25,9 @@ a script, write, edit, or done marker. Skip review on die and on
 SIGINT/SIGTERM.
 
 Print "Feedback from model:" on stderr, then the reply through
-sanitize_output (sanitizeOutput.txt; latestModelResponse.txt stays
-raw), then a newline, then the existing status line. Stdout stays
-script output only.
+sanitize_output (latestModelResponse.txt stays raw), then a
+newline, then the existing status line. Stdout stays script
+output only.
 
 A failed review curl uses call_curl as today (harness failure).
 Fail-soft (keep the task exit status) is the alternative if you

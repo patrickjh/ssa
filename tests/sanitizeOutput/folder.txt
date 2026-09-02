@@ -1,0 +1,2 @@
+Harness UI of untrusted bytes is escaped (CR, ESC, other
+non-print). Live script stdout and the sandbox file are not.
