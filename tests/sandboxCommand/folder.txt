@@ -1,2 +1,3 @@
 SSA_SANDBOX_COMMAND runs each model script.
 A custom command that behaves like sh is used for the script turn.
+Exported PID, PROMPT_COUNTER, and TEMP_FOLDER do not reach the script.

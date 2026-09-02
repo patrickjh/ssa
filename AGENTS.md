@@ -142,8 +142,9 @@ Harness state is **not** exported into child processes (`sh` or
 `SSA_SANDBOX_COMMAND`).
 
 Private (not exported): `PID`, `PROMPT_COUNTER`, `TEMP_FOLDER`.
+Startup unsets those names so an inherited export is dropped.
 Pipeline subshells inside the harness still see them; model scripts and
-custom sandbox commands do not inherit them unless the caller sets them.
+custom sandbox commands do not inherit them.
 
 `PID` holds the agent PID at startup for `die` (SIGUSR1). It must
 not be replaced with `$$` inside a pipeline subshell.
