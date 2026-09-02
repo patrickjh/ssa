@@ -17,6 +17,8 @@ SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
 
 # Internal
 unset PID PROMPT_COUNTER TEMP_FOLDER
+ASK_NO=1
+ASK_YES=0
 AUTH_HEADER_FILE=""
 CURL_RESPONSE_FILE=""
 EDITED_BYTES_FILE=""
@@ -231,8 +233,8 @@ check_command() {
 }
 
 read_task_from_stdin_if_needed() {
-    if [ -n "$TASK" ]; then return 0; fi
-    if [ -t 0 ]; then return 0; fi
+    if [ -n "$TASK" ]; then return; fi
+    if [ -t 0 ]; then return; fi
     TASK=$(cat) ||
         die "cannot read task from stdin; pass task as words after CLI " \
           "options or pipe task to stdin; see ssa -h for help"
@@ -288,9 +290,7 @@ check_sandbox_command() {
 }
 
 check_request_json() {
-    if [ -z "$SSA_REQUEST_JSON" ]; then
-        return 0
-    fi
+    if [ -z "$SSA_REQUEST_JSON" ]; then return; fi
     printf '%s' "$SSA_REQUEST_JSON" |
         jq -e 'type == "object"' >/dev/null 2>&1 ||
         die "SSA_REQUEST_JSON must be a JSON object; " \
@@ -793,8 +793,8 @@ handle_user_answers() {
     while true; do
         read_ask_answer_from_tty
         case $(cat "$USER_ANSWER_FILE") in
-        y|Y|yes|YES) return 0 ;;
-        n|N|no|NO) return 1 ;;
+        y|Y|yes|YES) return $ASK_YES ;;
+        n|N|no|NO) return $ASK_NO ;;
         q|Q|quit|QUIT) die 'User chose to quit.' ;;
         *) print_invalid_input; print_ask_prompt ;;
         esac
