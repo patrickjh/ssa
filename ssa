@@ -934,7 +934,7 @@ review_work() {
     cap_messages_file
     log_messages
     call_curl
-    printf 'Feedback from model:\n' >&2
+    printf 'Feedback from model: ' >&2
     sanitize_output <"$MODEL_RESPONSE_FILE" >&2 ||
         die "cannot show review feedback"
     printf '\n' >&2
