@@ -32,35 +32,75 @@ runOtherLanguages.txt):
   `# write file:`, `# edit file:`, or `# complete`. Bare
   scripts are format errors. Payload is everything after
   the sentinel; leading notes are not fed to the runner.
-- SSA_RUNNER default `sh`; space-separated names or paths;
-  `command -v` at startup; die if missing or empty. The
-  value is the whole list, not "sh plus extras."
+- SSA_RUNNER default `sh`; space-separated names on PATH;
+  `command -v` at startup; die if missing, empty, or a
+  token contains `/`. The value is the whole list, not
+  "sh plus extras."
 - Append the live tokens to the system prompt as valid
   `# run` runners. One example (`# run sh`, or the first
   token if sh is not on the list). No extra full Python or
   Node samples.
-- `# run sh`: `sh -n` the payload, then run. Other runners:
-  write payload to a temp file, exec the list token on that
-  file. No py_compile / node --check.
-- Write and edit stay harness sh -c. They never go through
-  the runner (python, node, or a jail). Ask still gates
-  every run, write, and edit.
+- `# run RUNNER`: extract the payload, ask, then
+  `"$RUNNER" < payload`. Same shape for sh, python3, node,
+  and a jail. No `sh -n`. No temp file. No py_compile /
+  node --check. Fences and think tags still retry. Invalid
+  sh or Python fails when it runs. Ask still shows the
+  payload first.
+- Write and edit are raw bytes, not a program. Do not pipe
+  them at python3 or node. They use a listed `sh` only.
+
+Write/edit gate: `sh` is on SSA_RUNNER if a token is exactly
+`sh`. Not `bash`, `dash`, `jail-sh`, or a path. Put the
+jail on PATH as `sh` if you want jailed writes and
+`# run sh`.
+
+If that token exists: same `-c` sed/cat as today (path as
+`$0`, bytes on stdin), but invoke that listed token, not
+SSA_SANDBOX_COMMAND and not a fallback PATH `sh`. Ask
+first. If you also `cat` the edit target through `sh`, do
+it only when that token exists (editReadThroughSandbox.txt).
+The fork may keep today's harness jq read plus listed `sh`
+for `cat >`. If `sh` is absent, do not jq-read the host
+file and then refuse the write.
+
+If `sh` is not on the list (`SSA_RUNNER="python3"`): `# run
+python3` still works. `# write file:` / `# edit file:` fail
+closed (exit 1, loop continues, file unchanged). Ask still
+runs. Do not `die` at startup: a list without `sh` is a
+valid caller choice. Do not fall back to an unlisted `sh`
+on PATH. Do not
+invent python `-c` / node `-e` write adapters. Keep
+write/edit in the prompt unless live models keep emitting
+them and wasting turns; say so in notes.txt.
+
+Stdin is today's sandbox contract, so a jail listed as
+SSA_RUNNER can replace COMMAND on run turns. Do not exec
+a temp file instead: wrappers that read stdin like sh
+would break. Do not add `-` or extra flags on the runner
+word (`python3` / `node` already run a piped script). If
+a binary needs a flag, wrap it.
+
+Cost of stdin: no real `__file__` / `__filename`; relative
+import/require next to "the file" do not work. When the
+model needs a path, write foo.py then `# run sh` with
+`python3 foo.py`. One-turn `# run python3` is a
+self-contained program on stdin. If live runs need a path,
+say so in notes.txt; do not add a temp file in this fork
+up front.
 
 Drop SSA_SANDBOX_COMMAND in the fork (setting, check, stdin
-to COMMAND, write/edit via COMMAND -c). Run turns exec the
-listed token with no wrapper in between. Isolation the
-caller still wants: list a jail as a runner
-(`SSA_RUNNER=jail-sh` or a path), or wrap the whole
-experiments/runSentinel/ssa process (container, sudo -u).
-Do not restore a second env var in the fork. A wrapper
-must take a script file (or stdin) like an interpreter,
-not sh -c for writes. If you want the prompt to keep
-saying `# run sh`, put the jail on PATH as `sh` so
-`command -v sh` is the wrapper — that is environment, not
-a new setting. Listing `/path/to/jail-sh` works but makes
-the prompt uglier. SSA_RUNNER="sh python3" plus a jail is
-several wrapper binaries, not one COMMAND that speaks
-sh -c. That is the point of dropping the sandbox layer.
+to COMMAND, write/edit via COMMAND -c). Run turns are
+`"$RUNNER" < payload`. Write/edit `-c` use listed `sh`
+when that word exists. Isolation the caller still wants:
+put a jail on PATH as `sh` (and/or `python3`), or wrap
+the whole experiments/runSentinel/ssa process (container,
+sudo -u). Do not restore a second env var in the fork. A
+run wrapper must read the program on stdin like sh. A
+write/edit wrapper must speak sh `-c`. A runner named
+`jail-sh` does not jail writes; list `sh`. SSA_RUNNER="sh
+python3" is listed `sh` for writes plus python3 for
+`# run`. That is the point of dropping the sandbox layer:
+one allowlist of PATH names, not COMMAND plus interpreters.
 
 Skip in the fork: -h polish, ask kind labels, AGENTS.md,
 README, acceptance tests under tests/. Do not patch
@@ -73,21 +113,28 @@ What to learn (write the answers in notes.txt):
 2. With SSA_RUNNER="sh python3", does it pick Python when
    that helps, or always shell / concatenate a write and a
    run (mixedReplyKinds.txt)?
-3. Is one-turn `# run python3` better than write foo.py
-   then python3 foo.py?
-4. Can a jail listed as SSA_RUNNER replace COMMAND? Writes
-   still use harness sh, so a runner jail does not jail
-   writes (editReadThroughSandbox.txt). If that is
-   unacceptable, "runner is the sandbox" fails and you
-   keep COMMAND or wrap all of ssa. Say whether # run and
+3. Is one-turn `# run python3` on stdin better than write
+   foo.py then python3 foo.py? Did missing `__file__`
+   actually matter?
+4. Write/edit through listed `sh` only: default `sh` still
+   writes; `SSA_RUNNER="python3"` fails write/edit without
+   changing the file; `SSA_RUNNER="sh python3"` writes via
+   `sh` not python3. A jail named `sh` sees runs and
+   writes. No PATH `sh` fallback. Say whether # run and
    no COMMAND should stay coupled for the product jobs.
 
 Harness smoke (no model): fake curl on PATH, SSA_NO_ASK=1.
 A few canned replies next to the fork (try.sh or similar):
-`# run sh`, notes then `# run sh`, `# run python3` with a
-stub on PATH, unknown `# run ruby`, missing runner at
-startup, write still works with python3 on the list, a
-stub listed as SSA_RUNNER actually runs (COMMAND is gone).
+`# run sh`, notes then `# run sh` (notes are not on the
+runner's stdin), `# run python3` with a stub on PATH that
+reads stdin, unknown `# run ruby`, missing runner at
+startup, write works when `sh` is on the list (including
+`SSA_RUNNER="sh python3"`: write uses sh, not python3),
+write/edit fail and leave the file unchanged when `sh` is
+not on the list, `jail-sh` without `sh` does not write, a
+token with `/` in SSA_RUNNER dies at startup, `# run
+/usr/bin/python3` is a format error, a stub listed as
+SSA_RUNNER actually runs (COMMAND is gone).
 SSA_SANDBOX_COMMAND in the environment must not affect
 the fork. Do not require a real python3 for the sh
 stories.
@@ -109,9 +156,9 @@ Those merges are not this task.
 Related: runOtherLanguages.txt (product # run / SSA_RUNNER).
 dropSandbox.txt (product COMMAND removal; try it here
 first). requireReplySentinels.txt (closed dispatch).
-mixedReplyKinds.txt. editReadThroughSandbox.txt (write/edit
-not through the runner). doNot.txt (Gemma envelopes; no
-bin/ in product).
+mixedReplyKinds.txt. editReadThroughSandbox.txt (edit
+read through listed `sh` only). doNot.txt (Gemma
+envelopes; no bin/ in product).
 
 Size:
 0 lines in product `ssa`. A copy of ssa under
