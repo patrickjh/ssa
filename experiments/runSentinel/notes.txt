@@ -1,0 +1,23 @@
+experiments/runSentinel — try # run and dropping COMMAND
+
+Fork of ssa. Not product. Run harness smoke with:
+
+  sh experiments/runSentinel/try.sh
+
+Live smoke (manual): SSA_NO_ASK=1 SSA_KEEP_TEMP=1, same URL/model
+as README, invoke experiments/runSentinel/ssa. Default
+SSA_RUNNER=sh, then SSA_RUNNER="sh python3" if python3 exists.
+
+Questions (from experimentRunSentinel.txt):
+
+1. Does the model emit # run sh on the hot path, or format-error
+   until max prompts?
+2. With SSA_RUNNER="sh python3", does it pick Python when that
+   helps, or always shell / concatenate a write and a run?
+3. Is one-turn # run python3 on stdin better than write foo.py
+   then python3 foo.py? Did missing __file__ matter?
+4. Write/edit through listed sh only. No PATH sh fallback. Should
+   # run and no COMMAND stay coupled for the product jobs?
+
+Harness: not run yet.
+Live: not run yet (needs a real SSA_URL / SSA_MODEL).
