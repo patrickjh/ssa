@@ -1,0 +1,35 @@
+unnecessaryVariables — inline short one-use static strings
+
+Why:
+Style keeps long static text (prompts, help, errors) in top-level
+variables. A one-line string used at one call site is not that: it
+adds a name, an assignment, and a jump for no sharing. The
+formatError fork already inlined REVIEW_ASK and the Format error:
+prefix. Product ssa still has REVIEW_ASK and
+OUTPUT_OMITTED_NOT_UTF8 as one-use strings.
+
+Do:
+Inline short static strings that have one call site. Wrap at 80
+columns with extra printf arguments or a continued quoted string.
+Keep HELP_TEXT, SYSTEM_PROMPT, and EDIT_APPLY_JQ at the top
+(long, or used as a jq program). Do not inline named constants
+(ASK_YES, IS_TRUE, LOOP_AGAIN, HIT_MAX, MAX_MESSAGES_BYTES).
+Do not inline path/run-state names (TEMP_FOLDER, PID, …).
+
+FORMAT_ERROR_EMPTY / FORMAT_ERROR_NOT_SHELL stay until
+oneFormatError.txt. After that job, if the leftover is only the
+prefix Format error:, inline it the same way; sharing the spec
+with the prompt is formatErrorInPrompt.txt.
+
+experiments/formatError/ssa already dropped REVIEW_ASK and
+FORMAT_ERROR. Copy that shape into product ssa; do not merge the
+rest of the fork.
+
+Size:
+About 4 lines removed from ssa (2–8): drop the assignments,
+inline at the printf sites. Tests extra only if a string changes.
+
+Tests:
+None if the bytes are unchanged. review_work still sends the same
+ask; omitted-output still matches Output omitted: not valid UTF-8.
+Fake curl, SSA_NO_ASK=1.

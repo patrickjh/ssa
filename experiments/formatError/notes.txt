@@ -1,0 +1,18 @@
+experiments/formatError — one FORMAT_ERROR + shared spec
+
+Fork of ssa. Not product. oneFormatError.txt and
+formatErrorInPrompt.txt. Leftover-as-script (no # run).
+
+Live smoke (manual): SSA_NO_ASK=1 SSA_KEEP_TEMP=1, same URL/model
+as README, invoke experiments/formatError/ssa.
+
+Questions:
+
+1. Does one Format error string recover as well as empty vs
+   not-shell? (The model already has the spec and its last turn.)
+2. Reprinting REPLY_SPEC on the error turn: does Gemma 4 31B
+   concatenate two kinds (mixedReplyKinds.txt)? If yes, stop;
+   do not add a second-sentinel harness rule in this fork.
+
+Harness: not run yet.
+Live: not run yet (needs a real SSA_URL / SSA_MODEL).
