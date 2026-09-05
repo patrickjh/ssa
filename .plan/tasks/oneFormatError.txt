@@ -1,0 +1,50 @@
+oneFormatError — one FORMAT_ERROR string, not a diagnosis
+
+Why:
+Product ssa has FORMAT_ERROR_EMPTY and FORMAT_ERROR_NOT_SHELL.
+The runSentinel fork grew more (no sentinel, bad run, empty
+payload) for the same retry. The model already has the spec in
+the system prompt and can see its own last turn. Distinct
+strings diagnose harness predicates; they do not teach a shape
+the prompt does not already teach. experiments/runSentinel/ssa
+already collapsed to one FORMAT_ERROR.
+
+Do:
+Replace FORMAT_ERROR_EMPTY and FORMAT_ERROR_NOT_SHELL with one
+static FORMAT_ERROR. Keep the checks (blank, fence, think tags,
+sh -n). Every format-error path records the same text. Drop the
+argument to record_format_error if only one string remains.
+
+The string says the reply is the wrong format, then the skeleton
+of the right one. Today's shapes: a POSIX sh script, # write
+file: PATH, # edit file: PATH with SEARCH/REPLACE, # complete.
+No markdown fences, no thinking tags. Do not say which check
+fired (empty vs fence vs invalid sh). Do not name env vars.
+Do not paste the full SYSTEM_PROMPT examples here; sharing
+the spec with the prompt is formatErrorInPrompt.txt.
+
+Do not fold write failed, edit failed, or ask rejection into
+it. Those are results, not format.
+
+If maybeNot/requireReplySentinels or runOtherLanguages ever
+land, this string follows those sentinels. Do not add
+FORMAT_ERROR_* then; update this one. Do not bake # run into
+product here.
+
+Related: maybeNot/experimentRunSentinel.txt (fork already did this).
+maybeNot/requireReplySentinels.txt.
+maybeNot/runOtherLanguages.txt.
+mixedReplyKinds.txt. malformedHttpSuccess.txt (empty content
+stays a format error; same string). formatErrorInPrompt.txt
+(reuse that string in SYSTEM_PROMPT; later).
+
+Size:
+About 15 lines in `ssa` (10–25): two constants become one,
+call sites, record_format_error. Tests and AGENTS.md extra.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. emptyContentIsFormatError and
+invalidShellThenRecover pin the shared prefix, not the old
+"empty reply" / "not valid POSIX sh" clauses. Other
+formatErrorRetry cases already match `Format error`. Write and
+edit failures still lack `Format error`.

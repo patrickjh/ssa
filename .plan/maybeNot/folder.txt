@@ -1,0 +1,12 @@
+maybeNot/ — ideas that may not belong in ssa. Not a job
+queue. Do not implement these unless a human decides they
+fit and moves the file to tasks/ and lists the stem in
+plan.txt.
+
+requireReplySentinels.txt   closed dispatch (# script)
+runOtherLanguages.txt       python/node in the harness
+proxyDocs.txt               dummy-key injector README
+securityModel.txt           README security model
+helpInReadme.txt            shrink or drop -h
+experimentRunSentinel.txt   try # run in experiments/
+subAgents.txt               nested agents / fifth reply shape

@@ -22,7 +22,7 @@ Harness detection is the fallback, not the goal. A write/edit
 payload is raw bytes: a file may contain "# comment:", "ls -la",
 or even "# write file:". A grep for a second kind in the tail will
 false positive. Do not add a second optional script sentinel (see
-requireReplySentinels.txt).
+maybeNot/requireReplySentinels.txt).
 
 If the prompt is not enough, pick one closed rule, not a heuristic
 "looks like a script":
@@ -38,13 +38,14 @@ If the prompt is not enough, pick one closed rule, not a heuristic
 
 Do not split one reply into two turns. Do not unwrap or run both.
 Wrong-kind dispatch without retry is the same warning as
-requireReplySentinels.txt. Land after or with that task if # script
-becomes a kind; the mix exists today without it.
+maybeNot/requireReplySentinels.txt. Land after or with that
+file if # script becomes a kind; the mix exists today without it.
 
 Related: clearerSystemPrompt.txt (prompt-only).
-requireReplySentinels.txt (missing/wrong sentinel).
+maybeNot/requireReplySentinels.txt (missing/wrong sentinel).
 completeSentinel.txt (done line as a second kind). doNot.txt
-(Gemma envelopes).
+(Gemma envelopes). formatErrorInPrompt.txt (same samples on
+the error turn; mix risk).
 
 Size:
 0 if clearerSystemPrompt.txt was enough. Format-error on a

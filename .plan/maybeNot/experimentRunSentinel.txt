@@ -1,7 +1,8 @@
 experimentRunSentinel — try # run in experiments/, not in ssa
 
 Why:
-runOtherLanguages.txt and requireReplySentinels.txt are product
+maybeNot/runOtherLanguages.txt and
+maybeNot/requireReplySentinels.txt are product
 breaks. The unknown is the model: Gemma 4 31B already misses
 envelopes (doNot.txt). Requiring `# run sh` on the hot path may
 burn SSA_MAX_MODEL_PROMPTS the same way `# script` would. The
@@ -26,7 +27,7 @@ saw. That file is the deliverable. Drift from ./ssa is
 expected; do not share functions with the product file.
 
 Patch the fork enough to run the idea (details in
-runOtherLanguages.txt):
+maybeNot/runOtherLanguages.txt):
 
 - Closed dispatch: first action line must be `# run RUNNER`,
   `# write file:`, `# edit file:`, or `# complete`. Bare
@@ -146,19 +147,23 @@ then SSA_RUNNER="sh python3" if python3 exists. Keep
 promptN/ for forgotten sentinels and mixed kinds.
 
 After notes.txt has a live try (or why you could not) and
-a yes/no leaning: leave runOtherLanguages.txt and
+a yes/no leaning: leave maybeNot/runOtherLanguages.txt and
 dropSandbox.txt undecided until a human says yes. If no:
 keep the fork or delete experiments/; do not patch ./ssa.
 If yes: later jobs copy dispatch and/or drop COMMAND into
 ssa (every canned tests/ script reply, sandbox tests, -h).
 Those merges are not this task.
 
-Related: runOtherLanguages.txt (product # run / SSA_RUNNER).
+Related: maybeNot/runOtherLanguages.txt (product # run /
+SSA_RUNNER).
 dropSandbox.txt (product COMMAND removal; try it here
-first). requireReplySentinels.txt (closed dispatch).
+first). maybeNot/requireReplySentinels.txt (closed dispatch).
 mixedReplyKinds.txt. editReadThroughSandbox.txt (edit
 read through listed `sh` only). doNot.txt (Gemma
-envelopes; no bin/ in product).
+envelopes; no bin/ in product). oneFormatError.txt (fork
+uses one FORMAT_ERROR; product still has EMPTY vs
+NOT_SHELL). formatErrorInPrompt.txt (same spec in the
+prompt and on error).
 
 Size:
 0 lines in product `ssa`. A copy of ssa under

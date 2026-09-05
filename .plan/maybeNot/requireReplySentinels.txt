@@ -63,8 +63,9 @@ experimentRunSentinel.txt tries `# run` in experiments/
 first; do not treat a successful fork as this product
 change.
 
-System prompt and FORMAT_ERROR_* text must list the sentinels.
-first_action_line only keeps known sentinels (drop ^[^#]).
+System prompt and the one FORMAT_ERROR string must list the
+sentinels (oneFormatError.txt). first_action_line only keeps
+known sentinels (drop ^[^#]).
 
 Size:
 0 in `ssa` if you keep script-as-default. If yes: about 50 lines to

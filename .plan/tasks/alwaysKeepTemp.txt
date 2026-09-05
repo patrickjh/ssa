@@ -18,7 +18,7 @@ SSA_KEEP_TEMP. Cleanup is the caller (rm -rf "$TMPDIR"/ssa-* or
 TMPDIR=$(mktemp -d)). Keep wiping authHeader.txt. Print the folder
 on the final stderr status line and on die as `Run files: PATH`
 (not a bare path); a kept path nobody is told is barely more
-useful than a deleted one. Nested runs (see subAgents.txt) each
+useful than a deleted one. Nested runs (see maybeNot/subAgents.txt) each
 get their own ssa-* folder; that labeled path in the status /
 child result is the handle.
 

@@ -100,21 +100,21 @@ Example:
   ssa why is apt not updating?
 '
 
-SYSTEM_PROMPT='You help users solve tasks with # run programs, write
-requests, and edit requests. Each turn you get a task, prior commands and
+SYSTEM_PROMPT='You help users solve tasks by running code, writing files
+and editing files. Each turn you get a task, prior commands and
 their output. Continue from there with exactly one of the following response
 types per turn to help complete the task. No markdown fences, no thinking
 tags. Put reasoning in # comments before the action line.
 
 Response Type 1: A program for one listed runner. First action line is
-# run NAME. Everything after that line is the program on stdin to NAME.
+# run RUNNER. Everything after that line is the program on stdin to NAME.
 
 # run sh
 ls -la
 
 Response Type 2: A raw file write. You write reasoning comments and then
 # write file: PATH. Everything after # write file: PATH is the raw file
-contents. Prefer this over POSIX tools for writing files because this
+contents. Prefer this over other tools for writing files because this
 has no quoting issues.
 
 # write file: hello.txt
@@ -124,7 +124,7 @@ world
 Response Type 3: A file edit. You write reasoning comments and then
 # edit file: PATH. We search for the search block and replace with the replace
 block. The search block must match exactly once in the file. Prefer this for
-edits over sed and other POSIX tools because this has no quoting issues.
+edits over other tools because this has no quoting issues.
 
 # edit file: hello.txt
 <<<<<<< SEARCH
@@ -140,19 +140,24 @@ this line in a separate turn. Do not append this to the end of other turns.
 # complete
 '
 
-FORMAT_ERROR_EMPTY='Format error: empty reply. Use # run NAME, a write '\
-'request, an edit, or # complete.'
+FORMAT_ERROR='Format error: use exactly one of:
 
-FORMAT_ERROR_NO_SENTINEL='Format error: first action line must be '\
-'# run NAME, # write file: PATH, # edit file: PATH, or # complete.'
+# run NAME
+program
 
-FORMAT_ERROR_BAD_RUN='Format error: # run needs one runner from '\
-'SSA_RUNNER. No markdown.'
+# write file: PATH
+bytes
 
-FORMAT_ERROR_EMPTY_RUN='Format error: empty # run payload.'
+# edit file: PATH
+<<<<<<< SEARCH
+old
+=======
+new
+>>>>>>> REPLACE
 
-FORMAT_ERROR_NOT_SHELL='Format error: no markdown, no thinking tags. '\
-'# run NAME, # write file: PATH, # edit file: PATH, or # complete.'
+# complete
+
+NAME is a listed runner. No markdown fences, no thinking tags.'
 
 REVIEW_ASK='Reply with plain text: what would have made this run go better?'
 
@@ -678,7 +683,7 @@ handle_model_response() {
     append_assistant_turn
     if agent_is_done; then return $TASK_DONE; fi
     if reply_is_blank; then
-        record_format_error "$FORMAT_ERROR_EMPTY"
+        record_format_error
         return $LOOP_AGAIN
     fi
     if reply_is_write_request; then
@@ -691,33 +696,33 @@ handle_model_response() {
     fi
     if reply_is_run_request; then
         if ! run_name_is_listed; then
-            record_format_error "$FORMAT_ERROR_BAD_RUN"
+            record_format_error
             return $LOOP_AGAIN
         fi
         if reply_payload_is_blank; then
-            record_format_error "$FORMAT_ERROR_EMPTY_RUN"
+            record_format_error
             return $LOOP_AGAIN
         fi
         if reply_has_fence_line; then
-            record_format_error "$FORMAT_ERROR_NOT_SHELL"
+            record_format_error
             return $LOOP_AGAIN
         fi
         if reply_has_thinking_tags; then
-            record_format_error "$FORMAT_ERROR_NOT_SHELL"
+            record_format_error
             return $LOOP_AGAIN
         fi
         run_model_reply
         return $LOOP_AGAIN
     fi
     if reply_has_fence_line; then
-        record_format_error "$FORMAT_ERROR_NOT_SHELL"
+        record_format_error
         return $LOOP_AGAIN
     fi
     if reply_has_thinking_tags; then
-        record_format_error "$FORMAT_ERROR_NOT_SHELL"
+        record_format_error
         return $LOOP_AGAIN
     fi
-    record_format_error "$FORMAT_ERROR_NO_SENTINEL"
+    record_format_error
     return $LOOP_AGAIN
 }
 
@@ -764,10 +769,10 @@ reply_payload_is_blank() {
 }
 
 record_format_error() {
-    printf '%s\n' "$1" | tee "$SCRIPT_OUTPUT_FILE"
+    printf '%s\n' "$FORMAT_ERROR" | tee "$SCRIPT_OUTPUT_FILE"
     echo 1 >"$EXIT_CODE_FILE" ||
         die "cannot write script exit code"
-    printf '%s\n' "$1" >"$USER_TURN_FILE" ||
+    printf '%s\n' "$FORMAT_ERROR" >"$USER_TURN_FILE" ||
         die "cannot write format error"
     append_user_turn
 }

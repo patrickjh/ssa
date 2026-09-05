@@ -167,7 +167,7 @@ add_reply 2 <<'REPLY'
 REPLY
 run_fork unknown runner
 [ "$EXIT_CODE" = 0 ] || fail "exit $EXIT_CODE"
-need 'Format error: # run needs one runner from SSA_RUNNER' "$STDOUT"
+need 'Format error: use exactly one of:' "$STDOUT"
 [ "$FAIL" -eq 0 ] && pass
 
 setup_case slash_run_name
@@ -180,7 +180,7 @@ add_reply 2 <<'REPLY'
 REPLY
 run_fork slash in run name
 [ "$EXIT_CODE" = 0 ] || fail "exit $EXIT_CODE"
-need 'Format error: # run needs one runner from SSA_RUNNER' "$STDOUT"
+need 'Format error: use exactly one of:' "$STDOUT"
 [ "$FAIL" -eq 0 ] && pass
 
 setup_case missing_runner_startup

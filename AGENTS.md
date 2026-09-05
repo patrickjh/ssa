@@ -5,7 +5,9 @@ Instructions for coding agents working in this repo. Humans: start with
 style rules are below; do not duplicate settings or behavior that `-h` and
 `ssa` already define. Open work lives in `.plan/`. A new file under
 `.plan/tasks/` is not added to `plan.txt`; only list a stem there when
-that job should run next.
+that job should run next. `.plan/maybeNot/` is ideas that may not
+belong in ssa; do not implement those unless a human moves the file
+to `tasks/`.
 
 ## Overview
 
@@ -72,6 +74,7 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 ## Boundaries
 
 - Keep the product surface small: one executable (`ssa`) plus docs.
+  Keep `ssa` under 1000 lines.
   Do not bring back `bin/` / `libexec/` / pluggable model runners.
 - Edit `ssa` in place; keep **≤80 characters per line**.
 - Do not invent flags or env vars for things the caller’s shell can do

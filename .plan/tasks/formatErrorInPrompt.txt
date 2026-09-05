@@ -1,0 +1,59 @@
+formatErrorInPrompt — same format string in the prompt and on error
+
+Why:
+oneFormatError.txt makes one FORMAT_ERROR for every format-error
+retry. The system prompt still teaches the same shapes in other
+words. Two texts drift (sentinel wording, examples vs skeleton).
+A shared string is about 15 lines out of FORMAT_ERROR's body, not
+a second copy of interleaved "Response Type N" prose. Recency:
+the error turn is what a stuck model attends to; the system
+prompt is at the front of messages.json. Undecided. Do not treat
+this as required work.
+
+Do:
+Land after oneFormatError.txt (product still has EMPTY vs
+NOT_SHELL until that job). Decide first.
+
+If no: keep SYSTEM_PROMPT and FORMAT_ERROR as two static strings.
+Do not glue four EXAMPLE_* pieces; that usually costs lines and
+drops the single-quoted prompt.
+
+If yes: one static spec used in both places. FORMAT_ERROR is a
+short prefix (`Format error:`) plus that spec. SYSTEM_PROMPT is
+intro prose (role, one of four, reasoning in # comments) plus
+the same spec. Do not paste the whole SYSTEM_PROMPT (role and
+quoting rationale) into every error turn. Do not name env vars.
+Live runner tokens stay an append after parse
+(write_system_prompt_file), not inside the shared spec.
+
+Pick one wording for the samples (`# run sh` / `ls -la` vs
+`# run NAME` / `program`) and use it in both. A skeleton that
+says `program` is a worse copy target; the prompt's worked
+samples are a mix risk on the error turn
+(mixedReplyKinds.txt). If live runs concatenate, stop; do not
+add a second-sentinel harness rule here.
+
+Do not fold write failed, edit failed, or ask rejection into
+the spec. Do not bake # run into product until
+maybeNot/requireReplySentinels / runOtherLanguages say yes; the
+shared spec follows the sentinels that exist.
+
+The runSentinel fork may try this first. Do not treat a fork
+try as the product change.
+
+Related: oneFormatError.txt (one error string first).
+mixedReplyKinds.txt (reprinting examples on the user turn).
+maybeNot/requireReplySentinels.txt.
+maybeNot/runOtherLanguages.txt.
+maybeNot/experimentRunSentinel.txt.
+
+Size:
+If no: 0. If yes: about 15 lines out of `ssa` (FORMAT_ERROR body
+goes away; a prefix plus one spec). Prompt rewrite is extra
+edits, not extra lines. Tests extra.
+
+Tests:
+If no: none. If yes: fake curl, SSA_NO_ASK=1. formatErrorRetry
+still matches `Format error`. The error text contains the same
+sample block as the prompt spec (one sentinel example). Write
+and edit failures still lack `Format error`.

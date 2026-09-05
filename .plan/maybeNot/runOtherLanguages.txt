@@ -112,9 +112,9 @@ not leave a `# run sh` example that would format-error;
 use the first token for the one example, or build that
 example after parse. Gemma 4 31B concatenates examples
 (mixedReplyKinds.txt); a one-line list is cheaper than
-one sample program per runner. FORMAT_ERROR_* can say
-`# run` plus "a runner from SSA_RUNNER" rather than
-naming every binary.
+one sample program per runner. The one FORMAT_ERROR string
+lists `# run NAME` (oneFormatError.txt). Do not name
+SSA_RUNNER in it; live tokens stay on the system prompt.
 
 Feed every run payload on stdin: `"$RUNNER" < payload`.
 Same shape as today's COMMAND. experimentRunSentinel.txt
