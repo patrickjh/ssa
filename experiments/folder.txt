@@ -2,3 +2,4 @@ experiments/ — forks and try-outs, not product. Do not merge
 these trees into ssa, tests/, -h, or AGENTS.md Layout.
 
 runSentinel/   # run + SSA_RUNNER, no SSA_SANDBOX_COMMAND
+formatError/   one FORMAT_ERROR + shared spec in the prompt
