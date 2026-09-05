@@ -1,0 +1,128 @@
+experimentRunSentinel — try # run in experiments/, not in ssa
+
+Why:
+runOtherLanguages.txt and requireReplySentinels.txt are product
+breaks. The unknown is the model: Gemma 4 31B already misses
+envelopes (doNot.txt). Requiring `# run sh` on the hot path may
+burn SSA_MAX_MODEL_PROMPTS the same way `# script` would. The
+fork also tries dropSandbox.txt: no SSA_SANDBOX_COMMAND, a
+jail is just another SSA_RUNNER token. A fork under
+experiments/ can answer both without touching ssa, tests/, or
+-h. Undecided whether either lands in the product. Do not
+treat merging the fork as this job.
+
+Do:
+Copy `./ssa` to `experiments/runSentinel/ssa` and patch only
+that file. Do not edit the product `ssa`. Do not add cases
+under tests/. Do not teach tests/runTests.sh about this
+folder (it only discovers tests/*/*.test.sh). doNot.txt bans
+bin/ and lib/ in the product; experiments/ is fine if
+experiments/folder.txt says this tree is a fork, not the
+installable file.
+
+experiments/folder.txt: not product; do not merge into ssa.
+runSentinel/notes.txt: questions, what you ran, what you
+saw. That file is the deliverable. Drift from ./ssa is
+expected; do not share functions with the product file.
+
+Patch the fork enough to run the idea (details in
+runOtherLanguages.txt):
+
+- Closed dispatch: first action line must be `# run RUNNER`,
+  `# write file:`, `# edit file:`, or `# complete`. Bare
+  scripts are format errors. Payload is everything after
+  the sentinel; leading notes are not fed to the runner.
+- SSA_RUNNER default `sh`; space-separated names or paths;
+  `command -v` at startup; die if missing or empty. The
+  value is the whole list, not "sh plus extras."
+- Append the live tokens to the system prompt as valid
+  `# run` runners. One example (`# run sh`, or the first
+  token if sh is not on the list). No extra full Python or
+  Node samples.
+- `# run sh`: `sh -n` the payload, then run. Other runners:
+  write payload to a temp file, exec the list token on that
+  file. No py_compile / node --check.
+- Write and edit stay harness sh -c. They never go through
+  the runner (python, node, or a jail). Ask still gates
+  every run, write, and edit.
+
+Drop SSA_SANDBOX_COMMAND in the fork (setting, check, stdin
+to COMMAND, write/edit via COMMAND -c). Run turns exec the
+listed token with no wrapper in between. Isolation the
+caller still wants: list a jail as a runner
+(`SSA_RUNNER=jail-sh` or a path), or wrap the whole
+experiments/runSentinel/ssa process (container, sudo -u).
+Do not restore a second env var in the fork. A wrapper
+must take a script file (or stdin) like an interpreter,
+not sh -c for writes. If you want the prompt to keep
+saying `# run sh`, put the jail on PATH as `sh` so
+`command -v sh` is the wrapper — that is environment, not
+a new setting. Listing `/path/to/jail-sh` works but makes
+the prompt uglier. SSA_RUNNER="sh python3" plus a jail is
+several wrapper binaries, not one COMMAND that speaks
+sh -c. That is the point of dropping the sandbox layer.
+
+Skip in the fork: -h polish, ask kind labels, AGENTS.md,
+README, acceptance tests under tests/. Do not patch
+product ssa. Do not delete tests/sandboxCommand/.
+
+What to learn (write the answers in notes.txt):
+
+1. Does the model emit `# run sh` on the hot path, or does
+   it format-error until max prompts?
+2. With SSA_RUNNER="sh python3", does it pick Python when
+   that helps, or always shell / concatenate a write and a
+   run (mixedReplyKinds.txt)?
+3. Is one-turn `# run python3` better than write foo.py
+   then python3 foo.py?
+4. Can a jail listed as SSA_RUNNER replace COMMAND? Writes
+   still use harness sh, so a runner jail does not jail
+   writes (editReadThroughSandbox.txt). If that is
+   unacceptable, "runner is the sandbox" fails and you
+   keep COMMAND or wrap all of ssa. Say whether # run and
+   no COMMAND should stay coupled for the product jobs.
+
+Harness smoke (no model): fake curl on PATH, SSA_NO_ASK=1.
+A few canned replies next to the fork (try.sh or similar):
+`# run sh`, notes then `# run sh`, `# run python3` with a
+stub on PATH, unknown `# run ruby`, missing runner at
+startup, write still works with python3 on the list, a
+stub listed as SSA_RUNNER actually runs (COMMAND is gone).
+SSA_SANDBOX_COMMAND in the environment must not affect
+the fork. Do not require a real python3 for the sh
+stories.
+
+Live smoke (the real question): same recipe as README
+local models, but invoke experiments/runSentinel/ssa.
+SSA_NO_ASK=1, SSA_KEEP_TEMP=1. Try default SSA_RUNNER=sh,
+then SSA_RUNNER="sh python3" if python3 exists. Keep
+promptN/ for forgotten sentinels and mixed kinds.
+
+After notes.txt has a live try (or why you could not) and
+a yes/no leaning: leave runOtherLanguages.txt and
+dropSandbox.txt undecided until a human says yes. If no:
+keep the fork or delete experiments/; do not patch ./ssa.
+If yes: later jobs copy dispatch and/or drop COMMAND into
+ssa (every canned tests/ script reply, sandbox tests, -h).
+Those merges are not this task.
+
+Related: runOtherLanguages.txt (product # run / SSA_RUNNER).
+dropSandbox.txt (product COMMAND removal; try it here
+first). requireReplySentinels.txt (closed dispatch).
+mixedReplyKinds.txt. editReadThroughSandbox.txt (write/edit
+not through the runner). doNot.txt (Gemma envelopes; no
+bin/ in product).
+
+Size:
+0 lines in product `ssa`. A copy of ssa under
+experiments/runSentinel/ plus the prompt/dispatch/SSA_RUNNER
+patch (same 50–80 ballpark as runOtherLanguages) and
+dropping COMMAND in that copy (~30 lines, dropSandbox).
+folder.txt, notes.txt, and a small fake-curl try.sh. No
+tests/ cases. No AGENTS.md Layout unless one line that
+experiments/ is not product.
+
+Tests:
+None via sh tests/runTests.sh. Fake-curl smoke lives under
+experiments/runSentinel/. Live model smoke is manual; record
+it in notes.txt.

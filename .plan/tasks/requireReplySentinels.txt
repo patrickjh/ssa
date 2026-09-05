@@ -56,6 +56,12 @@ which doNot.txt already rules out for this model.
 Related: completeSentinel.txt (maybe # complete; that rename
 is not the Gemma-sensitive part). subAgents.txt is cheaper if
 script is not the leftover, but that task stays separate.
+runOtherLanguages.txt: if that is yes, use `# run` plus
+SSA_RUNNER (default sh) here instead of `# script`. Do not
+land `# script` and rename it in the next job.
+experimentRunSentinel.txt tries `# run` in experiments/
+first; do not treat a successful fork as this product
+change.
 
 System prompt and FORMAT_ERROR_* text must list the sentinels.
 first_action_line only keeps known sentinels (drop ^[^#]).

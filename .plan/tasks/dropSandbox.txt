@@ -33,6 +33,14 @@ README Safety: no wrapper example. Ask remains the in-process
 gate. Open docs tasks must not restore COMMAND (see notes on
 readmeHumanLanguage, securityModel, proxyDocs, subAgents).
 
+Related: experimentRunSentinel.txt tries dropping COMMAND in
+a fork, with a jail listed as SSA_RUNNER instead of a second
+layer. Do not treat a successful fork as this product
+change. runOtherLanguages.txt wants to exec python3/node,
+not only sh. If that is yes, drop COMMAND first or define
+how a jail wraps those binaries; do not leave stdin-to-sh
+as the python contract.
+
 Size:
 About 30 lines removed from `ssa` (25–40): setting, -h, env line,
 parse arm, setter, check. Run helper hardcodes sh and gets a

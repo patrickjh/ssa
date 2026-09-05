@@ -1,0 +1,205 @@
+runOtherLanguages — run model code as python or node, not only sh
+
+Why:
+ssa is a shell agent: leftover-as-script, `sh -n`, stdin to
+SSA_SANDBOX_COMMAND (default sh), and a system prompt that only
+shows POSIX sh. Write and edit still need sh-style -c plus sed or
+cat, so pointing the sandbox at python or node breaks those turns.
+You cannot make this a Python agent today without forking the
+prompt, dropping `sh -n`, and keeping sh for writes.
+
+The Unix path already works: `# write file: foo.py`, then a
+shell turn `python3 foo.py`. A quoted heredoc is one turn but
+reintroduces quoting. Polyglot in the harness is only worth it
+for one turn, no file, no quoting — the same reason write
+exists. Undecided. Do not treat this as required work.
+
+Default stays shell: SSA_RUNNER=sh. Callers opt in with a list
+(`SSA_RUNNER="sh python3 node"` or a path). That is a setting,
+not a hardcoded language table. Still a product change when the
+list is not only sh (the model may emit `# run python3`).
+
+Do:
+Decide first.
+
+If no: keep only shell. Do not add SSA_RUNNER, `# python3` /
+`# node` / `# run` next to leftover-as-script (two ways to run
+is worse). The two-turn write-then-`python3 foo.py` path stays.
+Do not change SSA_SANDBOX_COMMAND to mean "scripts are Python";
+writes still need sh.
+
+If yes: closed dispatch first (see requireReplySentinels.txt).
+Do not keep leftover-as-script for sh and add sentinels only
+for other languages. One breaking change, not a mix. If
+requireReplySentinels has not landed, land it here as `# run`
+plus a runner word rather than `# script` then rename. Do not
+do two prompt breaks. Do not also accept a bare script.
+
+Uniform run kind, allowlisted word — not N sibling kinds:
+
+# notes ignored
+# run RUNNER
+payload
+
+# write file: PATH
+# edit file: PATH
+# complete
+
+RUNNER is an exact token from SSA_RUNNER. `# run sh` is exact
+like `# complete` (the kind plus the word). Unknown `# run ruby`
+is a format error. `# run` with no word is a format error.
+Empty payload is a format error. Match by string equality
+against the parsed list, not a regex of the joined value.
+
+Do not make `# sh`, `# python3`, and `# node` their own kinds
+next to write and complete. That grows the kind table and the
+prompt; adding a runner is one SSA_RUNNER word, not a new
+response type. `# python3 is not installed` as a reasoning
+note is a footgun unless the match is exact `$`. `# run
+python3` collides less.
+
+SSA_RUNNER — space-separated allow list (default `sh`).
+
+Users can set. Alphabetize with the other SSA_ names
+(after SSA_REQUEST_JSON). One executable per word, like
+SSA_SANDBOX_COMMAND: a name on PATH (`python3`, `node`) or a
+path (`/usr/bin/python3`). No flags (`python3 -u` is two
+words). No quoting; a path with a space cannot be a token
+(symlink or put a name on PATH). Consecutive whitespace
+collapses (`set -- $SSA_RUNNER` with default IFS).
+
+Unset or omitted: `sh`. The value is the whole list, not
+"sh plus extras." `SSA_RUNNER="node python3"` does not
+include sh; callers who want shell too write
+`SSA_RUNNER="sh node python3"`. Dropping sh from the list
+does not drop harness sh for write/edit. Empty
+SSA_RUNNER (or only whitespace) is a usage error: die, name
+the env var, `; see ssa -h for help`. Duplicate words: die
+or keep first; pick one and test it. Do not treat a
+comma-separated list as separators.
+
+At startup, every word must be `command -v` (same as
+check_sandbox_command). Missing runner: die before the
+loop, name SSA_RUNNER, show the missing word. Do not wait
+for a `# run` turn. Do not `die` later if the binary
+vanishes mid-run; that turn fails like any script (exit 1,
+loop continues). Default `sh` is already required as a
+tool; a custom list is extra binaries the caller asked
+for. Do not require python3 or node unless they appear in
+SSA_RUNNER. Relative paths (`./venv/bin/python3`) are
+whatever `command -v` does; prefer absolute paths in -h.
+
+The model may only name a listed runner. That is the
+allowlist; do not also parse a shebang. Putting
+`/usr/bin/sudo` on the list is the caller's choice, same
+as SSA_SANDBOX_COMMAND. Do not sniff "is this an
+interpreter." Do not add a hardcoded python/node table
+behind the env var.
+
+Document SSA_RUNNER in -h (space-separated, names or
+paths, must exist, default sh). Meaning is unclear without
+that sentence. Settings table in AGENTS.md. No flag; env
+only.
+
+System prompt: keep the static `# run` example from
+substitution. After parse, append the live list as valid
+runners for `# run` (the tokens, not extra full response
+types). Do not bake python3/node into the static
+SYSTEM_PROMPT "for later." If sh is not on the list, do
+not leave a `# run sh` example that would format-error;
+use the first token for the one example, or build that
+example after parse. Gemma 4 31B concatenates examples
+(mixedReplyKinds.txt); a one-line list is cheaper than
+one sample program per runner. FORMAT_ERROR_* can say
+`# run` plus "a runner from SSA_RUNNER" rather than
+naming every binary.
+
+`sh -n` the payload only when the runner is `sh` (or a
+path whose last component is `sh`). Do not syntax-check
+Python or Node (`py_compile`, `node --check`). Invalid
+Python fails when it runs.
+
+Do not feed Python or Node on stdin. `python3 -` and
+`node` on stdin have no `__file__` / `require` path.
+Write the payload to a temp file and exec the runner
+token on that file (the list word, not a resolved
+basename). Shell may stay stdin, or use the same
+temp-file path for every runner so the helper is one
+shape. Leading notes are not part of the payload.
+Ask can label the turn from the runner word instead of
+always "Script from model."
+
+Write and edit stay harness ops. They never go through
+python or node. Paths stay positional `$0`, no
+interpolation.
+
+Sandbox: if dropSandbox.txt lands, wrap ssa, exec the
+runner in-process like today's sh. If COMMAND stays, it
+cannot remain "stdin to one sh-like executable" for a
+python turn. Do not invent `SSA_SANDBOX_COMMAND python3
+file` as a silent contract change. SSA_RUNNER is not
+COMMAND: one names what the model may run, the other
+jails the run. Decide with dropSandbox: drop COMMAND
+first, or define how a jail wraps `python3` without
+breaking write `-c`. Hung scripts are still not killed.
+
+Rejected: shebang as the protocol. A shebang names an
+interpreter. Write, edit, and complete are harness
+operations. `#!/write PATH` is `# write file:` with a
+fake kernel line; paths with spaces and leading `#`
+notes both fight real shebang rules (`#!` at byte 0,
+interpreter plus one arg). Models copy real shebangs;
+they do not copy `#!/write`. `first_action_line` today
+skips `#!/usr/bin/env python3` as a `#` note; feeding
+stdin to a fixed command never switches interpreters.
+Do not exec an arbitrary model-chosen binary. A real
+shebang may appear inside a `# run python3` payload as
+bytes; do not also parse it.
+
+Cost: scripts are the hot path. Requiring `# run sh`
+has the same Gemma miss as `# script`
+(requireReplySentinels.txt): forgotten sentinel is a
+format-error retry; wrong sentinel dispatches and does
+not retry; can burn SSA_MAX_MODEL_PROMPTS. Extra names
+in the appended list are mix risk if you also paste
+full examples. A fifth kind (`# subagent`) is still a
+separate task (doNot.txt).
+
+Related: experimentRunSentinel.txt (try # run and dropping
+COMMAND in experiments/ before deciding this).
+requireReplySentinels.txt
+(closed dispatch; prefer `# run` plus SSA_RUNNER over
+`# script` if this is yes). dropSandbox.txt (always sh vs
+exec python3).
+mixedReplyKinds.txt (more examples). subAgents.txt (do
+not add a fifth kind here). doNot.txt (no JSON tools,
+no second edit shape). editReadThroughSandbox.txt
+(write/edit stay harness). securityModel.txt (untrusted
+model, ask then run). Nested ssa inherits SSA_RUNNER if
+it stays in the environment (do not unset it for
+scripts unless a later auth task says to).
+
+Size:
+0 in `ssa` if you keep only shell. If yes, on top of
+requireReplySentinels: about 50–80 more (SSA_RUNNER
+default and parse, startup `command -v` per word, `#
+run` match, prompt append, temp file + exec, ask
+label, -h). Tests, AGENTS.md, and README are extra, not
+in that count.
+
+Tests:
+If no: none. If yes: fake curl, SSA_NO_ASK=1. Default
+(unset) is sh only: `# run python3` is a format error
+even if python3 exists. Every canned script reply gets
+`# run sh`. SSA_RUNNER="sh python3" with a stub
+`python3` on PATH: payload file is the program, not the
+whole reply. SSA_RUNNER="/path/to/stub" and `# run
+/path/to/stub` match exactly. SSA_RUNNER="python3"
+without python3 on PATH dies at startup (name the env
+var). Empty SSA_RUNNER dies. Unknown `# run ruby` and
+empty `# run` are format errors. Empty payload
+format-errors. Notes before `# run sh` are not fed to
+sh. Write/edit still work when python3 is on the list
+(they must not invoke it). showHelp mentions
+SSA_RUNNER. Do not require a real python3/node for the
+default-sh stories.
