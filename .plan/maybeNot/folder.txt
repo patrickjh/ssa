@@ -3,6 +3,7 @@ queue. Do not implement these unless a human decides they
 fit and moves the file to tasks/ and lists the stem in
 plan.txt.
 
+alwaysKeepTemp.txt          always keep the temp folder
 requireReplySentinels.txt   closed dispatch (# script)
 runOtherLanguages.txt       one interpreter (not a menu)
 proxyDocs.txt               dummy-key injector README

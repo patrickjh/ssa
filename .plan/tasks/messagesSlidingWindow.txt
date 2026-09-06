@@ -25,8 +25,9 @@ fat stdout die; the caller starts a new ssa (SSA_CONTEXT if
 needed).
 
 Related: tests/capMessages/. maybeNot/subAgents.txt (child
-stdout can blow the cap). alwaysKeepTemp.txt (promptN copies
-are the record; the POST body is still capped).
+stdout can blow the cap). maybeNot/alwaysKeepTemp.txt
+(promptN copies are the record; the POST body is still
+capped).
 
 Size:
 About 20 lines out of ssa (drop loop and can_drop). Tests and

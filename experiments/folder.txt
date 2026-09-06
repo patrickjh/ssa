@@ -3,3 +3,4 @@ these trees into ssa, tests/, -h, or AGENTS.md Layout.
 
 runSentinel/   # run + SSA_RUNNER, no SSA_SANDBOX_COMMAND
 formatError/   one FORMAT_ERROR + shared spec + # script
+interpreter/   one SSA_INTERPRETER + # script (not a menu)

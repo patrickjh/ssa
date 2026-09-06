@@ -3,9 +3,13 @@ When done, delete that file and drop the stem here.
 
 oneFormatError
 formatErrorInPrompt
+unnecessaryVariables
 messagesSlidingWindow
 malformedHttpSuccess
-alwaysKeepTemp
+validateKeepTemp
+writeEditInHarness
+noEdits
+noWrites
 dropSandbox
 hardenAskListingUnicode
 shortFunctions
