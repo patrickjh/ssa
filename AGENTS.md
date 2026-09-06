@@ -122,8 +122,9 @@ repeat) with:
    `# edit file: PATH`), apply one unique SEARCH/REPLACE in the
    harness then write through the same layers; if the reply is empty,
    has a markdown fence line, has thinking tags (`<think>` or
-   `<|channel>thought`), or `sh -n` fails, append a format error
-   and continue (do not run it); else run through ask / command
+   `<|channel>thought`), or `sh -n` fails, append one format-error
+   string (the four shapes; not which check fired) and continue
+   (do not run it); else run through ask / command
    layers; capture script output, then append it to `messages.json`
    (if jq cannot hold it, or it contains a NUL, omit those bytes and
    append a short note plus the exit code instead).

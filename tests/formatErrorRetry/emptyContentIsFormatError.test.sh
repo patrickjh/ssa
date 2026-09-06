@@ -18,5 +18,5 @@ REPLY
 
 run_ssa_task print a greeting then stop
 expect_exit 0
-expect_stdout_has 'Format error: empty reply'
+expect_stdout_has 'Format error: use exactly one of'
 expect_stderr_has 'done: after 2 model prompts'
