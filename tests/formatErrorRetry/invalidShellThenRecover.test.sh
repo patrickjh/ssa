@@ -24,7 +24,7 @@ REPLY
 
 run_ssa_task print a greeting then stop
 expect_exit 0
-expect_stdout_has 'Format error: use exactly one of'
+expect_stdout_has 'Format error'
 expect_stdout_lacks 'should-not-run'
 expect_stdout_has 'hello-from-script'
 expect_stderr_has 'done: after 3 model prompts'

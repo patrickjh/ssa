@@ -101,29 +101,28 @@ Example:
   ssa why is apt not updating?
 '
 
-SYSTEM_PROMPT='You help users solve tasks with POSIX shell scripts, write
+SYSTEM_PROMPT_INTRO='You help users solve tasks with POSIX shell scripts, write
 requests, and edit requests. Each turn you get a task, prior commands and
-their output. Continue from there with exactly one of the following response
-types per turn to help complete the task. No markdown fences, no thinking
-tags. Put reasoning in # comments.
+their output. Continue from there with exactly one of the following: a
+POSIX sh script, a write request, an edit request, or the task complete
+marker. No markdown fences, no thinking tags. Put reasoning in # comments.
+Prefer write and edit requests over POSIX tools for files because they
+have no quoting issues.'
 
-Response Type 1: A POSIX sh script.
+REPLY_SPEC='These are the valid reply formats:
+
+A POSIX sh script. Example:
 
 ls -la
 
-Response Type 2: A raw file write. You write reasoning comments and then
-# write file: PATH. Everything after # write file: PATH is the raw file
-contents. Prefer this over POSIX tools for writing files because this
-has no quoting issues.
+A write request is "# write file: PATH" then raw file contents. Example:
 
 # write file: hello.txt
 hello
 world
 
-Response Type 3: A file edit. You write reasoning comments and then
-# edit file: PATH. We search for the search block and replace with the replace
-block. The search block must match exactly once in the file. Prefer this for
-edits over sed and other POSIX tools because this has no quoting issues.
+An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
+block must match exactly once. Example:
 
 # edit file: hello.txt
 <<<<<<< SEARCH
@@ -133,29 +132,10 @@ hello
 world
 >>>>>>> REPLACE
 
-Response Type 4: The complete signal. When the task is done, reply with exactly
-this line in a separate turn. Do not append this to the end of other turns.
+The task complete marker is "# complete" in its own turn.
+Do not append it to other turns. Example:
 
-# complete
-'
-
-FORMAT_ERROR='Format error: use exactly one of:
-
-ls -la
-
-# write file: PATH
-bytes
-
-# edit file: PATH
-<<<<<<< SEARCH
-old
-=======
-new
->>>>>>> REPLACE
-
-# complete
-
-No markdown fences, no thinking tags.'
+# complete'
 
 REVIEW_ASK='Reply with plain text: what would have made this run go better?'
 
@@ -459,7 +439,8 @@ cleanup_temp_folder() {
 setup_messages_file() {
     SYSTEM_PROMPT_FILE="${TEMP_FOLDER}/systemPrompt.txt"
     create_file_no_overwrite "$SYSTEM_PROMPT_FILE"
-    printf '%s\n' "$SYSTEM_PROMPT" >"$SYSTEM_PROMPT_FILE" ||
+    printf '%s\n\n%s\n' "$SYSTEM_PROMPT_INTRO" "$REPLY_SPEC" \
+        >"$SYSTEM_PROMPT_FILE" ||
         die "cannot write system prompt"
     # shellcheck disable=SC2086
     jq $JQ_BINARY_FLAG -n \
@@ -697,10 +678,12 @@ reply_has_thinking_tags() {
 }
 
 record_format_error() {
-    printf '%s\n' "$FORMAT_ERROR" | tee "$SCRIPT_OUTPUT_FILE"
+    printf '%s\n\n%s\n' 'Format error: ' "$REPLY_SPEC" |
+        tee "$SCRIPT_OUTPUT_FILE"
     echo 1 >"$EXIT_CODE_FILE" ||
         die "cannot write script exit code"
-    printf '%s\n' "$FORMAT_ERROR" >"$USER_TURN_FILE" ||
+    printf '%s\n\n%s\n' 'Format error: ' "$REPLY_SPEC" \
+        >"$USER_TURN_FILE" ||
         die "cannot write format error"
     append_user_turn
 }

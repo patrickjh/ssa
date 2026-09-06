@@ -33,6 +33,8 @@ Copy the formatError fork's dispatch, not the whole file.
   EXIT_CODE_FILE and append_script_result still run in the harness.
 - Prompt: one # script plus ls -la in the spec. Do not add # run.
   Do not add ask kind labels unless a later job asks.
+  `# reasoning:` lines on the examples are
+  reasoningInExamples.txt (after this).
 - Fake first turn is # script then echo starting the agent.
 - Every canned tests/ script reply gets # script. Write and edit
   unchanged.
@@ -48,3 +50,7 @@ is a format error. emptyWritePathRunsAsScript becomes a format
 error. trailingDoneCommentIsNotDone still runs (# complete is in
 the payload). Fence and think tags still retry. Write/edit still
 lack Format error.
+
+Related: reasoningInExamples.txt (comment lines on the
+spec examples; after this). maybeNot/requireReplySentinels.txt.
+writeEditInHarness.txt. mixedReplyKinds.txt.
