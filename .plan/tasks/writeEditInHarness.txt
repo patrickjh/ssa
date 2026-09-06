@@ -1,0 +1,57 @@
+writeEditInHarness — write and edit in the harness, not via sh -c
+
+Why:
+Write already extracts bytes with sed and edit already
+unique-replaces with jq. Only the final > goes through
+"$SSA_SANDBOX_COMMAND" -c. That is why -h says the sandbox
+must support -c for write and edit, and why
+maybeNot/runOtherLanguages.txt used to fail those turns
+when the interpreter is not sh. File bytes are not a
+program. Do not invent python -c / node -e adapters. Do
+not keep a hidden sh for those turns (that is a second
+binary again).
+
+A wrapper jail on COMMAND will no longer see writes.
+That is the same split editReadThroughSandbox.txt already
+worries about for reads. Isolation that should cover
+files wraps the whole ssa process (dropSandbox.txt). Do
+not keep -c only for jails.
+
+Do:
+After ask, extract the write payload the same way
+extract_edit_payload does (sentinel to end, drop the
+sentinel). Write with cat > "$1" (or equivalent) in the
+harness, path as $1, never interpolated. Success still
+prints wrote file: PATH / edited file: PATH. Missing
+parent, permissions, and failed unique-replace stay
+exit 1, file unchanged, loop continues. Reuse the
+existing tee / exit-code / append_script_result path;
+do not pipe writes or edits through
+run_in_configured_sandboxes. Drop the -c contract from
+-h and AGENTS.md. Scripts stay
+"$SSA_SANDBOX_COMMAND" < stdin.
+
+Ask still wraps the write. One file per reply. The
+harness does not create parent folders. Do not change
+SSA_SANDBOX_COMMAND to mean "scripts are Python."
+
+Related: noWrites.txt / noEdits.txt (disable the
+sentinels; land this first). dropSandbox.txt (wrap ssa;
+no COMMAND left to -c). editReadThroughSandbox.txt
+(after this, read and write are both harness).
+maybeNot/runOtherLanguages.txt (interpreter is only
+script turns). maybeNot/experimentRunSentinel.txt
+(fork used listed sh -c; not this product change).
+scriptSentinel.txt (same sed extract for # script).
+
+Size:
+About 20 lines in ssa (15–25): extract write payload,
+harness cat, drop the two -c strings. Tests and
+AGENTS.md extra, not in that count.
+
+Tests:
+Existing writeFileRequest/ and editFileRequest/ must
+still pass (they already use default sh). Add a stub
+SSA_SANDBOX_COMMAND that rejects -c or is not sh:
+write and edit still land; a script turn still hits
+the stub. Fake curl, SSA_NO_ASK=1.

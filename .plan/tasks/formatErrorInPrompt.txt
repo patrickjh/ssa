@@ -23,20 +23,23 @@ short prefix (`Format error:`) plus that spec. SYSTEM_PROMPT is
 intro prose (role, one of four, reasoning in # comments) plus
 the same spec. Do not paste the whole SYSTEM_PROMPT (role and
 quoting rationale) into every error turn. Do not name env vars.
-Live runner tokens stay an append after parse
-(write_system_prompt_file), not inside the shared spec.
+If runOtherLanguages lands, substitute the one
+SSA_INTERPRETER word into the prompt file only, not inside
+the shared spec. If noWrites.txt / noEdits.txt land, the
+shared spec omits those sentinels when the knob is 1
+(the valid kinds changed). Still do not name env vars.
 
-Pick one wording for the samples (`# run sh` / `ls -la` vs
-`# run NAME` / `program`) and use it in both. A skeleton that
-says `program` is a worse copy target; the prompt's worked
-samples are a mix risk on the error turn
-(mixedReplyKinds.txt). If live runs concatenate, stop; do not
-add a second-sentinel harness rule here.
+Pick one wording for the samples (`# script` / `ls -la` vs a
+skeleton) and use it in both. A skeleton that says `program`
+is a worse copy target; the prompt's worked samples are a mix
+risk on the error turn (mixedReplyKinds.txt). If live runs
+concatenate, stop; do not add a second-sentinel harness rule
+here.
 
 Do not fold write failed, edit failed, or ask rejection into
-the spec. Do not bake # run into product until
-maybeNot/requireReplySentinels / runOtherLanguages say yes; the
-shared spec follows the sentinels that exist.
+the spec. Do not bake # run into product. runOtherLanguages
+uses `# script` plus one interpreter; the shared spec follows
+the sentinels that exist.
 
 The runSentinel fork may try this first. Do not treat a fork
 try as the product change.
@@ -46,6 +49,7 @@ mixedReplyKinds.txt (reprinting examples on the user turn).
 maybeNot/requireReplySentinels.txt.
 maybeNot/runOtherLanguages.txt.
 maybeNot/experimentRunSentinel.txt.
+noWrites.txt. noEdits.txt.
 
 Size:
 If no: 0. If yes: about 15 lines out of `ssa` (FORMAT_ERROR body

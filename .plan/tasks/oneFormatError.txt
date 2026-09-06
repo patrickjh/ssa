@@ -27,13 +27,16 @@ Do not fold write failed, edit failed, or ask rejection into
 it. Those are results, not format.
 
 If maybeNot/requireReplySentinels or runOtherLanguages ever
-land, this string follows those sentinels. Do not add
-FORMAT_ERROR_* then; update this one. Do not bake # run into
-product here.
+land, this string follows those sentinels. If noWrites.txt
+or noEdits.txt land, omit those kinds from this string
+(and from SYSTEM_PROMPT). Do not name the env vars. Do
+not add FORMAT_ERROR_* then; update this one. Do not bake
+# run into product here.
 
 Related: maybeNot/experimentRunSentinel.txt (fork already did this).
 maybeNot/requireReplySentinels.txt.
 maybeNot/runOtherLanguages.txt.
+noWrites.txt. noEdits.txt.
 mixedReplyKinds.txt. malformedHttpSuccess.txt (empty content
 stays a format error; same string). formatErrorInPrompt.txt
 (reuse that string in SYSTEM_PROMPT; later).

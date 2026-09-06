@@ -11,7 +11,9 @@ after that line. Do not also accept a bare script.
 experiments/formatError/ssa already does this. Do not copy # run /
 SSA_RUNNER from runSentinel. maybeNot/requireReplySentinels.txt
 wanted a payload temp file; do not add one. sed the tail off
-latestModelResponse.txt, same idea as write -c.
+latestModelResponse.txt, same sed as the write payload
+extract (writeEditInHarness.txt; today that sed lives
+inside -c).
 
 Do:
 Copy the formatError fork's dispatch, not the whole file.

@@ -1,0 +1,57 @@
+noWrites — SSA_NO_WRITES disables # write file:
+
+Why:
+Callers who do not want write requests need a 0|1 knob
+like SSA_NO_ASK. A Python-only run can still write files
+once writeEditInHarness lands; this setting is for runs
+that should not offer that sentinel. Not a jail. Not a
+substitute for making writes work without sh.
+
+Do:
+SSA_NO_WRITES default 0. Users can set. Validate 0|1 at
+startup like check_no_ask_setting. Alphabetize with the
+other SSA_ names (after SSA_NO_EDITS). Empty or other
+values: die, name the env var, ; see ssa -h for help.
+Unset is 0. No flag.
+
+When 1: # write file: PATH is a format error (same
+string as other format errors once oneFormatError
+lands). Do not run it as a script. Do not die. Do not
+print wrote file:. Ask does not run. The file is
+unchanged. Keep recognizing the sentinel in
+first_action_line while leftover-as-script exists;
+dropping it would feed the payload to sh. After
+scriptSentinel lands, an unknown first action line is
+already a format error; either keep the explicit branch
+or drop # write file: from the known list only if
+# script is required.
+
+Omit the write response type from SYSTEM_PROMPT when
+the knob is 1. Same for the FORMAT_ERROR skeleton
+(oneFormatError.txt / formatErrorInPrompt.txt). Do not
+name SSA_NO_WRITES in that error string. Do not leave a
+write example in a no-write run.
+
+Do not merge with SSA_NO_EDITS. Independent knobs.
+NO_WRITES=1 with edits still on is valid. Land after
+writeEditInHarness.txt. Document in -h (one sentence;
+meaning is unclear without it). Settings table in
+AGENTS.md.
+
+Related: noEdits.txt. writeEditInHarness.txt.
+oneFormatError.txt. formatErrorInPrompt.txt.
+scriptSentinel.txt. maybeNot/runOtherLanguages.txt
+(do not use this knob as the python story).
+
+Size:
+About 20 lines in ssa (15–25): setting, check,
+predicate, handle_model_response branch, prompt omit,
+-h. Tests and AGENTS.md extra, not in that count.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. Default unset still writes.
+SSA_NO_WRITES=1 plus a canned # write file: is a
+format error and does not create or change the file.
+SSA_NO_WRITES=2 dies at startup. showHelp mentions
+the var. A later # complete still works. Existing
+writeFileRequest/ stories still pass with default 0.

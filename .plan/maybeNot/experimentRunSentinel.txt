@@ -10,7 +10,10 @@ fork also tries dropSandbox.txt: no SSA_SANDBOX_COMMAND, a
 jail is just another SSA_RUNNER token. A fork under
 experiments/ can answer both without touching ssa, tests/, or
 -h. Undecided whether either lands in the product. Do not
-treat merging the fork as this job.
+treat merging the fork as this job. runOtherLanguages.txt
+later chose one SSA_INTERPRETER and `# script`, not this
+list. Leave the fork as a try of the menu; do not copy
+that dispatch into ssa.
 
 Do:
 Copy `./ssa` to `experiments/runSentinel/ssa` and patch only
@@ -50,9 +53,11 @@ maybeNot/runOtherLanguages.txt):
 - Write and edit are raw bytes, not a program. Do not pipe
   them at python3 or node. They use a listed `sh` only.
 
-Write/edit gate: `sh` is on SSA_RUNNER if a token is exactly
-`sh`. Not `bash`, `dash`, `jail-sh`, or a path. Put the
-jail on PATH as `sh` if you want jailed writes and
+Write/edit gate: this fork still tries listed `sh -c`.
+Product write/edit I/O is writeEditInHarness.txt; do not
+copy this gate into ssa. `sh` is on SSA_RUNNER if a token
+is exactly `sh`. Not `bash`, `dash`, `jail-sh`, or a path.
+Put the jail on PATH as `sh` if you want jailed writes and
 `# run sh`.
 
 If that token exists: same `-c` sed/cat as today (path as
@@ -150,16 +155,23 @@ After notes.txt has a live try (or why you could not) and
 a yes/no leaning: leave maybeNot/runOtherLanguages.txt and
 dropSandbox.txt undecided until a human says yes. If no:
 keep the fork or delete experiments/; do not patch ./ssa.
-If yes: later jobs copy dispatch and/or drop COMMAND into
-ssa (every canned tests/ script reply, sandbox tests, -h).
-Those merges are not this task.
+If the product job is yes, copy one interpreter and
+`# script`, not this list dispatch. Write and edit in
+the product are harness I/O (writeEditInHarness.txt),
+not listed `sh -c`. Dropping COMMAND is still
+dropSandbox.txt. Those merges are not this task.
 
-Related: maybeNot/runOtherLanguages.txt (product # run /
-SSA_RUNNER).
+Related: maybeNot/runOtherLanguages.txt (product is now one
+SSA_INTERPRETER and `# script`, not this list). The fork
+tried `# run` plus a menu; do not copy that dispatch into
+ssa.
 dropSandbox.txt (product COMMAND removal; try it here
-first). maybeNot/requireReplySentinels.txt (closed dispatch).
-mixedReplyKinds.txt. editReadThroughSandbox.txt (edit
-read through listed `sh` only). doNot.txt (Gemma
+first). writeEditInHarness.txt (product write/edit I/O;
+this fork's listed-sh gate is not that change).
+noWrites.txt / noEdits.txt (optional product knobs; not
+this fork). maybeNot/requireReplySentinels.txt (closed
+dispatch). mixedReplyKinds.txt. editReadThroughSandbox.txt
+(edit read through listed `sh` only). doNot.txt (Gemma
 envelopes; no bin/ in product). oneFormatError.txt (fork
 uses one FORMAT_ERROR; product still has EMPTY vs
 NOT_SHELL). formatErrorInPrompt.txt (same spec in the

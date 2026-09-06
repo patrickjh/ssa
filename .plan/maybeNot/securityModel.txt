@@ -4,8 +4,9 @@ Why:
 README Safety says the model gets your terminal, then ask-user and
 an optional sandbox wrapper. That is the controls, not the model:
 what is trusted, what the two layers stop, and what they do not.
-AGENTS.md Design is wiring (ask tty, stdin to COMMAND, write -c).
-Humans and agents both guess the rest (key file in the temp
+AGENTS.md Design is wiring (ask tty, stdin to COMMAND,
+write/edit in the harness). Humans and agents both guess
+the rest (key file in the temp)
 folder, listing vs run, provider sees the transcript, --no-ask).
 
 Do:
@@ -21,7 +22,8 @@ Above or around them, state the model in short sentences:
   the model already ran) is untrusted. Default COMMAND is sh as
   you. Ask is the default gate; --no-ask removes it.
 - Two layers: ask, then COMMAND. Combine both. Neither is a
-  network jail by itself. Write/edit paths are your filesystem.
+  network jail by itself. Write/edit paths are the harness
+  filesystem (writeEditInHarness.txt), not COMMAND.
 - The listing (and review, if that has landed) may show escaped
   CR/ESC/non-print; the sandbox file is raw. See
   sanitizeOutput / hardenAskListingUnicode.
