@@ -59,7 +59,7 @@ checks, resolve paths, or set up state — callers invoke helpers such as
 - Help: `./ssa -h` (or `sh ssa -h`).
 - Smoke run (needs a real API): set `SSA_URL`, `SSA_KEY` if
   required, and `SSA_MODEL`; add `SSA_NO_ASK=1` when there is no TTY.
-- Keep temp logs: `SSA_KEEP_TEMP=1`.
+- Keep temp logs: `SSA_KEEP_TEMP=1` (`0` or `1`, like `SSA_NO_ASK`).
 - Live tests: **only** via `sh tests/runTests.sh`. The runner starts
   each `*.test.sh` in a background process with its own temp folder
   and harness env (`TEST_TEMP_FOLDER`, `TEST_UTILS_FILE`), waits,
@@ -342,7 +342,7 @@ Built-in OpenAI-compatible `/chat/completions` client:
 | Setting | Default |
 |---------|---------|
 | `SSA_CONTEXT` | empty (off) |
-| `SSA_KEEP_TEMP` | `0` (discard) |
+| `SSA_KEEP_TEMP` | `0` (discard; `0` or `1`) |
 | `SSA_KEY` | empty (optional) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
 | `SSA_MODEL` | unset (required) |
@@ -427,7 +427,7 @@ When the user can fix a failure by changing a **user-facing setting**,
 say how: name the env var. Pattern:
 
 ```sh
-die "SSA_URL not set; set SSA_URL; see ssa -h for help"
+die "SSA_URL not set; see ssa -h for help"
 ```
 
 Keep hints one short clause after a semicolon. Prefer
@@ -440,8 +440,7 @@ Keep hints one short clause after a semicolon. Prefer
   say to install or put the tool on `PATH`.
 - Failures fixed outside ssa (API billing, account quota).
 
-The task has **no env var** — say to pass words after options or pipe
-stdin.
+The task has **no env var** — say it was not found on stdin or CLI.
 
 `die` prints on stderr and sends SIGUSR1 to `PID`. Opening quote
 starts on the **same line** as `die`. Wrap at **80 columns** with
@@ -464,6 +463,7 @@ logging or side effects). Use `return $CONSTANT_NAME` (with `$`).
   (or `return $CONSTANT_NAME`) when that is the whole branch.
   Stay under 80 columns. A longer `then` stays a block.
 - `case` arms prefer one line: `pattern) action ;;`.
+  Indent each arm 4 spaces from `case`.
 
 ## Static strings
 

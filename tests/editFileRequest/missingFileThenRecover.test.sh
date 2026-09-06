@@ -42,6 +42,7 @@ expect_exit 0
 expect_stderr_has 'done: after 4 model prompts'
 expect_stdout_has 'edit failed:'
 expect_stdout_has 'file not found'
+expect_stdout_lacks 'Format error'
 expect_stdout_has 'wrote file: notes.txt'
 expect_stdout_has 'edited file: notes.txt'
 expect_file_equals "$WORK_FOLDER/notes.txt" \

@@ -13,7 +13,7 @@ Acceptance:
 - Create new file and overwrite existing file
 - Success prints "wrote file: PATH" on stdout (and into the transcript)
 - Write to a missing parent folder fails; a later mkdir script plus
-  retried write recovers
+  retried write recovers (not a format error)
 - First line "# write file:" with no path is a format error, not a
   script
 - Path with spaces ("# write file: my file.txt") writes that file

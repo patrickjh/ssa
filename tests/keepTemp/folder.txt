@@ -1,0 +1,2 @@
+SSA_KEEP_TEMP must be 0 or 1. Any other value is a usage error
+(exit 1) before the agent loop starts.

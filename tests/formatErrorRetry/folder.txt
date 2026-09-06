@@ -2,6 +2,8 @@ Invalid shell (prose, markdown fences, thinking tags, Gemma thought
 channels, syntax errors), empty replies, bare scripts, and empty
 # script payloads are not run. The same format error (shared reply
 spec as the system prompt, including # reasoning: on the script,
-write, and edit examples) is appended and the loop continues so
-the model can recover. Writes and edits skip fence and think checks
-so payloads may contain those bytes.
+write, and edit examples, and prefer-write / prefer-edit quoting
+rationale) is appended and the loop continues so the model can
+recover. Writes and edits skip fence and think checks so payloads
+may contain those bytes. A failed write or edit is not a format
+error.

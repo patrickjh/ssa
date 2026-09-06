@@ -13,6 +13,7 @@ Acceptance:
 - Empty new deletes the old block
 - 0 matches or 2+ matches leave the file unchanged; model recovers
 - Missing file fails; a later write or create plus edit recovers
+  (not a format error)
 - "# edit file:" with no path is a format error, not a script
 - Payload containing ``` is not a format error
 - Missing SEARCH/REPLACE markers is a failed edit, not a format error

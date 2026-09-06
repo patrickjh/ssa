@@ -19,6 +19,8 @@ REPLY
 SAMPLE='# write file: hello.txt'
 REASON_SCRIPT='# reasoning: look at the files in the folder'
 REASON_WRITE='# reasoning: write a hello.txt file'
+PREFER_WRITE='Prefer this over POSIX tools for writing files'
+PREFER_EDIT='Prefer this for edits over sed'
 
 SSA_KEEP_TEMP=1 run_ssa_task print a greeting then stop
 expect_exit 0
@@ -27,6 +29,8 @@ expect_stdout_has "$SAMPLE"
 expect_stdout_has '# script'
 expect_stdout_has "$REASON_SCRIPT"
 expect_stdout_has "$REASON_WRITE"
+expect_stdout_has "$PREFER_WRITE"
+expect_stdout_has "$PREFER_EDIT"
 expect_stderr_has 'done: after 2 model prompts'
 
 BODY=$(get_prompt_body_file 1)
@@ -40,6 +44,8 @@ printf '%s\n' "$PROMPT" | grep -qF -- "$REASON_SCRIPT" ||
     fail "system prompt missing: $REASON_SCRIPT"
 printf '%s\n' "$PROMPT" | grep -qF -- "$REASON_WRITE" ||
     fail "system prompt missing: $REASON_WRITE"
+printf '%s\n' "$PROMPT" | grep -qF -- "$PREFER_WRITE" ||
+    fail "system prompt missing: $PREFER_WRITE"
 if printf '%s\n' "$PROMPT" | grep -B2 '^# complete$' |
     grep -qF -- '# reasoning:'
 then

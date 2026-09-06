@@ -104,10 +104,8 @@ Example:
 SYSTEM_PROMPT_INTRO='You help users solve tasks with POSIX shell scripts, write
 requests, and edit requests. Each turn you get a task, prior commands and
 their output. Continue from there with exactly one of the following: a
-script request, a write request, an edit request, or the task complete
-marker. No markdown fences, no thinking tags. Put reasoning in # comments.
-Prefer write and edit requests over POSIX tools for files because they
-have no quoting issues.'
+script request, a write request, an edit request, or the task complete marker.
+No markdown fences, no thinking tags. Put reasoning in # comments.'
 
 REPLY_SPEC='These are the valid reply formats:
 
@@ -118,7 +116,9 @@ script lines with #. Example:
 # script
 ls -la
 
-A write request is "# write file: PATH" then raw file contents. Example:
+A write request is "# write file: PATH" then raw file contents.
+Prefer this over POSIX tools for writing files because this has no
+quoting issues. Example:
 
 # reasoning: write a hello.txt file
 # write file: hello.txt
@@ -126,7 +126,8 @@ hello
 world
 
 An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
-block must match exactly once. Example:
+block must match exactly once. Prefer this for edits over sed and other
+POSIX tools because this has no quoting issues. Example:
 
 # reasoning: edit the hello.txt file
 # edit file: hello.txt
@@ -232,15 +233,15 @@ check_command() {
 read_task_from_stdin_if_needed() {
     if [ -n "$TASK" ]; then return; fi
     if [ -t 0 ]; then return; fi
-    TASK=$(cat) ||
-        die "cannot read task from stdin; pass task as words after CLI " \
-          "options or pipe task to stdin; see ssa -h for help"
+    TASK=$(cat) || die "cannot read task from stdin; pass task as words " \
+          "after CLI options or pipe task to stdin; see ssa -h for help"
 }
 
 check_can_run() {
     check_task_is_set
     check_max_model_prompts
-    check_no_ask_setting
+    check_no_ask
+    check_keep_temp
     check_model_is_set
     check_url_is_set
     check_sandbox_command
@@ -251,66 +252,60 @@ check_can_run() {
 
 check_task_is_set() {
     [ -n "$TASK" ] ||
-        die "no task; pass task as words after CLI options or pipe task on " \
-          "stdin; see ssa -h for help"
+        die "task not found on stdin or CLI; see ssa -h for help"
 }
 
 check_max_model_prompts() {
     case $SSA_MAX_MODEL_PROMPTS in
-    *[!0-9]*) die "SSA_MAX_MODEL_PROMPTS must be a non-negative integer; " \
-        "set SSA_MAX_MODEL_PROMPTS; see ssa -h for help" ;;
+        *[!0-9]*) die "invalid SSA_MAX_MODEL_PROMPTS; see ssa -h for help" ;;
     esac
 }
 
-check_no_ask_setting() {
-    case $SSA_NO_ASK in
-    0|1) ;;
-    *) die "SSA_NO_ASK must be 0 or 1; set SSA_NO_ASK; " \
-        "see ssa -h for help" ;;
-    esac
+check_no_ask() {
+    if [ "$SSA_NO_ASK" != 0 ] && [ "$SSA_NO_ASK" != 1 ]; then
+        die "SSA_NO_ASK must be 0 or 1; see ssa -h for help"
+    fi
+}
+
+check_keep_temp() {
+    if [ "$SSA_KEEP_TEMP" != 0 ] && [ "$SSA_KEEP_TEMP" != 1 ]; then
+        die "SSA_KEEP_TEMP must be 0 or 1; see ssa -h for help"
+    fi
 }
 
 check_model_is_set() {
-    [ -n "$SSA_MODEL" ] ||
-        die "model not set; set SSA_MODEL (e.g. gpt-4o-mini); " \
-            "see ssa -h for help"
+    [ -n "$SSA_MODEL" ] || die "SSA_MODEL not set; see ssa -h for help"
 }
 
 check_url_is_set() {
-    [ -n "$SSA_URL" ] ||
-        die "SSA_URL not set; set SSA_URL; see ssa -h for help"
+    [ -n "$SSA_URL" ] || die "SSA_URL not set; see ssa -h for help"
 }
 
 check_sandbox_command() {
     command -v "$SSA_SANDBOX_COMMAND" >/dev/null 2>&1 ||
-        die "sandbox command not found: $SSA_SANDBOX_COMMAND; " \
-        "set SSA_SANDBOX_COMMAND; see ssa -h for help"
+        die "sandbox not found: $SSA_SANDBOX_COMMAND; see ssa -h for help"
 }
 
 check_request_json() {
     if [ -z "$SSA_REQUEST_JSON" ]; then return; fi
     printf '%s' "$SSA_REQUEST_JSON" |
         jq -e 'type == "object"' >/dev/null 2>&1 ||
-        die "SSA_REQUEST_JSON must be a JSON object; " \
-            "set SSA_REQUEST_JSON; see ssa -h for help"
+        die "SSA_REQUEST_JSON must be a JSON object; see ssa -h for help"
 }
 
 check_context() {
     if [ -z "$SSA_CONTEXT" ]; then return; fi
     if [ "$SSA_CONTEXT" = "-" ]; then
-        die "SSA_CONTEXT cannot be - (stdin is the task); " \
-            "see ssa -h for help"
+        die "SSA_CONTEXT cannot be -; see ssa -h for help"
     fi
     if [ ! -f "$SSA_CONTEXT" ] || [ ! -r "$SSA_CONTEXT" ]; then
-        die "context file not a readable regular file: $SSA_CONTEXT; " \
-            "set SSA_CONTEXT; see ssa -h for help"
+        die "cannot read context file: $SSA_CONTEXT; see ssa -h for help"
     fi
 }
 
 check_prompt_device() {
     ( exec </dev/tty ) 2>/dev/null ||
-        die "need /dev/tty to ask before running scripts; " \
-        "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+        die "need /dev/tty or set SSA_NO_ASK=1; see ssa -h for help"
 }
 
 setup_agent_loop() {
@@ -400,14 +395,10 @@ log_context() {
 
 check_context_is_json_safe() {
     # shellcheck disable=SC2086
-    if jq $JQ_BINARY_FLAG -e -n \
+    jq $JQ_BINARY_FLAG -e -n \
         --rawfile content "$CONTEXT_FILE" \
-        '$content | contains("\u0000") | not' >/dev/null 2>&1
-    then
-        return
-    fi
-    die "context file is not valid UTF-8 (NUL or binary bytes); " \
-        "set SSA_CONTEXT; see ssa -h for help"
+        '$content | contains("\u0000") | not' >/dev/null 2>&1 ||
+        die "context file is not valid UTF-8; see ssa -h for help"
 }
 
 setup_temp_cleanup() {
@@ -520,11 +511,7 @@ cap_messages_file() {
 }
 
 messages_file_over_byte_cap() {
-    if [ "$(messages_file_byte_count)" -gt "$MAX_MESSAGES_BYTES" ]
-    then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
+    [ "$(messages_file_byte_count)" -gt "$MAX_MESSAGES_BYTES" ]
 }
 
 messages_file_byte_count() {
@@ -536,10 +523,7 @@ messages_file_byte_count() {
 
 can_drop_old_message() {
     # jq may emit CRLF; strip so the integer test is safe.
-    if [ "$(jq 'length' "$MESSAGES_FILE" | tr -d '\r')" -gt 3 ]; then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
+    [ "$(jq 'length' "$MESSAGES_FILE" | tr -d '\r')" -gt 3 ]
 }
 
 drop_oldest_extra_message() {
@@ -596,8 +580,7 @@ send_curl_json_request() {
         --data-binary @"$JSON_BODY_FILE" \
         -o "$CURL_RESPONSE_FILE" \
         "$SSA_URL" ||
-        die "curl failed; check SSA_URL, SSA_MODEL, and " \
-            "SSA_KEY; see ssa -h for help"
+        die "curl failed; see ssa -h for help"
 }
 
 save_model_reply_to_file() {
@@ -661,34 +644,21 @@ append_assistant_turn() {
 }
 
 agent_is_done() {
-    if [ "$(first_action_line)" = '# complete' ]; then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
+    [ "$(first_action_line)" = '# complete' ]
 }
 
 reply_is_blank() {
-    if grep -q '[^[:space:]]' "$MODEL_RESPONSE_FILE"; then
-        return $IS_FALSE
-    fi
-    return $IS_TRUE
+    ! grep -q '[^[:space:]]' "$MODEL_RESPONSE_FILE"
 }
 
 reply_has_fence_line() {
-    if grep -q '^```' "$MODEL_RESPONSE_FILE"; then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
+    grep -q '^```' "$MODEL_RESPONSE_FILE"
 }
 
 reply_has_thinking_tags() {
-    if grep -qF -- '<think>' "$MODEL_RESPONSE_FILE" ||
+    grep -qF -- '<think>' "$MODEL_RESPONSE_FILE" ||
         grep -qF -- '</think>' "$MODEL_RESPONSE_FILE" ||
         grep -qF -- '<|channel>thought' "$MODEL_RESPONSE_FILE"
-    then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
 }
 
 record_format_error() {
@@ -703,10 +673,7 @@ record_format_error() {
 }
 
 reply_is_valid_shell() {
-    if script_payload | sh -n >/dev/null 2>&1; then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
+    script_payload | sh -n >/dev/null 2>&1
 }
 
 run_model_reply() {
@@ -750,8 +717,7 @@ apply_edit_request() {
 
 extract_edit_payload() {
     sed -n '/^# edit file: ./,$p' "$MODEL_RESPONSE_FILE" |
-        sed 1d >"$EDIT_PAYLOAD_FILE" ||
-        die "cannot write edit payload file"
+        sed 1d >"$EDIT_PAYLOAD_FILE" || die "cannot write edit payload file"
 }
 
 apply_unique_replace() {
@@ -802,8 +768,7 @@ first_action_line() {
 record_script_rejection() {
     printf 'User chose not to run script. Try something else.\n' |
         tee "$SCRIPT_OUTPUT_FILE"
-    echo 1 >"$EXIT_CODE_FILE" ||
-        die "cannot write script exit code"
+    echo 1 >"$EXIT_CODE_FILE" || die "cannot write script exit code"
     ask_user_for_rejection_reason
     append_script_result
 }
@@ -811,8 +776,7 @@ record_script_rejection() {
 ask_user_for_rejection_reason() {
     printf 'reason: ' >&2
     IFS= read -r REPLY </dev/tty ||
-        die "cannot read answer from /dev/tty; " \
-        "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+        die "need /dev/tty or set SSA_NO_ASK=1; see ssa -h for help"
     printf '%s\n' "$REPLY" \
         >"${PER_PROMPT_LOG_FOLDER}/userFeedback.txt" ||
         die "cannot write to temp file: " \
@@ -826,8 +790,7 @@ run_in_configured_sandboxes() {
         else
             "$SSA_SANDBOX_COMMAND" "$@" <"$SANDBOX_STDIN_FILE" 2>&1
         fi
-        echo $? >"$EXIT_CODE_FILE" ||
-            die "cannot write script exit code"
+        echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
     ) | tee "$SCRIPT_OUTPUT_FILE"
     append_script_result
 }
@@ -850,8 +813,7 @@ ask_user_to_approve_script() {
 print_model_script() {
     printf 'Script from model:\n' >&2
     # Show the script safely for ask review (file on disk unchanged).
-    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 ||
-        die "cannot show model script"
+    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 || die "cannot show model script"
 }
 
 handle_user_answers() {
@@ -873,16 +835,14 @@ print_ask_prompt() {
 
 read_ask_answer_from_tty() {
     IFS= read -r REPLY </dev/tty ||
-        die "cannot read answer from /dev/tty; " \
-        "set SSA_NO_ASK=1 in batch runs; see ssa -h for help"
+        die "need /dev/tty or set SSA_NO_ASK=1; see ssa -h for help"
     printf '%s\n' "$REPLY" >"$USER_ANSWER_FILE" ||
         die "cannot write to temp file: $USER_ANSWER_FILE"
 }
 
 print_invalid_input() {
     printf 'invalid input: ' >&2
-    sanitize_output <"$USER_ANSWER_FILE" >&2 ||
-        die "cannot show invalid input"
+    sanitize_output <"$USER_ANSWER_FILE" >&2 || die "cannot show invalid input"
 }
 
 append_script_result() {
@@ -891,8 +851,7 @@ append_script_result() {
         cat "$SCRIPT_OUTPUT_FILE"
         print_user_rejection_reason
         printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
-    } >"$USER_TURN_FILE" ||
-        die "cannot write user turn"
+    } >"$USER_TURN_FILE" || die "cannot write user turn"
     if ! user_turn_is_json_safe; then
         write_omitted_script_output
     fi
@@ -911,21 +870,16 @@ print_user_rejection_reason() {
 
 user_turn_is_json_safe() {
     # shellcheck disable=SC2086
-    if jq $JQ_BINARY_FLAG -e -n \
+    jq $JQ_BINARY_FLAG -e -n \
         --rawfile content "$USER_TURN_FILE" \
         '$content | contains("\u0000") | not' >/dev/null 2>&1
-    then
-        return $IS_TRUE
-    fi
-    return $IS_FALSE
 }
 
 write_omitted_script_output() {
     {
         printf '%s\n\n' "$OUTPUT_OMITTED_NOT_UTF8"
         printf 'Script exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
-    } >"$USER_TURN_FILE" ||
-        die "cannot write user turn"
+    } >"$USER_TURN_FILE" || die "cannot write user turn"
 }
 
 append_user_turn() {
@@ -955,8 +909,7 @@ review_work() {
     log_messages
     call_curl
     printf 'Feedback from model: ' >&2
-    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 ||
-        die "cannot show review feedback"
+    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 || die "cannot show feedback"
     printf '\n' >&2
     PROMPT_COUNTER=$((PROMPT_COUNTER - 1))
 }
@@ -975,11 +928,11 @@ sanitize_output() {
 
 finish_agent_loop() {
     case $LOOP_STATUS in
-    done) printf 'done: after %s model prompts\n' \
-        "$PROMPT_COUNTER" >&2; exit 0 ;;
-    hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
-        "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
-    *) die "unknown loop status $LOOP_STATUS" ;;
+        done) printf 'done: after %s model prompts\n' \
+            "$PROMPT_COUNTER" >&2; exit 0 ;;
+        hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
+            "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
+        *) die "unknown loop status $LOOP_STATUS" ;;
     esac
 }
 

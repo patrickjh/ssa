@@ -12,4 +12,4 @@ SSA_URL='http://fake.test/chat/completions' \
     SSA_CONTEXT="$TEST_TEMP_FOLDER/ctxdir" \
     run_ssa a task
 expect_exit 1
-expect_stderr_has 'context file not a readable regular file'
+expect_stderr_has 'cannot read context file'

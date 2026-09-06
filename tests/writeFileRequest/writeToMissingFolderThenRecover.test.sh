@@ -36,5 +36,6 @@ run_ssa_task create src/app/main.c
 expect_exit 0
 expect_stderr_has 'done: after 4 model prompts'
 expect_stdout_has 'wrote file: src/app/main.c'
+expect_stdout_lacks 'Format error'
 expect_file_equals "$WORK_FOLDER/src/app/main.c" \
     "$TEST_TEMP_FOLDER/expected.c"
