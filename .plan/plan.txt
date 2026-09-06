@@ -1,7 +1,7 @@
 Next jobs, in order. Full write-up for each is tasks/<stem>.txt.
 When done, delete that file and drop the stem here.
 
-reasoningInExamples
+promptWording
 messagesSlidingWindow
 malformedHttpSuccess
 validateKeepTemp
@@ -14,3 +14,4 @@ shortFunctions
 fewerLines
 unnecessaryVariables
 folderTxt
+fasterTests

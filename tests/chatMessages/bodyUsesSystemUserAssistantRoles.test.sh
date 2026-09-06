@@ -20,6 +20,9 @@ REPLY
 SSA_KEEP_TEMP=1 run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'hello-from-script'
+expect_stdout_lacks 'echo starting the agent'
+CWD=$(cd "$WORK_FOLDER" && pwd) || fail "cannot pwd work folder"
+expect_stdout_has "$CWD"
 
 BODY=$(get_prompt_body_file 1)
 [ -f "$BODY" ] || fail "missing body.json: $BODY"
@@ -36,9 +39,17 @@ jq -e '.messages | length >= 4' "$BODY" >/dev/null ||
 printf '%s' "$(jq -r '.messages[1].content' "$BODY")" | grep -qF \
     'print a greeting then stop' ||
     fail "user message should be the task"
-jq -r '.messages[2].content' "$BODY" | grep -qF \
-    'echo starting the agent' ||
-    fail "assistant message should be the bootstrap script"
+BOOT=$(jq -r '.messages[2].content' "$BODY")
+printf '%s' "$BOOT" | grep -qF -- '# script' ||
+    fail "assistant bootstrap should contain # script"
+printf '%s' "$BOOT" | grep -qF -- 'pwd' ||
+    fail "assistant bootstrap should contain pwd"
+printf '%s' "$BOOT" | grep -qF -- 'uname -a' ||
+    fail "assistant bootstrap should contain uname -a"
+if printf '%s' "$BOOT" | grep -qF -- 'echo starting the agent'
+then
+    fail "assistant bootstrap should not echo starting the agent"
+fi
 [ -f "$(get_kept_ssa_folder)/prompt1/response.txt" ] ||
     fail "missing prompt1/response.txt"
 

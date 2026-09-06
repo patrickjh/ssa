@@ -108,8 +108,8 @@ repeat) with:
    `jq`, `head`, …), create temp folder, write system prompt and task
    into `messages.json` (if `SSA_CONTEXT` is set, that file is appended
    to the first user turn after `Context:`), create `prompt0/`, seed
-   with a bootstrap `# script` then `echo starting the agent`
-   (ask-user applies when enabled).
+   with a bootstrap `# reasoning:` note, `# script`, then `pwd`
+   and `uname -a` (ask-user applies when enabled).
 2. **Loop** — For each model prompt (`prompt1+`), cap `messages.json`
    to `MAX_MESSAGES_BYTES` (keep the system prompt, the first user
    turn, and the newest turns; die if one turn is still over the cap),

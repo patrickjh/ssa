@@ -114,11 +114,13 @@ REPLY_SPEC='These are the valid reply formats:
 A script request is "# script" then a POSIX sh program. Do not prefix
 script lines with #. Example:
 
+# reasoning: look at the files in the folder
 # script
 ls -la
 
 A write request is "# write file: PATH" then raw file contents. Example:
 
+# reasoning: write a hello.txt file
 # write file: hello.txt
 hello
 world
@@ -126,6 +128,7 @@ world
 An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
 block must match exactly once. Example:
 
+# reasoning: edit the hello.txt file
 # edit file: hello.txt
 <<<<<<< SEARCH
 hello
@@ -464,7 +467,7 @@ setup_messages_file() {
 
 run_fake_first_turn() {
     setup_per_prompt_log_folder
-    printf '%s\n' '# script' 'echo starting the agent' \
+    printf '# reasoning: show cwd and kernel\n# script\npwd\nuname -a\n' \
         >"$MODEL_RESPONSE_FILE" ||
         die "cannot write fake first turn response"
     append_assistant_turn

@@ -1,6 +1,7 @@
 Invalid shell (prose, markdown fences, thinking tags, Gemma thought
 channels, syntax errors), empty replies, bare scripts, and empty
 # script payloads are not run. The same format error (shared reply
-spec as the system prompt) is appended and the loop continues so
+spec as the system prompt, including # reasoning: on the script,
+write, and edit examples) is appended and the loop continues so
 the model can recover. Writes and edits skip fence and think checks
 so payloads may contain those bytes.

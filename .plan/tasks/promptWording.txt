@@ -1,0 +1,44 @@
+promptWording — quoting rationale in REPLY_SPEC, not only intro
+
+Why:
+Product SYSTEM_PROMPT_INTRO says prefer write and edit because
+they have no quoting issues. REPLY_SPEC does not. A format
+error reprints the spec, not the intro, so a stuck model does
+not see that rationale. experiments/formatError/ssa keeps the
+intro short (role, one of four, no fences, reasoning in #
+comments) and puts the prefer-write / prefer-edit sentences
+on the write and edit examples in REPLY_SPEC.
+
+Do:
+Copy the formatError fork wording.
+
+- SYSTEM_PROMPT_INTRO: drop the Prefer write and edit…
+  sentence. Keep role, one of four, no markdown, no thinking
+  tags, Put reasoning in # comments.
+- REPLY_SPEC write example: after “then raw file contents.”
+  add Prefer this over POSIX tools for writing files because
+  this has no quoting issues. Same as the fork, then Example:
+- REPLY_SPEC edit example: after “match exactly once.”
+  add Prefer this for edits over sed and other POSIX tools
+  because this has no quoting issues. Then Example:
+- Keep the `# reasoning:` lines and `# script` / `# complete`
+  shapes. Do not grow the intro. Do not bake # run. Do not
+  name env vars. Do not change dispatch.
+
+Stay under 80 columns. Wrap like the fork.
+
+Related: experiments/formatError/ssa. formatErrorInPrompt
+(shared spec already landed; this only moves quoting prose
+into that spec). reasoningInExamples.txt (already landed).
+
+Size:
+About 0 net in `ssa` (a few lines move from intro to spec).
+Tests extra.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. formatErrorRepeatsPromptSample still
+matches `# write file: hello.txt` and the reasoning lines.
+Format error stdout and the system prompt both contain
+`Prefer this over POSIX tools for writing files`. Format
+error stdout contains `Prefer this for edits over sed`.
+Write and edit failures still lack `Format error`.
