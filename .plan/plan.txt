@@ -9,3 +9,4 @@ alwaysKeepTemp
 dropSandbox
 hardenAskListingUnicode
 shortFunctions
+fewerLines
