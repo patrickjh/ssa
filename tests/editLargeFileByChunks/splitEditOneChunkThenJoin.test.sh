@@ -22,6 +22,7 @@ SEED
 
 add_model_reply 1 <<'REPLY'
 # Split big.txt into chunk files and prove the split is lossless.
+# script
 mkdir chunks
 awk '$0 == "" { blanks = blanks + 1; next }
     { if (file == "" || blanks > 0) { close(file)
@@ -44,6 +45,7 @@ REPLY
 
 add_model_reply 3 <<'REPLY'
 # Join the chunks back onto big.txt and clean up.
+# script
 cat chunks/* > big.txt.new && mv big.txt.new big.txt && rm -r chunks
 REPLY
 

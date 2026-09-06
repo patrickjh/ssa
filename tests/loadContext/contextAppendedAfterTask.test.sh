@@ -12,6 +12,7 @@ printf '%s\n' 'repo notes for the model' >"$WORK_FOLDER/notes.txt" ||
     fail "cannot write context file"
 
 add_model_reply 1 <<'REPLY'
+# script
 printf 'hello-from-script\n'
 REPLY
 

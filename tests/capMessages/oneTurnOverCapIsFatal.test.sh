@@ -9,6 +9,7 @@ setup_fake_model
 setup_work_folder
 
 add_model_reply 1 <<'REPLY'
+# script
 awk 'BEGIN { for (i = 0; i < 140000; i++) printf "x" }'
 echo
 REPLY

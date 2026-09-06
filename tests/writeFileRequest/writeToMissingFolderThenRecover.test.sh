@@ -15,6 +15,7 @@ REPLY
 
 add_model_reply 2 <<'REPLY'
 # The write failed because the folder is missing; create it first.
+# script
 mkdir -p src/app
 REPLY
 

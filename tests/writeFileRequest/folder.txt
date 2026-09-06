@@ -14,8 +14,8 @@ Acceptance:
 - Success prints "wrote file: PATH" on stdout (and into the transcript)
 - Write to a missing parent folder fails; a later mkdir script plus
   retried write recovers
-- First line "# write file:" with no path is not a write request; it
-  runs as a script
+- First line "# write file:" with no path is a format error, not a
+  script
 - Path with spaces ("# write file: my file.txt") writes that file
 - Leading # notes and blank lines before the write sentinel are not
   part of the file

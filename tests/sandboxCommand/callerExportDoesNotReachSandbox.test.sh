@@ -9,6 +9,7 @@ setup_fake_model
 setup_work_folder
 
 add_model_reply 1 <<'REPLY'
+# script
 printf 'PID=%s\n' "${PID-unset}"
 printf 'PROMPT_COUNTER=%s\n' "${PROMPT_COUNTER-unset}"
 printf 'TEMP_FOLDER=%s\n' "${TEMP_FOLDER-unset}"

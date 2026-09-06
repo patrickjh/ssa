@@ -1,4 +1,5 @@
-The agent runs a canned script, then stops on "# complete".
+The agent runs a canned "# script" then stops on "# complete".
 Also covers a task on stdin, hitting the prompt cap, a done marker
-with extra trailing newlines, leading # notes before done, and a
-"# complete" comment after a script (not done).
+with extra trailing newlines, leading # notes before done, a
+"# complete" comment after a script (not done), and notes before
+"# script" (not on sh stdin).

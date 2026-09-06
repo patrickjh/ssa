@@ -108,8 +108,8 @@ repeat) with:
    `jq`, `head`, …), create temp folder, write system prompt and task
    into `messages.json` (if `SSA_CONTEXT` is set, that file is appended
    to the first user turn after `Context:`), create `prompt0/`, seed
-   with a bootstrap `echo starting the agent` (ask-user applies when
-   enabled).
+   with a bootstrap `# script` then `echo starting the agent`
+   (ask-user applies when enabled).
 2. **Loop** — For each model prompt (`prompt1+`), cap `messages.json`
    to `MAX_MESSAGES_BYTES` (keep the system prompt, the first user
    turn, and the newest turns; die if one turn is still over the cap),
@@ -120,7 +120,10 @@ repeat) with:
    and `#` notes), write everything after that line to PATH through
    the ask / command layers; if edit request (first action line
    `# edit file: PATH`), apply one unique SEARCH/REPLACE in the
-   harness then write through the same layers; if the reply is empty,
+   harness then write through the same layers; if first action line
+   is `# script`, run the payload after that line through ask /
+   command layers (`sh -n` on the payload); if the reply is empty,
+   has no known first action line, has an empty `# script` payload,
    has a markdown fence line, has thinking tags (`<think>` or
    `<|channel>thought`), or `sh -n` fails, append `Format error:`
    plus the same reply spec as the system prompt (not which check
@@ -133,7 +136,7 @@ repeat) with:
    (leading blank lines and `#` notes skipped; trailing newlines
    ignored: `[ "$(first_action_line)" = '# complete' ]`).
    `first_action_line` keeps `# complete`, `# write file:…`,
-   `# edit file:…`, or a non-`#` line (`grep -E`), takes the first
+   `# edit file:…`, or `# script` (`grep -E`), takes the first
    (`head -n 1`), and fails if none remain (`grep .`). Exit `1` on
    harness failure or max model prompts. SIGHUP / SIGINT /
    SIGTERM → `129` / `130` / `143`.
@@ -187,9 +190,9 @@ Combine both.
 ### 2. Sandbox command — `SSA_SANDBOX_COMMAND` (default `sh`)
 
 - Validated with `command -v` at startup. Default `sh`.
-- The harness feeds that command’s **stdin** from
-  `latestModelResponse.txt` (scripts and writes) or from edited
-  bytes (successful edits).
+- The harness feeds that command’s **stdin** from the `# script`
+  payload (scripts), `latestModelResponse.txt` (writes), or from
+  edited bytes (successful edits).
 - Contract: stdout/stderr from the run; exit code recorded in
   `messages.json`. Unrecoverable stop from inside the harness uses `die`
   (SIGUSR1 to `PID`). Custom sandbox commands do not get `PID`
@@ -208,7 +211,18 @@ After ask (or after ask is disabled):
 
 `"$SSA_SANDBOX_COMMAND" < stdin`
 
-Write and edit turns add sh-style `-c` and the target path as `$0`.
+For `# script` turns, stdin is everything after that line, not
+the whole reply. Leading `#` notes are not fed to `sh`. Write and
+edit turns add sh-style `-c` and the target path as `$0`.
+
+## Script requests (`# script`)
+
+A reply whose **first action line** is `# script` (exact, like
+`# complete`) is a script, not leftover-as-default. Everything
+after that line is the program. Empty payload is a format error.
+Unknown first action line (bare `ls`, comments-only, empty
+`# write file:` with no path) is a format error. Detection is in
+`reply_is_script_request`; `sh -n` runs on the payload only.
 
 ## Write requests (`# write file:`)
 

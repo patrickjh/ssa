@@ -21,9 +21,12 @@ SSA_KEEP_TEMP=1 run_ssa_task print a greeting then stop
 expect_exit 0
 expect_stdout_has 'Format error'
 expect_stdout_has "$SAMPLE"
+expect_stdout_has '# script'
 expect_stderr_has 'done: after 2 model prompts'
 
 BODY=$(get_prompt_body_file 1)
 [ -f "$BODY" ] || fail "missing body.json: $BODY"
 jq -r '.messages[0].content' "$BODY" | grep -qF -- "$SAMPLE" ||
     fail "system prompt missing sample: $SAMPLE"
+jq -r '.messages[0].content' "$BODY" | grep -qF -- '# script' ||
+    fail "system prompt missing # script"

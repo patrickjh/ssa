@@ -104,15 +104,17 @@ Example:
 SYSTEM_PROMPT_INTRO='You help users solve tasks with POSIX shell scripts, write
 requests, and edit requests. Each turn you get a task, prior commands and
 their output. Continue from there with exactly one of the following: a
-POSIX sh script, a write request, an edit request, or the task complete
+script request, a write request, an edit request, or the task complete
 marker. No markdown fences, no thinking tags. Put reasoning in # comments.
 Prefer write and edit requests over POSIX tools for files because they
 have no quoting issues.'
 
 REPLY_SPEC='These are the valid reply formats:
 
-A POSIX sh script. Example:
+A script request is "# script" then a POSIX sh program. Do not prefix
+script lines with #. Example:
 
+# script
 ls -la
 
 A write request is "# write file: PATH" then raw file contents. Example:
@@ -462,7 +464,8 @@ setup_messages_file() {
 
 run_fake_first_turn() {
     setup_per_prompt_log_folder
-    printf '%s\n' 'echo starting the agent' >"$MODEL_RESPONSE_FILE" ||
+    printf '%s\n' '# script' 'echo starting the agent' \
+        >"$MODEL_RESPONSE_FILE" ||
         die "cannot write fake first turn response"
     append_assistant_turn
     run_model_reply
@@ -626,6 +629,14 @@ handle_model_response() {
         run_model_reply
         return $LOOP_AGAIN
     fi
+    if ! reply_is_script_request; then
+        record_format_error
+        return $LOOP_AGAIN
+    fi
+    if ! script_payload | grep -q '[^[:space:]]'; then
+        record_format_error
+        return $LOOP_AGAIN
+    fi
     if reply_has_fence_line; then
         record_format_error
         return $LOOP_AGAIN
@@ -689,7 +700,7 @@ record_format_error() {
 }
 
 reply_is_valid_shell() {
-    if sh -n "$MODEL_RESPONSE_FILE" >/dev/null 2>&1; then
+    if script_payload | sh -n >/dev/null 2>&1; then
         return $IS_TRUE
     fi
     return $IS_FALSE
@@ -774,8 +785,12 @@ reply_is_edit_request() {
     first_action_line | grep -q '^# edit file: .'
 }
 
+reply_is_script_request() {
+    first_action_line | grep -q '^# script$'
+}
+
 first_action_line() {
-    grep -E '^# complete$|^# write file:|^# edit file:|^[^#]' \
+    grep -E '^# complete$|^# write file:|^# edit file:|^# script$' \
         "$MODEL_RESPONSE_FILE" |
         head -n 1 |
         grep .  # head succeeds on empty input; this fails then
@@ -803,11 +818,19 @@ ask_user_for_rejection_reason() {
 
 run_in_configured_sandboxes() {
     (
-        "$SSA_SANDBOX_COMMAND" "$@" <"$SANDBOX_STDIN_FILE" 2>&1
+        if reply_is_script_request && [ $# -eq 0 ]; then
+            script_payload | "$SSA_SANDBOX_COMMAND" 2>&1
+        else
+            "$SSA_SANDBOX_COMMAND" "$@" <"$SANDBOX_STDIN_FILE" 2>&1
+        fi
         echo $? >"$EXIT_CODE_FILE" ||
             die "cannot write script exit code"
     ) | tee "$SCRIPT_OUTPUT_FILE"
     append_script_result
+}
+
+script_payload() {
+    sed -n '/^# script$/,$p' "$MODEL_RESPONSE_FILE" | sed 1d
 }
 
 ask_user_enabled() {

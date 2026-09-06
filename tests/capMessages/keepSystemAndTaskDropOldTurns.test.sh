@@ -9,24 +9,28 @@ setup_fake_model
 setup_work_folder
 
 add_model_reply 1 <<'REPLY'
+# script
 awk 'BEGIN { for (i = 0; i < 40000; i++) printf "a" }'
 echo
 echo unique-early-marker
 REPLY
 
 add_model_reply 2 <<'REPLY'
+# script
 awk 'BEGIN { for (i = 0; i < 40000; i++) printf "b" }'
 echo
 echo unique-second-marker
 REPLY
 
 add_model_reply 3 <<'REPLY'
+# script
 awk 'BEGIN { for (i = 0; i < 40000; i++) printf "c" }'
 echo
 echo unique-third-marker
 REPLY
 
 add_model_reply 4 <<'REPLY'
+# script
 awk 'BEGIN { for (i = 0; i < 40000; i++) printf "d" }'
 echo
 echo unique-fourth-marker

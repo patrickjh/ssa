@@ -8,10 +8,12 @@ setup_fake_model
 setup_work_folder
 
 add_model_reply 1 <<'REPLY'
+# script
 printf 'still working\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
+# script
 printf 'still working\n'
 REPLY
 

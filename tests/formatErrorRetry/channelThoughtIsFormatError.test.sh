@@ -16,6 +16,7 @@ printf 'hello-from-script\n'
 REPLY
 
 add_model_reply 2 <<'REPLY'
+# script
 printf 'hello-from-script\n'
 REPLY
 

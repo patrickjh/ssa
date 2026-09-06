@@ -1,6 +1,6 @@
 #!/bin/sh
-# First line "# edit file:" with no path is not an edit request; ssa
-# runs the reply as a script.
+# First line "# edit file:" with no path is not an edit request; it
+# is a format error, not a script.
 
 set -u
 . "$TEST_UTILS_FILE"
@@ -20,5 +20,6 @@ REPLY
 run_ssa_task treat empty edit path as a script
 expect_exit 0
 expect_stderr_has 'done: after 2 model prompts'
-expect_stdout_has 'empty-path-was-script'
+expect_stdout_has 'Format error'
+expect_stdout_lacks 'empty-path-was-script'
 expect_stdout_lacks 'edited file:'
