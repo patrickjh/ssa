@@ -1,7 +1,8 @@
-experiments/formatError — one FORMAT_ERROR + shared spec
+experiments/formatError — one FORMAT_ERROR + shared spec +
+# script (no leftover-as-script, no payload temp file).
 
-Fork of ssa. Not product. oneFormatError.txt and
-formatErrorInPrompt.txt. Leftover-as-script (no # run).
+Fork of ssa. Not product. oneFormatError.txt,
+formatErrorInPrompt.txt, scriptSentinel.txt. No # run.
 
 Live smoke (manual): SSA_NO_ASK=1 SSA_KEEP_TEMP=1, same URL/model
 as README, invoke experiments/formatError/ssa.
@@ -13,6 +14,8 @@ Questions:
 2. Reprinting REPLY_SPEC on the error turn: does Gemma 4 31B
    concatenate two kinds (mixedReplyKinds.txt)? If yes, stop;
    do not add a second-sentinel harness rule in this fork.
+3. Does it emit # script then a real program, or comment out
+   commands (# ls -la), or format-error until max prompts?
 
 Harness: not run yet.
 Live: not run yet (needs a real SSA_URL / SSA_MODEL).

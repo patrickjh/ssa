@@ -3,6 +3,7 @@ When done, delete that file and drop the stem here.
 
 oneFormatError
 formatErrorInPrompt
+messagesSlidingWindow
 malformedHttpSuccess
 alwaysKeepTemp
 dropSandbox

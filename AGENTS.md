@@ -444,6 +444,9 @@ logging or side effects). Use `return $CONSTANT_NAME` (with `$`).
 - One clear job per function.
 - Prefer `if` over `[ test ] && command` when branching among actions.
 - Guard + `die`: `[ -n "$VAR" ] || die "…"`.
+- Guard + `return`: `if [ -z "$VAR" ]; then return; fi`
+  (or `return $CONSTANT_NAME`) when that is the whole branch.
+  Stay under 80 columns. A longer `then` stays a block.
 - `case` arms prefer one line: `pattern) action ;;`.
 
 ## Static strings

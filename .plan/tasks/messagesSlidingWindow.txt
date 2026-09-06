@@ -1,0 +1,40 @@
+messagesSlidingWindow — die when messages.json is over the cap
+
+Why:
+Product ssa silently drops the oldest extra turns to keep
+messages.json under MAX_MESSAGES_BYTES (131072). The model is
+not told. That is not Unix: do not throw away the log to keep
+going. Fail closed. experiments/formatError/ssa already dies
+instead of dropping.
+
+Do:
+Copy the formatError fork. Remove the drop while,
+can_drop_old_message, and drop_oldest_extra_message. Before each
+model prompt and after writing the first two turns, if the file
+is over the cap, die. One string for both sites, not "one chat
+turn" (that wording is only true after drops):
+
+    messages.json larger than the messages cap
+    ($MAX_MESSAGES_BYTES bytes)
+
+Rename cap_messages_file; it no longer caps
+(die_if_messages_over_cap). Keep messages_file_byte_count. Do
+not raise the constant. Do not summarize. Do not add
+SSA_MAX_MESSAGES_BYTES. Do not pin extra turns. Long runs with
+fat stdout die; the caller starts a new ssa (SSA_CONTEXT if
+needed).
+
+Related: tests/capMessages/. maybeNot/subAgents.txt (child
+stdout can blow the cap). alwaysKeepTemp.txt (promptN copies
+are the record; the POST body is still capped).
+
+Size:
+About 20 lines out of ssa (drop loop and can_drop). Tests and
+AGENTS.md extra.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. keepSystemAndTaskDropOldTurns becomes
+a fatal large-run case (or that file goes away).
+oneTurnOverCapIsFatal stays and matches the new die string.
+A system prompt plus task over the cap still dies at setup
+with that same string.
