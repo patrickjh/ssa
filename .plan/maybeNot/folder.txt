@@ -9,5 +9,5 @@ runOtherLanguages.txt       one interpreter (not a menu)
 proxyDocs.txt               dummy-key injector README
 securityModel.txt           README security model
 helpInReadme.txt            shrink or drop -h
-experimentRunSentinel.txt   try # run in experiments/
+experimentRunSentinel.txt   do not add # run / SSA_RUNNER
 subAgents.txt               nested agents / fifth reply shape

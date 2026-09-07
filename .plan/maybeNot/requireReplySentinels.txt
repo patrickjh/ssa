@@ -59,9 +59,8 @@ script is not the leftover, but that task stays separate.
 runOtherLanguages.txt: if that is yes, keep `# script`.
 The interpreter is SSA_INTERPRETER (one PATH name), not a
 model-chosen `# run` word. Do not land `# script` and
-rename it in the next job. experimentRunSentinel.txt tried
-`# run` plus a list; do not copy that into this product
-change.
+rename it in the next job. Do not add `# run` plus a
+list (experimentRunSentinel.txt).
 
 System prompt and the one FORMAT_ERROR string must list the
 sentinels (oneFormatError.txt). first_action_line only keeps

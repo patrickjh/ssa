@@ -36,10 +36,7 @@ gate. Open docs tasks must not restore COMMAND (see notes on
 readmeHumanLanguage, maybeNot/securityModel, maybeNot/proxyDocs,
 maybeNot/subAgents).
 
-Related: maybeNot/experimentRunSentinel.txt tries dropping COMMAND in
-a fork, with a jail listed as SSA_RUNNER instead of a second
-layer. Do not treat a successful fork as this product
-change. maybeNot/runOtherLanguages.txt wants to exec python3/node,
+Related: maybeNot/runOtherLanguages.txt wants to exec python3/node,
 not only sh. If that is yes, drop COMMAND first or define
 how a jail wraps those binaries; do not leave stdin-to-sh
 as the python contract.

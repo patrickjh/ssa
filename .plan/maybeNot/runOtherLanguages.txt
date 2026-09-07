@@ -119,9 +119,8 @@ python3 each turn. Extra names in the prompt are mix
 risk (mixedReplyKinds.txt). Parse, unknown-runner
 format errors, first-token example swap, and a "valid
 runners:" append all go away with one word. Mixing in
-one session is not this job. The experiment fork
-(experimentRunSentinel.txt) tried the list; do not copy
-that dispatch into ssa.
+one session is not this job. Do not copy a `# run` /
+SSA_RUNNER menu into ssa (experimentRunSentinel.txt).
 
 Rejected: shebang as the protocol. A shebang names an
 interpreter. Write, edit, and complete are harness
@@ -147,8 +146,8 @@ exist, default sh, no paths). Meaning is unclear without
 that sentence. Settings table in AGENTS.md. No flag;
 env only.
 
-Related: experimentRunSentinel.txt (fork tried `# run`
-plus a list; not the product shape).
+Related: experimentRunSentinel.txt (do not add `# run`
+plus a list).
 requireReplySentinels.txt / scriptSentinel.txt (keep
 `# script`; do not rename). dropSandbox.txt (always sh
 vs exec python3; isolation is not this knob).

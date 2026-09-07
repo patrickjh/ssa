@@ -5,13 +5,10 @@ ssa is one file with an 1000-line cap. Many helpers exist for a
 single call site and a one-test body (agent_is_done,
 cleanup_temp_folder). handle_model_response
 repeats return $LOOP_AGAIN on every arm. That is extra lines, not
-extra clarity. experiments/formatError/ssa already inlined some of
-this. No behavior change.
+extra clarity. No behavior change.
 
 Do:
-Shrink product ssa. Copy the shrink shapes from the formatError
-fork; do not merge the rest of that fork (sentinels, REPLY_SPEC,
-fake first turn). Stay under 80 columns. Keep call-order layout.
+Shrink product ssa. Stay under 80 columns. Keep call-order layout.
 
 - One-call-site function whose body is one [ ] test and a return:
   inline at the caller (Guard + return). Delete the function.
@@ -36,7 +33,7 @@ a 15-line body cap. unnecessaryVariables.txt is strings, not
 functions. unnecessaryLineBreaks.txt joins wraps that fit in 80.
 
 Related: shortFunctions.txt. unnecessaryVariables.txt.
-unnecessaryLineBreaks.txt. experiments/formatError/ssa.
+unnecessaryLineBreaks.txt.
 
 Size:
 About 30–60 lines out of ssa. Tests extra only if a string

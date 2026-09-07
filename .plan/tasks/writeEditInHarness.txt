@@ -41,7 +41,7 @@ no COMMAND left to -c). editReadThroughSandbox.txt
 (after this, read and write are both harness).
 maybeNot/runOtherLanguages.txt (interpreter is only
 script turns). maybeNot/experimentRunSentinel.txt
-(fork used listed sh -c; not this product change).
+(do not add `# run` / listed `sh -c`).
 scriptSentinel.txt (same sed extract for # script).
 
 Size:
