@@ -1,12 +1,12 @@
 runOtherLanguages — run model code as python or node, not only sh
 
 Why:
-ssa is a shell agent: leftover-as-script, `sh -n`, stdin to
-SSA_SANDBOX_COMMAND (default sh), and a system prompt that only
-shows POSIX sh. Write and edit are harness I/O
-(writeEditInHarness.txt); they do not need the interpreter to
-be sh. You cannot make this a Python agent today without
-forking the prompt and dropping `sh -n`.
+ssa is a shell agent: required `# script`, `sh -n` on the
+payload, stdin to SSA_SANDBOX_COMMAND (default sh), and a
+system prompt that only shows POSIX sh. Write and edit are
+harness I/O (writeEditInHarness.txt); they do not need the
+interpreter to be sh. You cannot make this a Python agent
+today without forking the prompt and dropping `sh -n`.
 
 The Unix path already works: `# write file: foo.py`, then a
 shell turn `python3 foo.py`. A quoted heredoc is one turn but
@@ -27,11 +27,10 @@ Decide first.
 
 If no: keep only shell. Do not add SSA_INTERPRETER,
 SSA_RUNNER, `# python3` / `# node` / `# run` next to
-leftover-as-script or `# script` (two ways to run is
-worse). The two-turn write-then-`python3 foo.py` path
-stays. Do not change SSA_SANDBOX_COMMAND to mean
-"scripts are Python"; writes are harness I/O, not a
-reason to keep COMMAND as sh.
+`# script` (two ways to run is worse). The two-turn
+write-then-`python3 foo.py` path stays. Do not change
+SSA_SANDBOX_COMMAND to mean "scripts are Python"; writes
+are harness I/O, not a reason to keep COMMAND as sh.
 
 If yes: one PATH name. Default `sh`. Users can set.
 Alphabetize with the other SSA_ names (after
@@ -53,17 +52,14 @@ mid-run; that turn fails like any script (exit 1, loop
 continues). Do not require python3 or node unless they
 are the value.
 
-The model does not name the binary. `# script` (see
-scriptSentinel.txt / requireReplySentinels.txt) is
+The model does not name the binary. `# script` is
 enough. Do not add `# run RUNNER`, `# run python3`, or
 an allowlist. Do not parse a shebang. Do not add a
 hardcoded python/node table behind the env var. Putting
 `sudo` as the interpreter is the caller's choice, same
 as a dangerous COMMAND today.
 
-Closed dispatch first if leftover-as-script is still
-the default: land `# script`, then this. Do not keep
-bare scripts for sh and a sentinel only for other
+Do not keep bare scripts for sh and a sentinel only for other
 languages. Do not also accept a bare script. Do not
 rename `# script` to `# run`.
 
@@ -73,12 +69,11 @@ Default example stays POSIX sh (`# script` then `ls
 -la`). If the value is not `sh`, do not leave a shell
 example that would be wrong for that run; one tiny
 example for that interpreter. Do not bake python3/node
-into the static SYSTEM_PROMPT "for later." FORMAT_ERROR
-lists `# script` (oneFormatError.txt). Do not name
+into the static SYSTEM_PROMPT "for later." Shared
+REPLY_SPEC lists `# script`. Do not name
 SSA_INTERPRETER in it; the live word stays on the
-system prompt. Do not interpolate into a shared spec
-used on the error turn (formatErrorInPrompt.txt: do
-not name env vars).
+system prompt. Do not interpolate into that shared spec
+on the error turn (do not name env vars).
 
 Skip `sh -n` when the interpreter is not exactly `sh`.
 Feed every script payload on stdin:
@@ -120,7 +115,7 @@ risk (mixedReplyKinds.txt). Parse, unknown-runner
 format errors, first-token example swap, and a "valid
 runners:" append all go away with one word. Mixing in
 one session is not this job. Do not copy a `# run` /
-SSA_RUNNER menu into ssa (experimentRunSentinel.txt).
+SSA_RUNNER menu into ssa.
 
 Rejected: shebang as the protocol. A shebang names an
 interpreter. Write, edit, and complete are harness
@@ -135,7 +130,7 @@ may appear inside a `# script` payload as bytes; do
 not also parse it.
 
 Cost: `# script` on the hot path has the same Gemma
-miss as requiring `# run sh` (requireReplySentinels.txt):
+miss as a forgotten fence (mixedReplyKinds.txt):
 forgotten sentinel is a format-error retry; wrong
 sentinel dispatches and does not retry; can burn
 SSA_MAX_MODEL_PROMPTS. A fifth kind (`# subagent`) is
@@ -146,13 +141,11 @@ exist, default sh, no paths). Meaning is unclear without
 that sentence. Settings table in AGENTS.md. No flag;
 env only.
 
-Related: experimentRunSentinel.txt (do not add `# run`
-plus a list).
-requireReplySentinels.txt / scriptSentinel.txt (keep
-`# script`; do not rename). dropSandbox.txt (always sh
+Related: mixedReplyKinds.txt (forgotten `# script`; a menu
+of runners is extra mix risk). Keep `# script`; do not
+rename. dropSandbox.txt (always sh
 vs exec python3; isolation is not this knob).
-mixedReplyKinds.txt (a menu of runners is extra mix
-risk). subAgents.txt (do not add a fifth kind here).
+subAgents.txt (do not add a fifth kind here).
 doNot.txt (no JSON tools, no second edit shape).
 writeEditInHarness.txt (write/edit stay harness I/O).
 noWrites.txt / noEdits.txt (optional; not the python

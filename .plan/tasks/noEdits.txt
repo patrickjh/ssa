@@ -15,22 +15,17 @@ values: die, name the env var, ; see ssa -h for help.
 Unset is 0. No flag.
 
 When 1: # edit file: PATH is a format error (same
-string as other format errors once oneFormatError
-lands). Do not run it as a script. Do not die. Do not
-print edited file: or edit failed:. Ask does not run.
-The file is unchanged. Keep recognizing the sentinel in
-first_action_line while leftover-as-script exists;
-dropping it would feed the payload to sh. After
-scriptSentinel lands, an unknown first action line is
-already a format error; either keep the explicit branch
-or drop # edit file: from the known list only if
-# script is required.
+REPLY_SPEC as other format errors). Do not run it as a
+script. Do not die. Do not print edited file: or edit
+failed:. Ask does not run. The file is unchanged.
+Unknown first action line is already a format error;
+either keep an explicit branch or drop # edit file: from
+first_action_line's known list.
 
-Omit the edit response type from SYSTEM_PROMPT when
-the knob is 1. Same for the FORMAT_ERROR skeleton
-(oneFormatError.txt / formatErrorInPrompt.txt). Do not
-name SSA_NO_EDITS in that error string. Do not leave an
-edit example in a no-edit run.
+Omit the edit response type from SYSTEM_PROMPT_INTRO and
+REPLY_SPEC when the knob is 1 (format error uses the same
+spec). Do not name SSA_NO_EDITS in that error string. Do
+not leave an edit example in a no-edit run.
 
 Do not merge with SSA_NO_WRITES. Independent knobs.
 NO_EDITS=1 with writes still on is valid. Land after
@@ -39,9 +34,8 @@ meaning is unclear without it). Settings table in
 AGENTS.md.
 
 Related: noWrites.txt. writeEditInHarness.txt.
-oneFormatError.txt. formatErrorInPrompt.txt.
-scriptSentinel.txt. maybeNot/runOtherLanguages.txt
-(do not use this knob as the python story).
+maybeNot/runOtherLanguages.txt (do not use this knob as
+the python story).
 
 Size:
 About 20 lines in ssa (15–25): setting, check,

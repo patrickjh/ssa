@@ -7,7 +7,10 @@ style rules are below; do not duplicate settings or behavior that `-h` and
 `.plan/tasks/` is not added to `plan.txt`; only list a stem there when
 that job should run next. `.plan/maybeNot/` is ideas that may not
 belong in ssa; do not implement those unless a human moves the file
-to `tasks/`.
+to `tasks/`. Undecided ideas may be tried as a copy under
+`experiments/` (not product). Apply the change there, test that
+fork, and merge into `ssa` only what works. Do not treat an
+experiment as a second product (`bin/`, extra flags).
 
 ## Overview
 

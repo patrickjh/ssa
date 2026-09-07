@@ -19,9 +19,10 @@ not keep -c only for jails.
 
 Do:
 After ask, extract the write payload the same way
-extract_edit_payload does (sentinel to end, drop the
-sentinel). Write with cat > "$1" (or equivalent) in the
-harness, path as $1, never interpolated. Success still
+script_payload / extract_edit_payload do (sentinel to
+end, drop the sentinel). Write with cat > "$1" (or
+equivalent) in the harness, path as $1, never
+interpolated. Success still
 prints wrote file: PATH / edited file: PATH. Missing
 parent, permissions, and failed unique-replace stay
 exit 1, file unchanged, loop continues. Reuse the
@@ -40,9 +41,7 @@ sentinels; land this first). dropSandbox.txt (wrap ssa;
 no COMMAND left to -c). editReadThroughSandbox.txt
 (after this, read and write are both harness).
 maybeNot/runOtherLanguages.txt (interpreter is only
-script turns). maybeNot/experimentRunSentinel.txt
-(do not add `# run` / listed `sh -c`).
-scriptSentinel.txt (same sed extract for # script).
+script turns).
 
 Size:
 About 20 lines in ssa (15–25): extract write payload,

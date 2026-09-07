@@ -3,63 +3,70 @@ mixedReplyKinds — one reply, one kind
 Why:
 Gemma 4 31B often concatenates two system-prompt
 examples into one reply: a # write file: PATH block and a # comment:
-script block. The prompt already says one of four shapes and "Do not
-put a script after the write file line." First-wins still treats that
-as a write: everything after the sentinel is file bytes, so the
-script never runs and the file is polluted. Ask can catch it; --no-ask
-cannot. Reverse mix (script line then a write sentinel) runs as a
-script; the write is a shell comment. Same class as a trailing
-# complete in a script (trailingDoneCommentIsNotDone). Undecided.
-Do not treat this as required work.
+script block. The prompt already says exactly one of four shapes.
+First-wins still treats that as a write: everything after the
+sentinel is file bytes, so the script never runs and the file is
+polluted. Ask can catch it; SSA_NO_ASK=1 cannot. Reverse mix
+(script line then a write sentinel) runs as a script; the write
+is a shell comment. Same class as a trailing # complete in a
+script (trailingDoneCommentIsNotDone). Undecided. Do not treat
+this as required work.
+
+Closed dispatch already landed: first action line must be
+# complete, # write file:, # edit file:, or # script; anything
+else is a format error. A forgotten # script on an otherwise
+valid shell reply is the same as a prose/fence miss: not run,
+no ask, no sandbox, format error in messages.json, next prompt
+can add the sentinel. Extra turns, tokens, and context. It can
+burn SSA_MAX_MODEL_PROMPTS (exit 1) if it never complies, same
+as fences. A wrong sentinel (# complete as a comment, # script
+then a write payload) dispatches; it does not retry. # script
+does not fix fences: a fenced reply still fails. Do not also
+accept a bare script. Do not add a second script sentinel.
 
 Do:
-Prompt rewrite is clearerSystemPrompt.txt. If that landed, skip
-the prompt try. If models still concatenate, smoke with Gemma 4
-31B before adding harness rules. If the prompt change is enough,
-stop there. Do not grow the prompt into an essay here.
+If the current intro is not enough, smoke with Gemma 4 31B
+before adding harness rules. If models still concatenate, pick
+one closed rule (below). If the prompt is enough, stop there.
+Do not grow the prompt into an essay here.
 
 Harness detection is the fallback, not the goal. A write/edit
 payload is raw bytes: a file may contain "# comment:", "ls -la",
 or even "# write file:". A grep for a second kind in the tail will
-false positive. Do not add a second optional script sentinel (see
-maybeNot/requireReplySentinels.txt).
+false positive.
 
 If the prompt is not enough, pick one closed rule, not a heuristic
 "looks like a script":
 
 - Format-error when two known action sentinels appear
-  (# write file:, # edit file:, # complete, and # script if
-  that task lands) anywhere in the reply. Cheap. Misses
-  "# write file:" plus a bare ls with only "# comment:" notes,
-  because "# comment:" is not an action sentinel.
+  (# write file:, # edit file:, # complete, # script) anywhere
+  in the reply. Cheap. Misses "# write file:" plus a bare ls
+  with only "# comment:" notes, because "# comment:" is not an
+  action sentinel.
 - Format-error when the payload after a write/edit contains another
   action sentinel. Same miss. False positive if the file should
   contain that line.
 
 Do not split one reply into two turns. Do not unwrap or run both.
-Wrong-kind dispatch without retry is the same warning as
-maybeNot/requireReplySentinels.txt. Land after or with that
-file if # script becomes a kind; the mix exists today without it.
+Wrong-kind dispatch without retry stays: first sentinel wins.
 
-Related: clearerSystemPrompt.txt (prompt-only).
-maybeNot/requireReplySentinels.txt (missing/wrong sentinel).
-completeSentinel.txt (done line as a second kind). doNot.txt
-(Gemma envelopes). formatErrorInPrompt.txt (same samples on
-the error turn; mix risk).
+Related: doNot.txt (Gemma envelopes). REPLY_SPEC is shared with
+the format-error turn (mix risk on the error samples).
+subAgents.txt (a fifth kind is another sentinel, not leftover).
+runOtherLanguages.txt (keep # script; do not add # run).
 
 Size:
-0 if clearerSystemPrompt.txt was enough. Format-error on a
-second action sentinel: about 10–20 (predicate, FORMAT_ERROR_*
-line, handle_model_response before write/edit run). Tests and
+0 if the current prompt is enough. Format-error on a
+second action sentinel: about 10–20 (predicate,
+handle_model_response before write/edit run). Tests and
 AGENTS.md extra.
 
 Tests:
-None if this stays prompt-only (clearerSystemPrompt.txt). If a
-harness rule lands: fake curl, SSA_NO_ASK=1. Write then
-"# comment:" / ls is a format error or a polluted write, matching
-the decision. Two writes, write then # complete, edit then a
-script sentinel. A write whose file bytes are exactly
-"# comment:\nls -la\n" is the false-positive case: either that
-test exists (must still write) or the rule admits it cannot tell.
-Cover notes-then-write (writeAfterLeadingComments) still
-succeeding.
+None if this stays prompt-only. If a harness rule lands: fake
+curl, SSA_NO_ASK=1. Write then "# comment:" / ls is a format
+error or a polluted write, matching the decision. Two writes,
+write then # complete, edit then a script sentinel. A write
+whose file bytes are exactly "# comment:\nls -la\n" is the
+false-positive case: either that test exists (must still write)
+or the rule admits it cannot tell. Cover notes-then-write
+(writeAfterLeadingComments) still succeeding.

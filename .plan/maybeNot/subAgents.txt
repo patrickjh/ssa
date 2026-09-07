@@ -9,7 +9,9 @@ harness locals; inner ssa defaults to ask-on and wants /dev/tty;
 child stdout is every inner script's output, which can blow
 the parent messages.json (jq or the provider). This is
 undecided. Do not treat a fifth reply
-shape as required work.
+shape as required work. Closed dispatch already landed
+(# script required); a new kind is another sentinel, not
+the leftover default.
 
 Do:
 Decide first. Keep the product Unix-shaped: only shell, each action
