@@ -1,0 +1,12 @@
+invalidChatResponse — 2xx body that is not a chat message
+
+A successful curl (HTTP 2xx) must still be JSON with
+choices[0].message.content as a string. Non-JSON, {}, or a
+missing message dies (invalid chat response). Empty content is
+a format error and the loop continues. No extra retry.
+
+Acceptance:
+- Non-JSON body: exit 1, stderr has invalid chat response
+- JSON without choices[0].message: same
+- Empty content still recovers with Format error then # complete
+- Fake curl on PATH; no real network

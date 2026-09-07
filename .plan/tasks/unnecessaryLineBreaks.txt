@@ -1,0 +1,29 @@
+unnecessaryLineBreaks — join wraps that already fit in 80
+
+Why:
+ssa is one file with a 1000-line cap. Many `|| die`, `if`/`then`,
+and continued strings are two lines when one would still be
+≤80 characters. That is extra wraps, not extra clarity.
+
+Do:
+In product `ssa` only, join a wrapped line onto the previous
+line when the result stays ≤80 characters. Typical cases:
+`cmd || die "…"`, `[ ] || die`, `if …; then …; fi` on one
+line when Style already allows it, and a continued quoted
+string that fits. Keep names; do not shorten to fit.
+Do not join if the one-liner would exceed 80. Do not strip
+comments. Do not change behavior.
+
+Land after fewerLines.txt. That job inlines helpers and
+must not unwrap; this job is the unwrap pass.
+
+Related: fewerLines.txt. unnecessaryVariables.txt.
+AGENTS.md line length (80 columns).
+
+Size:
+A cut in `ssa` (one line per successful join). Tests extra
+only if a string on stderr/stdout changes. Stay under 1000.
+
+Tests:
+sh tests/runTests.sh. Fake curl, SSA_NO_ASK=1. No behavior
+change.

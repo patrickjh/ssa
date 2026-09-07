@@ -326,7 +326,10 @@ Built-in OpenAI-compatible `/chat/completions` client:
 - `call_curl` / jq read `messages.json` (not one concatenated user
   blob); no stdin prompt spool
 - Model replies are extracted with `jq -j` (and `jq -b` when that flag
-  works; probed once at startup) onto `latestModelResponse.txt`
+  works; probed once at startup) onto `latestModelResponse.txt`.
+  `choices[0].message.content` must be a JSON string; otherwise ssa
+  dies (`invalid chat response`). Empty content is a format error
+  and the loop continues.
 - Request body is `system` / `user` / `assistant` messages plus
   `SSA_REQUEST_JSON` merged in. After the agent loop, one more POST
   asks for plain-text feedback (not a script). Curl uses `--fail`,

@@ -541,7 +541,11 @@ send_curl_json_request() {
 
 save_model_reply_to_file() {
     # shellcheck disable=SC2086
-    jq $JQ_BINARY_FLAG -j '.choices[0].message.content // empty' \
+    jq $JQ_BINARY_FLAG -e \
+        '.choices[0].message.content | type == "string"' \
+        "$CURL_RESPONSE_FILE" >/dev/null 2>&1 ||
+        die "invalid chat response; see ssa -h for help"
+    jq $JQ_BINARY_FLAG -j '.choices[0].message.content' \
         "$CURL_RESPONSE_FILE" >"$MODEL_RESPONSE_FILE" ||
         die "cannot write to temp file: $MODEL_RESPONSE_FILE"
 }

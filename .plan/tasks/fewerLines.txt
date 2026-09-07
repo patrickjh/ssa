@@ -27,16 +27,16 @@ fake first turn). Stay under 80 columns. Keep call-order layout.
 Do not inline first_action_line, die,
 create_file_no_overwrite, or other helpers with several callers
 or a real job. Do not add write_or_die. Do not split ssa into
-a second file. Do not delete comments or unwrap 80-column lines
-just to cut the count.
+a second file. Do not delete comments. Do not unwrap wrapped
+lines here; that is unnecessaryLineBreaks.txt.
 
 Land after shortFunctions.txt. That job splits long bodies; this
 job cuts total lines. Do not re-split the elif dispatch to meet
 a 15-line body cap. unnecessaryVariables.txt is strings, not
-functions.
+functions. unnecessaryLineBreaks.txt joins wraps that fit in 80.
 
 Related: shortFunctions.txt. unnecessaryVariables.txt.
-experiments/formatError/ssa.
+unnecessaryLineBreaks.txt. experiments/formatError/ssa.
 
 Size:
 About 30–60 lines out of ssa. Tests extra only if a string

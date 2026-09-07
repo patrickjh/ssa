@@ -4,6 +4,7 @@ channels, syntax errors), empty replies, bare scripts, and empty
 spec as the system prompt, including # reasoning: on the script,
 write, and edit examples, and prefer-write / prefer-edit quoting
 rationale) is appended and the loop continues so the model can
-recover. Writes and edits skip fence and think checks so payloads
-may contain those bytes. A failed write or edit is not a format
-error.
+recover. An HTTP 2xx body that is not JSON, or JSON with no
+string message content, dies (invalid chat response). Writes and
+edits skip fence and think checks so payloads may contain those
+bytes. A failed write or edit is not a format error.
