@@ -540,39 +540,16 @@ create_file_no_overwrite() {
 handle_model_response() {
     append_assistant_turn
     if agent_is_done; then return $TASK_DONE; fi
-    if reply_is_blank; then
-        record_format_error
-        return $LOOP_AGAIN
+    if reply_is_blank; then record_format_error
+    elif reply_is_write_request; then run_model_reply
+    elif reply_is_edit_request; then run_model_reply
+    elif ! reply_is_script_request; then record_format_error
+    elif ! script_payload | grep -q '[^[:space:]]'; then record_format_error
+    elif reply_has_fence_line; then record_format_error
+    elif reply_has_thinking_tags; then record_format_error
+    elif reply_is_valid_shell; then run_model_reply
+    else record_format_error
     fi
-    if reply_is_write_request; then
-        run_model_reply
-        return $LOOP_AGAIN
-    fi
-    if reply_is_edit_request; then
-        run_model_reply
-        return $LOOP_AGAIN
-    fi
-    if ! reply_is_script_request; then
-        record_format_error
-        return $LOOP_AGAIN
-    fi
-    if ! script_payload | grep -q '[^[:space:]]'; then
-        record_format_error
-        return $LOOP_AGAIN
-    fi
-    if reply_has_fence_line; then
-        record_format_error
-        return $LOOP_AGAIN
-    fi
-    if reply_has_thinking_tags; then
-        record_format_error
-        return $LOOP_AGAIN
-    fi
-    if reply_is_valid_shell; then
-        run_model_reply
-        return $LOOP_AGAIN
-    fi
-    record_format_error
     return $LOOP_AGAIN
 }
 
