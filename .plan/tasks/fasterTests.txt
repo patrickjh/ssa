@@ -5,7 +5,7 @@ The runner already starts each tests/*/*.test.sh in the
 background. A full pass is still minutes (61 cases here).
 Each agent-loop story pays prompt0, canned curls, and the
 always-on review POST. Fake curl is a new sh script per
-request. capMessages stories print huge awk blobs. Do not
+request. largeTranscript stories print huge awk blobs. Do not
 treat a faster Windows Git-bash fork as a product change.
 
 Do:
@@ -18,7 +18,7 @@ stories). Then do cheap harness wins only:
   keep using add_default_review_reply.
 - Fake curl / add_model_reply: fewer processes or fewer
   jq wraps if that is where time goes.
-- Do not shrink capMessages blobs below the cap they
+- Do not shrink largeTranscript blobs below the size they
   prove. Do not drop SSA_NO_ASK=1 stories. Do not add a
   second test runner.
 

@@ -110,12 +110,11 @@ repeat) with:
    to the first user turn after `Context:`), create `prompt0/`, seed
    with a bootstrap `# reasoning:` note, `# script`, then `pwd`
    and `uname -a` (ask-user applies when enabled).
-2. **Loop** — For each model prompt (`prompt1+`), cap `messages.json`
-   to `MAX_MESSAGES_BYTES` (keep the system prompt, the first user
-   turn, and the newest turns; die if one turn is still over the cap),
-   copy it to `promptN/messages.json` (temp log only), run `call_curl`
-   against `messages.json` (system / user / assistant roles); treat
-   the reply as the script. If done marker, stop; if write request
+2. **Loop** — For each model prompt (`prompt1+`), copy
+   `messages.json` to `promptN/messages.json` (temp log only), run
+   `call_curl` against `messages.json` (system / user / assistant
+   roles). Treat the reply as the script. If done marker, stop; if
+   write request
    (first action line `# write file: PATH`, after leading blank lines
    and `#` notes), write everything after that line to PATH through
    the ask / command layers; if edit request (first action line
@@ -317,10 +316,8 @@ Built-in OpenAI-compatible `/chat/completions` client:
   script output before the user-turn append to `messages.json`).
   Output that `jq --rawfile` cannot hold, or that contains a NUL, is
   omitted from that user turn; stdout is unchanged.
-- Before each **model** prompt (`prompt1+`), the harness caps
-  `messages.json` to `MAX_MESSAGES_BYTES` (system prompt, first user
-  turn, and newest turns; die if one remaining turn is still over the cap),
-  then copies it to `$TEMP_FOLDER/promptN/messages.json` for
+- Before each **model** prompt (`prompt1+`), the harness copies
+  `messages.json` to `$TEMP_FOLDER/promptN/messages.json` for
   debugging (`SSA_KEEP_TEMP=1`). `prompt0/` is created for the fake-first
   bootstrap (no curl / no messages copy). `N` matches
   `PROMPT_COUNTER`.

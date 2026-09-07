@@ -3,7 +3,7 @@ fewerLines — inline thin helpers; fewer lines in ssa
 Why:
 ssa is one file with an 1000-line cap. Many helpers exist for a
 single call site and a one-test body (agent_is_done,
-cleanup_temp_folder, messages_file_over_byte_cap). handle_model_response
+cleanup_temp_folder). handle_model_response
 repeats return $LOOP_AGAIN on every arm. That is extra lines, not
 extra clarity. experiments/formatError/ssa already inlined some of
 this. No behavior change.
@@ -24,20 +24,19 @@ fake first turn). Stay under 80 columns. Keep call-order layout.
   when it is the documentation (if reply_is_blank; then in the
   dispatch).
 
-Do not inline first_action_line, messages_file_byte_count, die,
+Do not inline first_action_line, die,
 create_file_no_overwrite, or other helpers with several callers
 or a real job. Do not add write_or_die. Do not split ssa into
 a second file. Do not delete comments or unwrap 80-column lines
-just to cut the count. Do not raise MAX_MESSAGES_BYTES here.
+just to cut the count.
 
 Land after shortFunctions.txt. That job splits long bodies; this
 job cuts total lines. Do not re-split the elif dispatch to meet
 a 15-line body cap. unnecessaryVariables.txt is strings, not
-functions. messagesSlidingWindow.txt already removes the drop
-loop.
+functions.
 
 Related: shortFunctions.txt. unnecessaryVariables.txt.
-messagesSlidingWindow.txt. experiments/formatError/ssa.
+experiments/formatError/ssa.
 
 Size:
 About 30–60 lines out of ssa. Tests extra only if a string
@@ -45,6 +44,6 @@ changes. Stay under 1000.
 
 Tests:
 sh tests/runTests.sh. Fake curl, SSA_NO_ASK=1. No behavior
-change: complete, format-error retry, write/edit, cap die, ask
+change: complete, format-error retry, write/edit, ask
 off. Product dispatch still uses FORMAT_ERROR_EMPTY /
 FORMAT_ERROR_NOT_SHELL until oneFormatError.txt.

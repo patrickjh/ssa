@@ -1,14 +1,12 @@
 #!/bin/sh
-# After later turns are dropped, the first user turn still has context.
+# Several large turns: system and task stay, and early markers
+# stay too. Nothing is dropped from messages.json.
 
 set -u
 . "$TEST_UTILS_FILE"
 
 setup_fake_model
 setup_work_folder
-
-printf '%s\n' 'unique-context-marker' >"$WORK_FOLDER/notes.txt" ||
-    fail "cannot write context file"
 
 add_model_reply 1 <<'REPLY'
 # script
@@ -42,17 +40,21 @@ add_model_reply 5 <<'REPLY'
 # complete
 REPLY
 
-SSA_CONTEXT=notes.txt SSA_KEEP_TEMP=1 \
-    run_ssa_task print markers then stop
+SSA_KEEP_TEMP=1 run_ssa_task print markers then stop
 expect_exit 0
+expect_stdout_has 'unique-early-marker'
 expect_stderr_has 'done: after 5 model prompts'
 
 SNAP="$(get_kept_ssa_folder)/prompt5/messages.json"
 [ -f "$SNAP" ] || fail "missing snapshot: $SNAP"
+jq -e '.[0].role == "system"' "$SNAP" >/dev/null ||
+    fail "prompt5/messages.json should start with system"
+jq -e '.[1].role == "user"' "$SNAP" >/dev/null ||
+    fail "prompt5/messages.json[1] should be the task"
 printf '%s' "$(jq -r '.[1].content' "$SNAP")" | grep -qF \
-    'unique-context-marker' ||
-    fail "context should remain in messages[1] after capping"
-if jq -r '.[].content' "$SNAP" | grep -qF 'unique-early-marker'
-then
-    fail "early marker should have been dropped from prompt5"
-fi
+    'print markers then stop' ||
+    fail "task text should remain in messages[1]"
+jq -r '.[].content' "$SNAP" | grep -qF 'unique-early-marker' ||
+    fail "early marker should still be in prompt5"
+jq -r '.[].content' "$SNAP" | grep -qF 'unique-fourth-marker' ||
+    fail "latest marker should still be in prompt5"

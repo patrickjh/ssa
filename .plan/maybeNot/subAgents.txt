@@ -7,7 +7,8 @@ cannot honestly re-enter ssa today: SSA_KEY is unset so
 scripts never see it; SSA_URL / SSA_MODEL are unexported
 harness locals; inner ssa defaults to ask-on and wants /dev/tty;
 child stdout is every inner script's output, which can blow
-MAX_MESSAGES_BYTES. This is undecided. Do not treat a fifth reply
+the parent messages.json (jq or the provider). This is
+undecided. Do not treat a fifth reply
 shape as required work.
 
 Do:
@@ -38,7 +39,7 @@ Figure out (auth is not these; they still block a simple nested
 ssa even with dummy+proxy):
 
 - Child stdout: the inner loop's script output is the parent's
-  next user turn and can blow MAX_MESSAGES_BYTES. Prompt
+  next user turn and can blow the parent log. Prompt
   convention, a result file, the omit path, or something else.
   Undecided.
 - Child ask: inner ssa defaults to ask-on and wants /dev/tty.

@@ -1,6 +1,6 @@
 #!/bin/sh
-# One script output larger than the cap cannot be trimmed; ssa dies
-# instead of sending an oversize messages.json.
+# One script output larger than the old 131072-byte cap is kept
+# and the run can still complete.
 
 set -u
 . "$TEST_UTILS_FILE"
@@ -14,6 +14,10 @@ awk 'BEGIN { for (i = 0; i < 140000; i++) printf "x" }'
 echo
 REPLY
 
+add_model_reply 2 <<'REPLY'
+# complete
+REPLY
+
 run_ssa_task print a huge blob
-expect_exit 1
-expect_stderr_has 'one chat turn is larger than the messages cap'
+expect_exit 0
+expect_stderr_has 'done: after 2 model prompts'

@@ -1,0 +1,12 @@
+largeTranscript — fat stdout stays in messages.json
+
+ssa does not trim or cap messages.json. Large script output
+is POSTed on later turns. The provider (or jq) rejects a body
+that is too big.
+
+Acceptance:
+- Several large turns: all unique markers remain in a later
+  promptN/messages.json snapshot (system and task still first)
+- One script output larger than the old 131072-byte cap still
+  completes
+- Fake curl on PATH; no real network

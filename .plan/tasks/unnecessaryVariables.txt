@@ -13,7 +13,7 @@ Inline short static strings that have one call site. Wrap at 80
 columns with extra printf arguments or a continued quoted string.
 Keep HELP_TEXT, SYSTEM_PROMPT, and EDIT_APPLY_JQ at the top
 (long, or used as a jq program). Do not inline named constants
-(ASK_YES, IS_TRUE, LOOP_AGAIN, HIT_MAX, MAX_MESSAGES_BYTES).
+(ASK_YES, IS_TRUE, LOOP_AGAIN, HIT_MAX).
 Do not inline path/run-state names (TEMP_FOLDER, PID, …).
 
 FORMAT_ERROR_EMPTY / FORMAT_ERROR_NOT_SHELL stay until

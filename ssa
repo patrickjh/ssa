@@ -34,7 +34,6 @@ JQ_BINARY_FLAG=""
 JSON_BODY_FILE=""
 LOOP_AGAIN=0
 LOOP_STATUS="stopped"
-MAX_MESSAGES_BYTES=131072
 MESSAGES_FILE=""
 MESSAGES_NEXT_FILE=""
 MODEL_RESPONSE_FILE=""
@@ -448,19 +447,13 @@ setup_messages_file() {
            content: (if $context == "" then $task
                      else $task + "\nContext:\n" + $context
                      end)}]' \
-        >"$MESSAGES_FILE" ||
-        die "cannot write chat messages"
-    if messages_file_over_byte_cap; then
-        die "system prompt and first user turn exceed the messages " \
-            "cap ($MAX_MESSAGES_BYTES bytes)"
-    fi
+        >"$MESSAGES_FILE" || die "cannot write chat messages"
 }
 
 run_fake_first_turn() {
     setup_per_prompt_log_folder
     printf '# reasoning: show cwd and kernel\n# script\npwd\nuname -a\n' \
-        >"$MODEL_RESPONSE_FILE" ||
-        die "cannot write fake first turn response"
+        >"$MODEL_RESPONSE_FILE" || die "cannot write fake first turn response"
     append_assistant_turn
     run_model_reply
 }
@@ -481,7 +474,6 @@ run_agent_loop() {
 prompt_model_then_run_script() {
     if over_model_prompt_limit; then return $HIT_MAX; fi
     setup_per_prompt_log_folder
-    cap_messages_file
     log_messages
     call_curl
     handle_model_response
@@ -498,42 +490,6 @@ over_model_prompt_limit() {
 setup_per_prompt_log_folder() {
     PER_PROMPT_LOG_FOLDER="${TEMP_FOLDER}/prompt${PROMPT_COUNTER}"
     create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
-}
-
-cap_messages_file() {
-    while messages_file_over_byte_cap && can_drop_old_message; do
-        drop_oldest_extra_message
-    done
-    if messages_file_over_byte_cap; then
-        die "one chat turn is larger than the messages cap" \
-            "($MAX_MESSAGES_BYTES bytes)"
-    fi
-}
-
-messages_file_over_byte_cap() {
-    [ "$(messages_file_byte_count)" -gt "$MAX_MESSAGES_BYTES" ]
-}
-
-messages_file_byte_count() {
-    # ASCII JSON: string length is byte count. Avoid wc padding/CRLF.
-    # shellcheck disable=SC2086
-    jq $JQ_BINARY_FLAG -n --rawfile raw "$MESSAGES_FILE" \
-        '$raw | length' | tr -d '\r'
-}
-
-can_drop_old_message() {
-    # jq may emit CRLF; strip so the integer test is safe.
-    [ "$(jq 'length' "$MESSAGES_FILE" | tr -d '\r')" -gt 3 ]
-}
-
-drop_oldest_extra_message() {
-    # Keep system and task (indexes 0 and 1); drop the next oldest.
-    # shellcheck disable=SC2086
-    jq $JQ_BINARY_FLAG '.[0:2] + .[3:]' \
-        "$MESSAGES_FILE" >"$MESSAGES_NEXT_FILE" ||
-        die "cannot cap chat messages"
-    mv "$MESSAGES_NEXT_FILE" "$MESSAGES_FILE" ||
-        die "cannot update chat messages"
 }
 
 log_messages() {
@@ -905,7 +861,6 @@ review_work() {
     printf '%s\n' "$REVIEW_ASK" >"$USER_TURN_FILE" ||
         die "cannot write review ask"
     append_user_turn
-    cap_messages_file
     log_messages
     call_curl
     printf 'Feedback from model: ' >&2
