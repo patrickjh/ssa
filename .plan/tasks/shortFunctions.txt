@@ -7,7 +7,7 @@ Most helpers in ssa are already small. Four are over 15 lines
   handle_model_response     30  reply-kind dispatch
   setup_temp_files          20  path list plus create
   build_curl_json_request   20  extra JSON plus jq merge
-  apply_unique_replace      17  jq apply, check .ok, write bytes
+  jq_apply_edit             17  jq apply, check .ok, write bytes
 
 send_curl_json_request is 15 already. Later jobs
 (mixedReplyKinds, reviewWork) grow the dispatch, so split it

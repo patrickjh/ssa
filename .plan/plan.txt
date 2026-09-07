@@ -9,6 +9,6 @@ hardenAskListingUnicode
 shortFunctions
 fewerLines
 unnecessaryVariables
+unnecessaryLineBreaks
 folderTxt
 fasterTests
-unnecessaryLineBreaks
