@@ -4,8 +4,7 @@ The model changes an existing file with no heredoc and no quoting:
 first action line is "# edit file: PATH" (leading blank lines and
 # notes skipped). The rest is one SEARCH/REPLACE pair. The old
 string must match exactly once. ssa applies that with jq in the
-harness, then writes the new bytes through the same ask and
-sandbox-command layers as a write request.
+harness, then writes the new bytes with cat > "$1" after ask.
 
 Acceptance:
 - Unique replace is byte-for-byte (quotes, dollars, backticks)

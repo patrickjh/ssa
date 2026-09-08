@@ -1,5 +1,6 @@
 The agent runs a canned "# script" then stops on "# complete".
 Also covers a task on stdin, hitting the prompt cap, a done marker
 with extra trailing newlines, leading # notes before done, a
-"# complete" comment after a script (not done), and notes before
-"# script" (not on sh stdin).
+"# complete" comment after a script (not done), notes before
+"# script" (not on sh stdin), and exported PID / PROMPT_COUNTER /
+TEMP_FOLDER not reaching the script.

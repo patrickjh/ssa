@@ -1,0 +1,6 @@
+noWrites — SSA_NO_WRITES disables # write file:
+
+When 1, a write request is a format error (same reply spec as
+other format errors, with the write type omitted). The file is
+not created. Ask does not run. Default 0 still writes.
+Unset is 0. Other values die at startup.

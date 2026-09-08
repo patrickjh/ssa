@@ -12,8 +12,9 @@ SSA_KEY="${SSA_KEY:-}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
+SSA_NO_EDITS="${SSA_NO_EDITS-0}"
+SSA_NO_WRITES="${SSA_NO_WRITES-0}"
 SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
-SSA_SANDBOX_COMMAND="${SSA_SANDBOX_COMMAND:-sh}"
 SSA_URL="${SSA_URL:-}"
 
 # Internal
@@ -25,7 +26,6 @@ CONTEXT_FILE=""
 CURL_RESPONSE_FILE=""
 EDITED_BYTES_FILE=""
 EDIT_PAYLOAD_FILE=""
-EDIT_RESULT_FILE=""
 EXIT_CODE_FILE=""
 HIT_MAX=2
 IS_FALSE=1
@@ -42,7 +42,6 @@ PID=$$
 PROMPT_COUNTER=0
 REQUEST_EXTRA_FILE=""
 REPLY=""
-SANDBOX_STDIN_FILE=""
 SCRIPT_OUTPUT_FILE=""
 SYSTEM_PROMPT_FILE=""
 TASK=""
@@ -76,12 +75,13 @@ Environment:
   SSA_MODEL               OpenAI-style model name (required).
   SSA_NO_ASK              0 = ask before running scripts (default);
                           1 = do not ask.
+  SSA_NO_EDITS            0 = allow # edit file: (default); 1 = treat
+                          that reply as a format error.
+  SSA_NO_WRITES           0 = allow # write file: (default); 1 = treat
+                          that reply as a format error.
   SSA_REQUEST_JSON        JSON object merged into the request body
                           (think, max_tokens, temperature). Model and
                           messages from ssa win on key conflicts.
-  SSA_SANDBOX_COMMAND     Command that runs the model script on stdin.
-                          Works like sh. Must support -c for write and
-                          edit. Default is sh.
   SSA_URL                 URL curl POSTs chat-completions to (required).
 
 ssa asks the model for a script, a write, or an edit; runs it; and
@@ -100,31 +100,33 @@ Example:
   ssa why is apt not updating?
 '
 
-SYSTEM_PROMPT_INTRO='You help users solve tasks with POSIX shell scripts, write
-requests, and edit requests. Each turn you get a task, prior commands and
-their output. Continue from there with exactly one of the following: a
-script request, a write request, an edit request, or the task complete marker.
+SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. Each
+turn you get a task, prior commands and their output. Continue from
+there with exactly one of the reply formats below.
 No markdown fences, no thinking tags. Put reasoning in # comments.'
 
-REPLY_SPEC='These are the valid reply formats:
+REPLY_SPEC_HEAD='These are the valid reply formats:'
 
-A script request is "# script" then a POSIX sh program. Do not prefix
+REPLY_SPEC_SCRIPT=\
+'A script request is "# script" then a POSIX sh program. Do not prefix
 script lines with #. Example:
 
 # reasoning: look at the files in the folder
 # script
-ls -la
+ls -la'
 
-A write request is "# write file: PATH" then raw file contents.
+REPLY_SPEC_WRITE=\
+'A write request is "# write file: PATH" then raw file contents.
 Prefer this over POSIX tools for writing files because this has no
 quoting issues. Example:
 
 # reasoning: write a hello.txt file
 # write file: hello.txt
 hello
-world
+world'
 
-An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
+REPLY_SPEC_EDIT=\
+'An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
 block must match exactly once. Prefer this for edits over sed and other
 POSIX tools because this has no quoting issues. Example:
 
@@ -135,12 +137,15 @@ hello
 =======
 hello
 world
->>>>>>> REPLACE
+>>>>>>> REPLACE'
 
-The task complete marker is "# complete" in its own turn.
+REPLY_SPEC_COMPLETE=\
+'The task complete marker is "# complete" in its own turn.
 Do not append it to other turns. Example:
 
 # complete'
+
+REPLY_SPEC=""
 
 REVIEW_ASK='Reply with plain text: what would have made this run go better?'
 
@@ -148,13 +153,14 @@ OUTPUT_OMITTED_NOT_UTF8='Output omitted: not valid UTF-8 (NUL or binary '\
 'bytes).'
 
 EDIT_APPLY_JQ='
+def fail($m): $m | halt_error(1);
 ($payload | split("<<<<<<< SEARCH\n")) as $a
 | if ($a | length) != 2 or $a[0] != "" then
-    {ok: false, msg: "missing SEARCH/REPLACE markers"}
+    fail("missing SEARCH/REPLACE markers")
   else
     ($a[1] | split("\n=======\n")) as $b
     | if ($b | length) != 2 then
-        {ok: false, msg: "missing SEARCH/REPLACE markers"}
+        fail("missing SEARCH/REPLACE markers")
       else
         ($b[1] |
           if startswith(">>>>>>> REPLACE") then
@@ -163,20 +169,19 @@ EDIT_APPLY_JQ='
           end
         ) as $c
         | if ($c | length) != 2 then
-            {ok: false, msg: "missing SEARCH/REPLACE markers"}
+            fail("missing SEARCH/REPLACE markers")
           elif $c[1] != "" and $c[1] != "\n" then
-            {ok: false, msg: "missing SEARCH/REPLACE markers"}
+            fail("missing SEARCH/REPLACE markers")
           elif $b[0] == "" then
-            {ok: false, msg: "old string is empty"}
+            fail("old string is empty")
           else
             ($file | split($b[0])) as $p
             | if ($p | length) != 2 then
-                {ok: false,
-                 msg: ("old string matched "
-                   + (($p | length) - 1 | tostring)
-                   + " times (need 1)")}
+                fail("old string matched "
+                  + (($p | length) - 1 | tostring)
+                  + " times (need 1)")
               else
-                {ok: true, text: ($p[0] + $c[0] + $p[1])}
+                $p[0] + $c[0] + $p[1]
               end
           end
       end
@@ -240,10 +245,11 @@ check_can_run() {
     check_task_is_set
     check_max_model_prompts
     check_no_ask
+    check_no_edits
+    check_no_writes
     check_keep_temp
     check_model_is_set
     check_url_is_set
-    check_sandbox_command
     check_request_json
     check_context
     if [ "$SSA_NO_ASK" = 0 ]; then check_prompt_device; fi
@@ -265,6 +271,18 @@ check_no_ask() {
     fi
 }
 
+check_no_edits() {
+    if [ "$SSA_NO_EDITS" != 0 ] && [ "$SSA_NO_EDITS" != 1 ]; then
+        die "SSA_NO_EDITS must be 0 or 1; see ssa -h for help"
+    fi
+}
+
+check_no_writes() {
+    if [ "$SSA_NO_WRITES" != 0 ] && [ "$SSA_NO_WRITES" != 1 ]; then
+        die "SSA_NO_WRITES must be 0 or 1; see ssa -h for help"
+    fi
+}
+
 check_keep_temp() {
     if [ "$SSA_KEEP_TEMP" != 0 ] && [ "$SSA_KEEP_TEMP" != 1 ]; then
         die "SSA_KEEP_TEMP must be 0 or 1; see ssa -h for help"
@@ -277,11 +295,6 @@ check_model_is_set() {
 
 check_url_is_set() {
     [ -n "$SSA_URL" ] || die "SSA_URL not set; see ssa -h for help"
-}
-
-check_sandbox_command() {
-    command -v "$SSA_SANDBOX_COMMAND" >/dev/null 2>&1 ||
-        die "sandbox not found: $SSA_SANDBOX_COMMAND; see ssa -h for help"
 }
 
 check_request_json() {
@@ -337,18 +350,15 @@ setup_temp_files() {
     MODEL_RESPONSE_FILE="${TEMP_FOLDER}/latestModelResponse.txt"
     EDITED_BYTES_FILE="${TEMP_FOLDER}/latestEditedBytes.txt"
     EDIT_PAYLOAD_FILE="${TEMP_FOLDER}/latestEditPayload.txt"
-    EDIT_RESULT_FILE="${TEMP_FOLDER}/latestEditResult.json"
     EXIT_CODE_FILE="${TEMP_FOLDER}/latestScriptExitCode.txt"
     SCRIPT_OUTPUT_FILE="${TEMP_FOLDER}/latestScriptOutput.txt"
     MESSAGES_FILE="${TEMP_FOLDER}/messages.json"
     MESSAGES_NEXT_FILE="${TEMP_FOLDER}/messagesNext.json"
     USER_TURN_FILE="${TEMP_FOLDER}/latestUserTurn.txt"
     CONTEXT_FILE="${TEMP_FOLDER}/context.txt"
-    SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
     create_file_no_overwrite "$MODEL_RESPONSE_FILE"
     create_file_no_overwrite "$EDITED_BYTES_FILE"
     create_file_no_overwrite "$EDIT_PAYLOAD_FILE"
-    create_file_no_overwrite "$EDIT_RESULT_FILE"
     create_file_no_overwrite "$EXIT_CODE_FILE"
     create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
     create_file_no_overwrite "$MESSAGES_FILE"
@@ -418,6 +428,7 @@ cleanup_auth_header_file() {
 setup_messages_file() {
     SYSTEM_PROMPT_FILE="${TEMP_FOLDER}/systemPrompt.txt"
     create_file_no_overwrite "$SYSTEM_PROMPT_FILE"
+    REPLY_SPEC=$(reply_spec_text)
     printf '%s\n\n%s\n' "$SYSTEM_PROMPT_INTRO" "$REPLY_SPEC" \
         >"$SYSTEM_PROMPT_FILE" || die "cannot write system prompt"
     # shellcheck disable=SC2086
@@ -433,12 +444,23 @@ setup_messages_file() {
         >"$MESSAGES_FILE" || die "cannot write chat messages"
 }
 
+reply_spec_text() {
+    printf '%s\n\n%s' "$REPLY_SPEC_HEAD" "$REPLY_SPEC_SCRIPT"
+    if writes_are_enabled; then
+        printf '\n\n%s' "$REPLY_SPEC_WRITE"
+    fi
+    if edits_are_enabled; then
+        printf '\n\n%s' "$REPLY_SPEC_EDIT"
+    fi
+    printf '\n\n%s' "$REPLY_SPEC_COMPLETE"
+}
+
 run_fake_first_turn() {
     setup_per_prompt_log_folder
     printf '# reasoning: show cwd and kernel\n# script\npwd\nuname -a\n' \
         >"$MODEL_RESPONSE_FILE" || die "cannot write fake first turn response"
     append_assistant_turn
-    run_model_reply
+    handle_script_request
 }
 
 run_agent_loop() {
@@ -541,16 +563,41 @@ handle_model_response() {
     append_assistant_turn
     if agent_is_done; then return $TASK_DONE; fi
     if reply_is_blank; then record_format_error
-    elif reply_is_write_request; then run_model_reply
-    elif reply_is_edit_request; then run_model_reply
-    elif ! reply_is_script_request; then record_format_error
-    elif ! script_payload | grep -q '[^[:space:]]'; then record_format_error
-    elif reply_has_fence_line; then record_format_error
-    elif reply_has_thinking_tags; then record_format_error
-    elif reply_is_valid_shell; then run_model_reply
+    elif reply_is_write_request; then handle_write_request
+    elif reply_is_edit_request; then handle_edit_request
+    elif reply_is_script_request; then handle_script_request
     else record_format_error
     fi
     return $LOOP_AGAIN
+}
+
+handle_write_request() {
+    if ! writes_are_enabled; then
+        record_format_error
+        return
+    fi
+    ask_to_run || return
+    apply_write_request \
+        "$(first_action_line | sed 's/^# write file: //')"
+}
+
+handle_edit_request() {
+    if ! edits_are_enabled; then
+        record_format_error
+        return
+    fi
+    ask_to_run || return
+    apply_edit_request \
+        "$(first_action_line | sed 's/^# edit file: //')"
+}
+
+handle_script_request() {
+    if ! script_payload | grep -q '[^[:space:]]'; then record_format_error
+    elif reply_has_fence_line; then record_format_error
+    elif reply_has_thinking_tags; then record_format_error
+    elif ! reply_is_valid_shell; then record_format_error
+    elif ask_to_run; then run_script
+    fi
 }
 
 append_assistant_turn() {
@@ -587,28 +634,24 @@ reply_is_valid_shell() {
     script_payload | sh -n >/dev/null 2>&1
 }
 
-run_model_reply() {
+ask_to_run() {
     if [ "$SSA_NO_ASK" = 0 ]; then
         ask_user_to_approve_script || {
             record_script_rejection
-            return
+            return $IS_FALSE
         }
     fi
-    run_reply_in_sandboxes
+    return $IS_TRUE
 }
 
-run_reply_in_sandboxes() {
-    if reply_is_write_request; then
-        run_in_configured_sandboxes \
-            -c 'sed -n "/^# write file: ./,\$p" | sed 1d > "$0" &&
-                printf "wrote file: %s\n" "$0"' \
-            "$(first_action_line | sed 's/^# write file: //')"
-    elif reply_is_edit_request; then
-        apply_edit_request \
-            "$(first_action_line | sed 's/^# edit file: //')"
-    else
-        run_in_configured_sandboxes
-    fi
+apply_write_request() {
+    (
+        sed -n '/^# write file: ./,$p' "$MODEL_RESPONSE_FILE" |
+            sed 1d >"$1" &&
+            printf 'wrote file: %s\n' "$1"
+        echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    ) 2>&1 | tee "$SCRIPT_OUTPUT_FILE"
+    append_script_result
 }
 
 apply_edit_request() {
@@ -618,12 +661,12 @@ apply_edit_request() {
     fi
     extract_edit_payload
     jq_apply_edit "$1" || return
-    SANDBOX_STDIN_FILE="$EDITED_BYTES_FILE"
-    run_in_configured_sandboxes \
-        -c 'cat > "$0" &&
-            printf "edited file: %s\n" "$0"' \
-        "$1"
-    SANDBOX_STDIN_FILE="$MODEL_RESPONSE_FILE"
+    (
+        cat "$EDITED_BYTES_FILE" >"$1" &&
+            printf 'edited file: %s\n' "$1"
+        echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    ) 2>&1 | tee "$SCRIPT_OUTPUT_FILE"
+    append_script_result
 }
 
 extract_edit_payload() {
@@ -632,17 +675,16 @@ extract_edit_payload() {
 }
 
 jq_apply_edit() {
-    jq $JQ_BINARY_FLAG -n \
+    # shellcheck disable=SC2086
+    if ! ERR=$(jq $JQ_BINARY_FLAG -j -n \
         --rawfile file "$1" \
         --rawfile payload "$EDIT_PAYLOAD_FILE" \
-        "$EDIT_APPLY_JQ" >"$EDIT_RESULT_FILE" || die "cannot apply edit"
-    if [ "$(jq $JQ_BINARY_FLAG -j '.ok' "$EDIT_RESULT_FILE")" != "true" ]; then
-        record_edit_failure "$1" \
-            "$(jq $JQ_BINARY_FLAG -j '.msg' "$EDIT_RESULT_FILE")"
+        "$EDIT_APPLY_JQ" 2>&1 >"$EDITED_BYTES_FILE")
+    then
+        [ -n "$ERR" ] || die "cannot apply edit"
+        record_edit_failure "$1" "$ERR"
         return $IS_FALSE
     fi
-    jq $JQ_BINARY_FLAG -j '.text' "$EDIT_RESULT_FILE" >"$EDITED_BYTES_FILE" ||
-        die "cannot write edited bytes"
     return $IS_TRUE
 }
 
@@ -662,6 +704,14 @@ reply_is_edit_request() {
 
 reply_is_script_request() {
     first_action_line | grep -q '^# script$'
+}
+
+writes_are_enabled() {
+    [ "$SSA_NO_WRITES" = 0 ]
+}
+
+edits_are_enabled() {
+    [ "$SSA_NO_EDITS" = 0 ]
 }
 
 first_action_line() {
@@ -687,13 +737,9 @@ ask_user_for_rejection_reason() {
         die "cannot write ${PER_PROMPT_LOG_FOLDER}/userFeedback.txt"
 }
 
-run_in_configured_sandboxes() {
+run_script() {
     (
-        if reply_is_script_request && [ $# -eq 0 ]; then
-            script_payload | "$SSA_SANDBOX_COMMAND" 2>&1
-        else
-            "$SSA_SANDBOX_COMMAND" "$@" <"$SANDBOX_STDIN_FILE" 2>&1
-        fi
+        script_payload | sh 2>&1
         echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
     ) | tee "$SCRIPT_OUTPUT_FILE"
     append_script_result

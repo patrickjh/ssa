@@ -1,2 +1,3 @@
 A mistyped -* flag is a usage error, not a task word. Exit 1
 before the agent loop. The only flags are -h and --help.
+--sandbox-command is a bad option.

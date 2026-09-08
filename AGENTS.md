@@ -102,8 +102,7 @@ repeat) with:
 
 - OpenAI-compatible HTTP via **curl** and **jq** (built in)
 - **Ask-user** approval (on by default)
-- **Sandbox command** for the model script (default `sh`; override for
-  containers / pledge / jails, etc.)
+- Scripts run with **`sh` on stdin**. Write and edit are harness I/O.
 
 ## Program flow
 
@@ -119,18 +118,18 @@ repeat) with:
    roles). Treat the reply as the script. If done marker, stop; if
    write request
    (first action line `# write file: PATH`, after leading blank lines
-   and `#` notes), write everything after that line to PATH through
-   the ask / command layers; if edit request (first action line
+   and `#` notes), write everything after that line to PATH in the
+   harness after ask; if edit request (first action line
    `# edit file: PATH`), apply one unique SEARCH/REPLACE in the
-   harness then write through the same layers; if first action line
-   is `# script`, run the payload after that line through ask /
-   command layers (`sh -n` on the payload); if the reply is empty,
+   harness then write the new bytes there; if first action line
+   is `# script`, run the payload after that line through ask then
+   `sh` (`sh -n` on the payload); if the reply is empty,
    has no known first action line, has an empty `# script` payload,
    has a markdown fence line, has thinking tags (`<think>` or
    `<|channel>thought`), or `sh -n` fails, append `Format error:`
    plus the same reply spec as the system prompt (not which check
-   fired) and continue (do not run it); else run through ask /
-   command layers; capture script output, then append it to
+   fired) and continue (do not run it); else run through ask then
+   `sh`; capture script output, then append it to
    `messages.json` (if jq cannot hold it, or it contains a NUL,
    omit those bytes and append a short note plus the exit code
    instead).
@@ -150,13 +149,12 @@ repeat) with:
 
 ## Environment
 
-Harness state is **not** exported into child processes (`sh` or
-`SSA_SANDBOX_COMMAND`).
+Harness state is **not** exported into child processes (`sh`).
 
 Private (not exported): `PID`, `PROMPT_COUNTER`, `TEMP_FOLDER`.
 Startup unsets those names so an inherited export is dropped.
-Pipeline subshells inside the harness still see them; model scripts and
-custom sandbox commands do not inherit them.
+Pipeline subshells inside the harness still see them; model scripts
+do not inherit them.
 
 `PID` holds the agent PID at startup for `die` (SIGUSR1). It must
 not be replaced with `$$` inside a pipeline subshell.
@@ -164,18 +162,20 @@ not be replaced with `$$` inside a pipeline subshell.
 User-facing settings (`SSA_MODEL`, `SSA_NO_ASK`, …) are environment
 knobs; see Settings below and `ssa -h`.
 
-## Sandboxing (two layers)
+## Ask then sh
 
-Ask is optional. The sandbox command always runs (default `sh`).
-Combine both.
+Ask is optional. Scripts always run with `sh` on stdin. Isolation
+that should cover files wraps the whole `ssa` process (container,
+pledge, a different user). Hung scripts are not killed; wrap `ssa`
+with `timeout` in the caller’s shell.
 
-### 1. Ask user — off when `SSA_NO_ASK=1` (default `0`)
+### Ask user — off when `SSA_NO_ASK=1` (default `0`)
 
 - `SSA_NO_ASK=0|1` (`1` skips ask).
 - When `0`: show each **model** script on **stderr**; print the
   `[Y]es / [N]o / [Q]uit` prompt on stderr; read the answer from
   `/dev/tty`.
-- Yes → run the script (other layers). No → rejection text on stdout,
+- Yes → run it. No → rejection text on stdout,
   status `1` (loop continues); then `reason:` on stderr and one line
   from `/dev/tty` (empty skips). A typed reason is logged to
   `promptN/userFeedback.txt` and appended as `Reason: …` on the user
@@ -183,39 +183,21 @@ Combine both.
   cannot cover this tty read.
 - Ask listing and other harness UI of untrusted bytes show CR as
   `\r`, ESC as `\e`, and other non-print (except tab) as `?`. The
-  file fed to the sandbox and live script stdout are unchanged.
+  file fed to `sh` and live script stdout are unchanged.
 - Invalid answers print `invalid input: …` on stderr and re-prompt.
 - Answers are logged to `promptN/userAnswer.txt` when ask runs.
 - Requires an openable `/dev/tty` when ask is enabled. Read failure
   from `/dev/tty` is fatal. Batch jobs: `SSA_NO_ASK=1`.
 
-### 2. Sandbox command — `SSA_SANDBOX_COMMAND` (default `sh`)
-
-- Validated with `command -v` at startup. Default `sh`.
-- The harness feeds that command’s **stdin** from the `# script`
-  payload (scripts), `latestModelResponse.txt` (writes), or from
-  edited bytes (successful edits).
-- Contract: stdout/stderr from the run; exit code recorded in
-  `messages.json`. Unrecoverable stop from inside the harness uses `die`
-  (SIGUSR1 to `PID`). Custom sandbox commands do not get `PID`
-  in their environment. Write turns need sh-style `-c` and `sed`.
-  Edit turns need sh-style `-c` and `cat` (jq runs in the harness).
-- Hung scripts are not killed by ssa. Point `SSA_SANDBOX_COMMAND` at a
-  wrapper that runs `timeout` or `timelimit` around `sh`, passing
-  `"$@"` through so write/edit `-c` still works. `COMMAND` is one
-  executable (`command -v`), not `timeout 60 sh`. Use a process
-  group (`timeout --foreground`, or `setsid`): a background child
-  that inherits the pipe keeps `tee` waiting after the parent exits.
-
 ### How the script is run
 
 After ask (or after ask is disabled):
 
-`"$SSA_SANDBOX_COMMAND" < stdin`
+`sh < stdin`
 
 For `# script` turns, stdin is everything after that line, not
 the whole reply. Leading `#` notes are not fed to `sh`. Write and
-edit turns add sh-style `-c` and the target path as `$0`.
+edit turns are harness I/O, not `sh`.
 
 ## Script requests (`# script`)
 
@@ -235,17 +217,13 @@ script. Leading blank lines and `#` notes are skipped;
 is the raw file contents — no heredocs, no quoting, no escaping.
 Detection is in `reply_is_write_request`; done-marker and blank-reply
 checks come first; `sh -n` is not applied to write requests.
+`SSA_NO_WRITES=1` makes `# write file: PATH` a format error (same
+`REPLY_SPEC`, no ask, file unchanged).
 
-- The write runs through the same ask / sandbox layers as a script.
-  The sandbox command is invoked with `-c`,
-  `sed -n "/^# write file: ./,$p" | sed 1d > "$0"` then
-  `printf "wrote file: %s\n" "$0"`, and PATH (`$0` in the `-c`
-  script), with the full `latestModelResponse.txt` on **stdin**.
-  The first sed keeps from the sentinel to the end; `sed 1d` drops
-  the sentinel. That works when the sentinel is line 1 (unlike
-  `1,/pattern/d`). The path is a positional argument — never
-  interpolated into script text — so no quoting problem exists.
-  Sandbox commands must support sh-style `-c` for write turns.
+- After ask, the harness extracts the payload (sentinel to end, drop
+  the sentinel) and writes it to PATH (`sed` to `"$1"`). PATH is
+  `$1` — never interpolated. Do not pipe writes through
+  `run_script`.
 - Success prints `wrote file: PATH`; failures (missing parent folder,
   permissions) land in `messages.json` like any script failure. The
   harness does **not** create parent folders; the model sends a
@@ -255,10 +233,6 @@ checks come first; `sh -n` is not applied to write requests.
   `latestModelResponse.txt`, so trailing blank lines in the payload
   are kept. `jq -b` is added when the probe at startup succeeds, so
   jq builds that would otherwise write CRLF do not.
-
-This is harness-parsed (unlike the earlier prompt-only raw-tail idea)
-because relying on POSIX stdin sharing proved non-portable across
-shells used as the sandbox command.
 
 ## Edit requests (`# edit file:`)
 
@@ -279,6 +253,8 @@ new bytes
 Detection is in `reply_is_edit_request`; done-marker, blank-reply, and
 write-request checks come first; `sh -n` and fence/think checks are
 not applied (the payload may contain those bytes).
+`SSA_NO_EDITS=1` makes `# edit file: PATH` a format error (same
+`REPLY_SPEC`, no ask, file unchanged).
 
 - The harness extracts the payload (from the sentinel, minus that
   line) and runs `jq` `split` so the old string matches **exactly
@@ -286,11 +262,9 @@ not applied (the payload may contain those bytes).
   (file not found, missing markers, empty old string, matched 0 or
   2+ times) with exit `1` and do not change the file. Same recovery
   as a failed write.
-- On success the sandbox command is invoked with `-c`,
-  `cat > "$0" && printf "edited file: %s\n" "$0"`, PATH as `$0`,
-  and the new file bytes on **stdin**. The path is a positional
-  argument — never interpolated into script text. Sandbox commands
-  must support sh-style `-c` for edit turns; they do not need `jq`.
+- On success the harness writes with `cat > "$1"` and prints
+  `edited file: PATH`. PATH is `$1` — never interpolated. Do not
+  pipe edits through `run_script`.
 - One file, one replace per reply. Empty new string deletes the
   old block. Marker lines in old/new are ambiguous; fail closed.
 
@@ -350,8 +324,9 @@ Built-in OpenAI-compatible `/chat/completions` client:
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
 | `SSA_MODEL` | unset (required) |
 | `SSA_NO_ASK` | `0` (ask) |
+| `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
+| `SSA_NO_WRITES` | `0` (allow `# write file:`) |
 | `SSA_REQUEST_JSON` | empty |
-| `SSA_SANDBOX_COMMAND` | `sh` |
 | `SSA_URL` | unset (required) |
 
 Settings are environment only. The only flags are `-h` / `--help`.
@@ -514,7 +489,7 @@ in one line at the call site.
 | Diagnostic log file | `ssa … 2>run.log` |
 | Keep temp logs | `SSA_KEEP_TEMP=1` |
 | Extra curl flags | `curl` wrapper earlier on `PATH` |
-| Hung script / open pipe | `SSA_SANDBOX_COMMAND` wrapping `timeout` |
+| Hung script / open pipe | wrap `ssa` with `timeout` |
 | HTTP(S) proxy | `https_proxy` / `http_proxy` (curl) |
 | Repeat for many tasks | `for task in …; do …; done` |
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Edit request path may contain spaces; the path is $0 of -c.
+# Edit request path may contain spaces; the path is $1.
 
 set -u
 . "$TEST_UTILS_FILE"

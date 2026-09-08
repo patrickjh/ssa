@@ -1,0 +1,47 @@
+atomicOverwrite — write and edit replace PATH with mv, not >
+
+Why:
+Harness write and edit stream onto PATH with > (sed 1d > "$1",
+cat edited bytes > "$1"). That truncates first. A full disk,
+kill, or cat error then leaves PATH empty or partial. Unique-
+replace already built the new bytes; the original is still
+lost. Missing parent and permissions already fail closed.
+This job is the remaining "file unchanged" hole.
+
+writeEditInHarness already landed: writes and edits are
+harness I/O. Do not stuff temp-then-mv into a sandbox -c
+string. Scripts that open files themselves are not this job.
+
+Do:
+After ask, write the new bytes to a temp file, then mv onto
+PATH. Do not truncate PATH until mv succeeds. Path stays $1,
+never interpolated. Success still prints wrote file: PATH /
+edited file: PATH. Missing parent, permissions, and failed
+unique-replace stay exit 1, original unchanged, loop
+continues. The harness does not create parent folders.
+
+Put the temp in the same directory as PATH so mv is a rename
+on one filesystem. A temp under TEMP_FOLDER then mv is a copy
+when PATH is on another device, and the original can still
+be lost. Remove the temp on both success and failure.
+
+If PATH is a directory, fail; do not mv into it (that would
+create a file inside). Same visible failure as today's >.
+New files: mv into place is fine (no original). Do not add a
+flag or env var. Do not keep a hidden sh for this.
+
+Related: write and edit are harness I/O (this replaces the
+cat >). Disabled sentinels (SSA_NO_WRITES / SSA_NO_EDITS)
+never reach this path.
+
+Size:
+About 15 lines in ssa (10–25): temp next to PATH, write,
+mv, cleanup. Tests and AGENTS.md extra, not in that count.
+
+Tests:
+Existing writeFileRequest/ and editFileRequest/ still pass
+(overwrite bytes match; missing parent recovers). Add a write
+or edit whose PATH is an existing directory: edit failed or
+the write error on stdout, directory unchanged, loop
+continues. Fake curl, SSA_NO_ASK=1. Do not try to simulate a
+kill mid-write.

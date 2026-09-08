@@ -1,10 +1,7 @@
 Next jobs, in order. Full write-up for each is tasks/<stem>.txt.
 When done, delete that file and drop the stem here.
 
-writeEditInHarness
-noEdits
-noWrites
-dropSandbox
+atomicOverwrite
 hardenAskListingUnicode
 shortFunctions
 fewerLines

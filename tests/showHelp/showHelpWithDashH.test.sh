@@ -14,4 +14,8 @@ expect_stdout_has 'think, max_tokens'
 expect_stdout_has 'feedback'
 expect_stdout_has 'requested help'
 expect_stdout_has '# complete'
+expect_stdout_has 'SSA_NO_EDITS'
+expect_stdout_has 'SSA_NO_WRITES'
+expect_stdout_lacks 'SSA_SANDBOX_COMMAND'
+expect_stdout_lacks '--sandbox-command'
 expect_stderr_empty

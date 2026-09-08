@@ -1,6 +1,6 @@
 #!/bin/sh
 # A script that prints a CR is not filtered on stdout. Ask listing
-# is display-only; sandbox bytes stay raw.
+# is display-only; bytes fed to sh stay raw.
 
 set -u
 . "$TEST_UTILS_FILE"

@@ -1,0 +1,5 @@
+experiments/ — forks of ssa, not product.
+
+Copy the runnable tree (ssa, tests, AGENTS.md, README). Apply a
+change here, test that fork, and merge into ssa only what works.
+Do not add bin/ or extra flags.

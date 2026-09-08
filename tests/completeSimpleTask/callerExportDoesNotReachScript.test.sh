@@ -1,6 +1,6 @@
 #!/bin/sh
 # Exported PID / PROMPT_COUNTER / TEMP_FOLDER from the caller do not
-# reach the sandbox script.
+# reach the script.
 
 set -u
 . "$TEST_UTILS_FILE"

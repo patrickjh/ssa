@@ -6,6 +6,7 @@ Acceptance:
 - Exit code 0
 - Help on stdout
 - Output includes usage (-h, --help) and a required setting such as
-  SSA_URL
+  SSA_URL, plus SSA_NO_EDITS and SSA_NO_WRITES
+- Output does not mention SSA_SANDBOX_COMMAND
 - Stderr empty on success
 - No model call and no temp agent session

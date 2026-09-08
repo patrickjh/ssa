@@ -3,9 +3,8 @@ writeFileRequest — model write requests
 The model creates or overwrites a file with no heredoc and no shell in
 the reply: first action line is "# write file: PATH" (leading blank
 lines and # notes skipped) and every line after that sentinel is the
-raw file. ssa writes that payload to PATH with sed through the same
-ask and sandbox layers as a script. No quoting or escaping applies
-to the payload.
+raw file. ssa writes that payload to PATH in the harness after ask
+(sed to "$1"). No quoting or escaping applies to the payload.
 
 Acceptance:
 - File lands byte-for-byte (quotes, dollars, backticks, backslashes,

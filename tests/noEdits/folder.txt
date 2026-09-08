@@ -1,0 +1,6 @@
+noEdits — SSA_NO_EDITS disables # edit file:
+
+When 1, an edit request is a format error (same reply spec as
+other format errors, with the edit type omitted). The file is
+unchanged. Ask does not run. Default 0 still edits.
+Unset is 0. Other values die at startup.

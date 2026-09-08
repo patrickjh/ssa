@@ -1,0 +1,34 @@
+dropJqBinaryFlag — consider dropping JQ_BINARY_FLAG
+
+Why:
+Every jq call threads unquoted $JQ_BINARY_FLAG so some builds
+do not write CRLF. setup_jq_binary_flag probes jq -b once
+because jq 1.6 and older lack it. ssa is POSIX-only (Windows
+use WSL). Unix jq already writes LF. The probe, the internal
+name, and the unquoted expansion exist for a Windows jq
+behavior the product does not run.
+
+Do:
+Decide first. Preferred: drop -b. Remove JQ_BINARY_FLAG,
+setup_jq_binary_flag, and the startup probe. Call jq with
+no extra flag. Write/edit still need exact bytes; on POSIX
+jq -j already does that. Do not require jq 1.7+ only to
+keep -b. Do not wrap jq in a helper just to hide the flag.
+
+If no: keep the probe and the flag. Do not always pass -b
+(that dies on jq 1.6). Do not document a Windows jq
+workaround; the product still says use WSL.
+
+If yes: drop the AGENTS.md sentences about jq -b and the
+startup probe (write-request bytes and model-reply extract).
+Do not add a jq version check.
+
+Size:
+If no: 0. If yes: about 8 lines removed from ssa (5–12):
+the name, the setup function, the call. jq lines stay;
+they lose $JQ_BINARY_FLAG. AGENTS.md is extra.
+
+Tests:
+If no: none. If yes: write/edit stories still keep trailing
+blank lines and exact payload bytes. Fake curl, SSA_NO_ASK=1.
+No new story for -b.
