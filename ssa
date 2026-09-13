@@ -18,7 +18,7 @@ SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
 SSA_URL="${SSA_URL:-}"
 
 # Internal
-unset PID PROMPT_COUNTER TEMP_FOLDER
+unset PID PROMPT_COUNTER REPLACE_TEMP_FILE TEMP_FOLDER
 ASK_NO=1
 ASK_YES=0
 AUTH_HEADER_FILE=""
@@ -40,8 +40,9 @@ MODEL_RESPONSE_FILE=""
 PER_PROMPT_LOG_FOLDER=""
 PID=$$
 PROMPT_COUNTER=0
-REQUEST_EXTRA_FILE=""
+REPLACE_TEMP_FILE=""
 REPLY=""
+REQUEST_EXTRA_FILE=""
 SCRIPT_OUTPUT_FILE=""
 SYSTEM_PROMPT_FILE=""
 TASK=""
@@ -225,6 +226,7 @@ check_required_commands() {
     check_command head
     check_command jq
     check_command mkdir
+    check_command mv
     check_command rm
     check_command sed
     check_command tee
@@ -411,6 +413,7 @@ setup_temp_cleanup() {
 
 cleanup_on_exit() {
     cleanup_auth_header_file
+    cleanup_replace_temp_file
     if [ "$SSA_KEEP_TEMP" = 0 ] && [ -n "$TEMP_FOLDER" ]; then
         rm -rf "$TEMP_FOLDER"
     fi
@@ -423,6 +426,12 @@ cleanup_auth_header_file() {
         rm -f "$AUTH_HEADER_FILE" || :
     fi
     AUTH_HEADER_FILE=""
+}
+
+cleanup_replace_temp_file() {
+    if [ -z "$REPLACE_TEMP_FILE" ]; then return; fi
+    rm -f "$REPLACE_TEMP_FILE"
+    REPLACE_TEMP_FILE=""
 }
 
 setup_messages_file() {
@@ -645,12 +654,14 @@ ask_to_run() {
 }
 
 apply_write_request() {
+    REPLACE_TEMP_FILE="$1.ssa_temp.$$"
     (
         sed -n '/^# write file: ./,$p' "$MODEL_RESPONSE_FILE" |
-            sed 1d >"$1" &&
+            sed 1d | replace_path_atomically "$1" &&
             printf 'wrote file: %s\n' "$1"
         echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
     ) 2>&1 | tee "$SCRIPT_OUTPUT_FILE"
+    cleanup_replace_temp_file
     append_script_result
 }
 
@@ -661,12 +672,25 @@ apply_edit_request() {
     fi
     extract_edit_payload
     jq_apply_edit "$1" || return
+    REPLACE_TEMP_FILE="$1.ssa_temp.$$"
     (
-        cat "$EDITED_BYTES_FILE" >"$1" &&
+        replace_path_atomically "$1" <"$EDITED_BYTES_FILE" &&
             printf 'edited file: %s\n' "$1"
         echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
     ) 2>&1 | tee "$SCRIPT_OUTPUT_FILE"
+    cleanup_replace_temp_file
     append_script_result
+}
+
+replace_path_atomically() {
+    if [ -d "$1" ]; then
+        printf '%s: Is a directory\n' "$1" >&2
+        return $IS_FALSE
+    fi
+    cat >"$REPLACE_TEMP_FILE" && mv "$REPLACE_TEMP_FILE" "$1"
+    STATUS=$?
+    rm -f "$REPLACE_TEMP_FILE"
+    return $STATUS
 }
 
 extract_edit_payload() {

@@ -151,10 +151,10 @@ repeat) with:
 
 Harness state is **not** exported into child processes (`sh`).
 
-Private (not exported): `PID`, `PROMPT_COUNTER`, `TEMP_FOLDER`.
-Startup unsets those names so an inherited export is dropped.
-Pipeline subshells inside the harness still see them; model scripts
-do not inherit them.
+Private (not exported): `PID`, `PROMPT_COUNTER`, `REPLACE_TEMP_FILE`,
+`TEMP_FOLDER`. Startup unsets those names so an inherited export is
+dropped. Pipeline subshells inside the harness still see them; model
+scripts do not inherit them.
 
 `PID` holds the agent PID at startup for `die` (SIGUSR1). It must
 not be replaced with `$$` inside a pipeline subshell.
@@ -221,13 +221,16 @@ checks come first; `sh -n` is not applied to write requests.
 `REPLY_SPEC`, no ask, file unchanged).
 
 - After ask, the harness extracts the payload (sentinel to end, drop
-  the sentinel) and writes it to PATH (`sed` to `"$1"`). PATH is
-  `$1` — never interpolated. Do not pipe writes through
-  `run_script`.
+  the sentinel) and writes it to a temp file next to PATH, then `mv`
+  onto PATH. PATH is `$1` — never interpolated. Do not truncate PATH
+  until `mv` succeeds. If PATH is a directory, fail; do not `mv`
+  into it. Do not pipe writes through `run_script`. The sibling path
+  is `REPLACE_TEMP_FILE` in the parent; the exit trap removes it if
+  it is still there (INT / TERM / HUP / `die`).
 - Success prints `wrote file: PATH`; failures (missing parent folder,
-  permissions) land in `messages.json` like any script failure. The
-  harness does **not** create parent folders; the model sends a
-  normal `mkdir` script turn first.
+  permissions, PATH is a directory) land in `messages.json` like any
+  script failure. The harness does **not** create parent folders; the
+  model sends a normal `mkdir` script turn first.
 - One file per reply. `save_model_reply_to_file` writes the model
   string with `jq -j` (raw, no extra newline) straight onto
   `latestModelResponse.txt`, so trailing blank lines in the payload
@@ -262,9 +265,11 @@ not applied (the payload may contain those bytes).
   (file not found, missing markers, empty old string, matched 0 or
   2+ times) with exit `1` and do not change the file. Same recovery
   as a failed write.
-- On success the harness writes with `cat > "$1"` and prints
-  `edited file: PATH`. PATH is `$1` — never interpolated. Do not
-  pipe edits through `run_script`.
+- On success the harness writes the new bytes to a temp file next
+  to PATH, then `mv` onto PATH, and prints `edited file: PATH`.
+  PATH is `$1` — never interpolated. Do not pipe edits through
+  `run_script`. Same `REPLACE_TEMP_FILE` and exit-trap cleanup as
+  write requests.
 - One file, one replace per reply. Empty new string deletes the
   old block. Marker lines in old/new are ambiguous; fail closed.
 

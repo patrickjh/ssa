@@ -3,8 +3,8 @@ writeFileRequest — model write requests
 The model creates or overwrites a file with no heredoc and no shell in
 the reply: first action line is "# write file: PATH" (leading blank
 lines and # notes skipped) and every line after that sentinel is the
-raw file. ssa writes that payload to PATH in the harness after ask
-(sed to "$1"). No quoting or escaping applies to the payload.
+raw file. ssa writes that payload to a temp next to PATH, then mv
+onto PATH, after ask. No quoting or escaping applies to the payload.
 
 Acceptance:
 - File lands byte-for-byte (quotes, dollars, backticks, backslashes,
@@ -13,6 +13,8 @@ Acceptance:
 - Success prints "wrote file: PATH" on stdout (and into the transcript)
 - Write to a missing parent folder fails; a later mkdir script plus
   retried write recovers (not a format error)
+- Write whose PATH is an existing directory fails on stdout; the
+  directory is unchanged; the loop continues (not a format error)
 - First line "# write file:" with no path is a format error, not a
   script
 - Path with spaces ("# write file: my file.txt") writes that file
