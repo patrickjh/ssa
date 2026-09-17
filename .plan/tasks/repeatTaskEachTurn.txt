@@ -1,0 +1,40 @@
+repeatTaskEachTurn — suffix the argv task on each script result
+
+Why:
+Task drift after a few turns is recency: the last user turn
+is a big "Output from running the script" blob and exit
+code. Pinning the task in system (taskInSystemPrompt) is
+primacy only. A short Task: line at the end of that user
+turn sits next to "what do I do now." Do not repeat stdin
+or the full context; that would copy the pipe every prompt.
+
+Do:
+Land after taskInSystemPrompt (system already has the job;
+this is the recency reminder). In append_script_result,
+after the exit code line, print Task: and the argv bytes
+(same task.txt). Same suffix on format-error user turns so
+a retry still sees the job. Put it after the output, not
+before: a prefix dies under a huge blob in the same
+message.
+
+Do not suffix the review_work user ask (that is plain-text
+feedback, not another script turn). Do not suffix the first
+user turn (context / placeholder). Do not add a new env var
+or -h sentence. Do not repeat context bytes.
+
+If system-only already stops the drift in a live smoke, you
+may drop this job and delete the stem; do not ship both
+reminders without checking the extra tokens help.
+
+Size:
+About 8–15 in ssa (append_script_result, record_format_error
+or the shared user-turn writer). Tests extra.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. After a script turn, the user
+message ends with Task: and the argv text, after Script
+exit code. Format-error user turn has the same suffix.
+Huge script output still completes; the suffix is still
+there. Review user turn lacks Task:. several large turns:
+early markers stay, latest user turn still has Task:.
+Do not require a tty.

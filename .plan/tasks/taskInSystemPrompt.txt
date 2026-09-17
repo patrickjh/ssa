@@ -1,0 +1,44 @@
+taskInSystemPrompt — argv task lives in the system message
+
+Why:
+After a few turns the model follows the latest script dump
+("Continue from there") and loses the job. The task is still
+in messages[1]; it is just no longer at an attention pole.
+System is the start of every request (primacy). With
+contextOnStdin, argv vs pipe also map cleanly: task in
+system, extra bytes in user. Do not treat this as a
+guarantee against recency drift; repeatTaskEachTurn is
+that follow-up.
+
+Do:
+Land after contextOnStdin. Keep the reply spec as the first
+part of system (ssa-owned). Then a Task: block that is the
+argv bytes from task.txt. Do not put stdin / context in
+system. Do not also put the task on the first user turn.
+
+First user message is stdin context only. Empty stdin (tty
+or /dev/null) still needs a user turn before the fake first
+assistant turn (system then assistant is a bad chat shape).
+Use one short fixed placeholder (No extra context. or
+Start.), not a second copy of the task, and not a Context:
+block. Same NUL / huge-context rules as contextOnStdin on
+the user bytes.
+
+Do not add developer / tool roles. Do not grow -h beyond
+the stdin sentence from contextOnStdin. AGENTS.md: system
+is spec plus task; user is context then script results.
+
+Size:
+About 10–20 in ssa (setup_messages_file, maybe
+SYSTEM_PROMPT_INTRO so it does not say the task is the
+first user turn). Tests and AGENTS.md extra.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. chatMessages: messages[0] is
+system and contains the task and # script; messages[1] is
+user and is not the raw task when stdin is empty
+(placeholder) or is the piped bytes when not. several large
+turns: task still in system at prompt5, not only in a buried
+user turn. loadContext / stdin stories: piped bytes in user,
+not in system. Review still a trailing user ask, not a
+script. Do not require a tty.
