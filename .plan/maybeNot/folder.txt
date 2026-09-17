@@ -9,3 +9,4 @@ proxyDocs.txt               dummy-key injector README
 securityModel.txt           README security model
 helpInReadme.txt            shrink or drop -h
 subAgents.txt               nested agents / fifth reply shape
+taskInSystemPrompt.txt      argv task in the system message
