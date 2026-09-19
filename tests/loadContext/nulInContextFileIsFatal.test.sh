@@ -1,5 +1,5 @@
 #!/bin/sh
-# A context file with a NUL dies at load; jq cannot hold it.
+# Stdin with a NUL dies at load; jq cannot hold it.
 
 set -u
 . "$TEST_UTILS_FILE"
@@ -10,7 +10,6 @@ printf '\0' >"$TEST_TEMP_FOLDER/nul-context.txt" ||
 SSA_URL='http://fake.test/chat/completions' \
     SSA_MODEL=fakeModel \
     SSA_NO_ASK=1 \
-    SSA_CONTEXT="$TEST_TEMP_FOLDER/nul-context.txt" \
-    run_ssa a task
+    run_ssa_from_stdin a task <"$TEST_TEMP_FOLDER/nul-context.txt"
 expect_exit 1
 expect_stderr_has 'context file is not valid UTF-8'

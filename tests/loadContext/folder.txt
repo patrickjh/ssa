@@ -1,3 +1,3 @@
-SSA_CONTEXT appends a file to the first user turn after Context:.
-Empty disables. Missing, dash, directory, and NUL die. A large
-context file is kept on that first user turn.
+A non-tty stdin is extra user context on the first user turn
+after Context:. Empty stdin omits the block. NUL dies. A large
+stdin is kept on that first user turn.

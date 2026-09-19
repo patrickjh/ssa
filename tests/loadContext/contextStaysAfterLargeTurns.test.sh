@@ -43,8 +43,8 @@ add_model_reply 5 <<'REPLY'
 # complete
 REPLY
 
-SSA_CONTEXT=notes.txt SSA_KEEP_TEMP=1 \
-    run_ssa_task print markers then stop
+SSA_KEEP_TEMP=1 run_ssa_task_from_stdin print markers then stop \
+    <"$WORK_FOLDER/notes.txt"
 expect_exit 0
 expect_stderr_has 'done: after 5 model prompts'
 

@@ -38,10 +38,11 @@ export SSA_MODEL=gpt-4o-mini
 ssa summarize this repo
 ```
 
-Task on stdin:
+Context on stdin; task on argv:
 
 ```sh
-echo "summarize this repo" | ssa
+cat a b | ssa summarize this repo
+ssa "$(cat task.txt)"
 ```
 
 Batch / no TTY: `SSA_NO_ASK=1`. Keep temp logs: `SSA_KEEP_TEMP=1`. Extra

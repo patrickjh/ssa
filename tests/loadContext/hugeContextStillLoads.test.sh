@@ -16,8 +16,8 @@ add_model_reply 1 <<'REPLY'
 # complete
 REPLY
 
-SSA_CONTEXT=huge-context.txt SSA_KEEP_TEMP=1 \
-    run_ssa_task a task
+SSA_KEEP_TEMP=1 run_ssa_task_from_stdin a task \
+    <"$WORK_FOLDER/huge-context.txt"
 expect_exit 0
 expect_stderr_has 'done: after 1 model prompts'
 

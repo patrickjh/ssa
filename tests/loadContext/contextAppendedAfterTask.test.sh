@@ -1,5 +1,5 @@
 #!/bin/sh
-# SSA_CONTEXT file bytes follow the task after a Context: delimiter.
+# Stdin bytes follow the task after a Context: delimiter.
 # A copy is kept as context.txt when SSA_KEEP_TEMP=1.
 
 set -u
@@ -20,8 +20,8 @@ add_model_reply 2 <<'REPLY'
 # complete
 REPLY
 
-SSA_CONTEXT=notes.txt SSA_KEEP_TEMP=1 \
-    run_ssa_task print a greeting then stop
+SSA_KEEP_TEMP=1 run_ssa_task_from_stdin print a greeting then stop \
+    <"$WORK_FOLDER/notes.txt"
 expect_exit 0
 expect_stdout_has 'hello-from-script'
 

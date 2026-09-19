@@ -31,6 +31,14 @@ run_ssa() {
     SSA_EXIT_CODE=$?
 }
 
+run_ssa_from_stdin() {
+    # Like run_ssa, but stdin is not /dev/null (context on stdin).
+    require_test_temp_folder
+    sh "$(get_ssa_path)" "$@" \
+        >"$TEST_TEMP_FOLDER/stdout.txt" 2>"$TEST_TEMP_FOLDER/stderr.txt"
+    SSA_EXIT_CODE=$?
+}
+
 expect_exit() {
     [ "${SSA_EXIT_CODE-}" = "$1" ] ||
         fail "expected exit $1, got ${SSA_EXIT_CODE-}"
@@ -164,7 +172,7 @@ run_ssa_task() {
 }
 
 run_ssa_task_from_stdin() {
-    # Like run_ssa_task, but the task is stdin (no argv words).
+    # Like run_ssa_task, but stdin is not /dev/null (context on stdin).
     require_test_temp_folder
     [ -n "${WORK_FOLDER:-}" ] || fail "call setup_work_folder first"
     add_default_review_reply

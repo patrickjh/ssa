@@ -6,7 +6,6 @@
 set -u
 
 # Users can set
-SSA_CONTEXT="${SSA_CONTEXT:-}"
 SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
 SSA_KEY="${SSA_KEY:-}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
@@ -53,8 +52,10 @@ USER_TURN_FILE=""
 HELP_TEXT='ssa — Simple Shell Agent.
 A simple AI agent that feels like a unix util. Inspired by mini-swe-agent.
 
-Usage: ssa task as a string no quotes needed
-       ssa -h | --help
+Usage: ssa with the task as args and context on stdin
+
+Example:
+  apt-get update 2>&1 | ssa why is apt not updating?
 
 Requires POSIX sh, curl, and jq.
 SSA_MODEL and SSA_URL are required.
@@ -65,8 +66,6 @@ Options:
           Show this help and exit.
 
 Environment:
-  SSA_CONTEXT             Extra user context from a file (empty
-                          disables).
   SSA_KEEP_TEMP           Keep per-run temp folder (0 = discard,
                           1 = keep, default = 0).
   SSA_KEY                 Bearer token (optional for local servers).
@@ -95,9 +94,6 @@ Exit status:
   129     Hangup (SIGHUP).
   130     Interrupted (SIGINT).
   143     Terminated (SIGTERM).
-
-Example:
-  ssa why is apt not updating?
 '
 
 SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. Each
@@ -192,7 +188,6 @@ main() {
     trap handle_die_signal USR1
     parse_arguments "$@"
     check_required_commands
-    read_task_from_stdin_if_needed
     check_can_run
     setup_agent_loop
     run_agent_loop
@@ -234,13 +229,6 @@ check_command() {
     command -v "$1" >/dev/null 2>&1 || die "$1 not found on PATH"
 }
 
-read_task_from_stdin_if_needed() {
-    if [ -n "$TASK" ]; then return; fi
-    if [ -t 0 ]; then return; fi
-    TASK=$(cat) || die "cannot read task from stdin; pass task as words " \
-          "after CLI options or pipe task to stdin; see ssa -h for help"
-}
-
 check_can_run() {
     check_task_is_set
     check_max_model_prompts
@@ -251,12 +239,11 @@ check_can_run() {
     check_model_is_set
     check_url_is_set
     check_request_json
-    check_context
     if [ "$SSA_NO_ASK" = 0 ]; then check_prompt_device; fi
 }
 
 check_task_is_set() {
-    [ -n "$TASK" ] || die "task not found on stdin or CLI; see ssa -h for help"
+    [ -n "$TASK" ] || die "task not found on CLI; see ssa -h for help"
 }
 
 check_max_model_prompts() {
@@ -302,16 +289,6 @@ check_request_json() {
     printf '%s' "$SSA_REQUEST_JSON" |
         jq -e 'type == "object"' >/dev/null 2>&1 ||
         die "SSA_REQUEST_JSON must be a JSON object; see ssa -h for help"
-}
-
-check_context() {
-    if [ -z "$SSA_CONTEXT" ]; then return; fi
-    if [ "$SSA_CONTEXT" = "-" ]; then
-        die "SSA_CONTEXT cannot be -; see ssa -h for help"
-    fi
-    if [ ! -f "$SSA_CONTEXT" ] || [ ! -r "$SSA_CONTEXT" ]; then
-        die "cannot read context file: $SSA_CONTEXT; see ssa -h for help"
-    fi
 }
 
 check_prompt_device() {
@@ -389,8 +366,8 @@ log_task() {
 }
 
 log_context() {
-    if [ -z "$SSA_CONTEXT" ]; then return; fi
-    cp "$SSA_CONTEXT" "$CONTEXT_FILE" || die "cannot write file: $CONTEXT_FILE"
+    if [ -t 0 ]; then return; fi
+    cat >"$CONTEXT_FILE" || die "cannot write file: $CONTEXT_FILE"
     check_context_is_json_safe
 }
 

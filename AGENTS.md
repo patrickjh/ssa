@@ -108,8 +108,9 @@ repeat) with:
 
 1. **Start** — Parse `-h` and the task, validate settings and tools (`curl`,
    `jq`, `head`, …), create temp folder, write system prompt and task
-   into `messages.json` (if `SSA_CONTEXT` is set, that file is appended
-   to the first user turn after `Context:`), create `prompt0/`, seed
+   into `messages.json` (if stdin is not a tty, those bytes are appended
+   to the first user turn after `Context:`; empty stdin omits the block),
+   create `prompt0/`, seed
    with a bootstrap `# reasoning:` note, `# script`, then `pwd`
    and `uname -a` (ask-user applies when enabled).
 2. **Loop** — For each model prompt (`prompt1+`), copy
@@ -285,8 +286,9 @@ Built-in OpenAI-compatible `/chat/completions` client:
   curl argv does not contain it. `authHeader.txt` is overwritten and
   removed on every exit (including `SSA_KEEP_TEMP=1`).
 - Once per run, writes `SSA_URL` to `$TEMP_FOLDER/url.txt`
-  and the task to `$TEMP_FOLDER/task.txt` (log only). If `SSA_CONTEXT`
-  is set, a copy of that file is `$TEMP_FOLDER/context.txt`.
+  and the task to `$TEMP_FOLDER/task.txt` (log only). A non-tty stdin
+  is copied to `$TEMP_FOLDER/context.txt` (empty or a tty leaves it
+  empty).
 - Temp working files include `authHeader.txt` while the run needs it
   (always deleted on exit), `messages.json`, `latestModelResponse.txt`,
   `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d
@@ -318,7 +320,6 @@ Built-in OpenAI-compatible `/chat/completions` client:
 
 | Setting | Default |
 |---------|---------|
-| `SSA_CONTEXT` | empty (off) |
 | `SSA_KEEP_TEMP` | `0` (discard; `0` or `1`) |
 | `SSA_KEY` | empty (optional) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
@@ -418,7 +419,7 @@ Keep hints one short clause after a semicolon. Prefer
   say to install or put the tool on `PATH`.
 - Failures fixed outside ssa (API billing, account quota).
 
-The task has **no env var** — say it was not found on stdin or CLI.
+The task has **no env var** — say it was not found on the CLI.
 
 `die` prints on stderr and sends SIGUSR1 to `PID`. Opening quote
 starts on the **same line** as `die`. Wrap at **80 columns** with

@@ -1,5 +1,5 @@
 #!/bin/sh
-# With SSA_CONTEXT empty, the first user turn is the task only.
+# With empty stdin, the first user turn is the task only.
 
 set -u
 . "$TEST_UTILS_FILE"
@@ -27,5 +27,5 @@ printf '%s' "$(jq -r '.[1].content' "$SNAP")" | grep -qF \
     fail "task text should be in messages[1]"
 if printf '%s' "$(jq -r '.[1].content' "$SNAP")" | grep -qF 'Context:'
 then
-    fail "empty SSA_CONTEXT should not add a Context: block"
+    fail "empty stdin should not add a Context: block"
 fi

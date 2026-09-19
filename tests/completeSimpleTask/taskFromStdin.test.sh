@@ -1,24 +1,11 @@
 #!/bin/sh
-# Empty argv; the task is read from stdin.
+# Empty argv is a usage error even when a pipe is open.
 
 set -u
 . "$TEST_UTILS_FILE"
 
-setup_fake_model
-setup_work_folder
-
-add_model_reply 1 <<'REPLY'
-# script
-printf 'hello-from-script\n'
-REPLY
-
-add_model_reply 2 <<'REPLY'
-# complete
-REPLY
-
-run_ssa_task_from_stdin <<'TASK'
-print a greeting then stop
-TASK
-expect_exit 0
-expect_stdout_has 'hello-from-script'
-expect_stderr_has 'done: after 2 model prompts'
+run_ssa_from_stdin <<'NOTES'
+notes that must not become the task
+NOTES
+expect_exit 1
+expect_stderr_has 'task not found on CLI'
