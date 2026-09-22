@@ -9,3 +9,8 @@ unnecessaryVariables
 unnecessaryLineBreaks
 folderTxt
 fasterTests
+editEncodingGuard
+nonFatalReview
+httpDiagnostics
+perPromptWorkingFiles
+targetFileNotPositional

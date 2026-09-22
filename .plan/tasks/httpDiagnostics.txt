@@ -1,0 +1,43 @@
+httpDiagnostics — show HTTP status and a sanitized body on curl failure
+
+Why:
+send_curl_json_request (ssa:506-517) dies with the generic
+"curl failed; see ssa -h for help" for every API failure. That
+hides the HTTP status code and the provider error body, so users
+debug billing, quota, auth, and wrong-URL failures blind. The
+response body is already saved to CURL_RESPONSE_FILE (ssa:507)
+for SSA_KEEP_TEMP=1; surface a short, safe slice on failure.
+
+Do:
+On curl failure, print the HTTP status code and a small sanitized
+excerpt of the response body on stderr before dying. Use curl's
+-w or -i to capture the status (or a head -c on the body for a
+plain-text provider error). Sanitize with sanitize_output
+(ssa:827-836) so untrusted bytes are safe to print. Keep the
+"see ssa -h for help" hint only for usage-shaped failures; an
+HTTP 4xx/5xx is not a usage error, so drop the hint there (per
+AGENTS.md Error messages: skip the hint when it would mislead).
+
+Do not print SSA_URL or SSA_KEY. Do not print the request body
+(it may hold context). Do not print the full response (cap at a
+small byte count, for example 500). Do not add a setting for
+verbosity; the slice is always small.
+
+Update AGENTS.md Model (curl) section (near ssa:314-317): a
+failed curl prints the HTTP status and a short sanitized body
+excerpt on stderr. Do not add to -h.
+
+Size:
+About 10-16 lines in ssa (capture status, read body head,
+sanitize, print, then die). AGENTS.md one sentence. -h unchanged.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. New story httpDiagnostics or cases in
+invalidChatResponse:
+- curl exits non-zero with a fake status line and a short body:
+  stderr has the status and the body excerpt; stdout unchanged.
+- A 200 with non-JSON body still dies "invalid chat response"
+  (existing notJsonIsFatal) and is not regressed.
+- A 4xx-style fake reply: stderr shows the code, not just
+  "curl failed".
+Do not print SSA_URL. Do not require a tty.

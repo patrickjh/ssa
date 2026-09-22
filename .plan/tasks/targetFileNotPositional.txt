@@ -1,0 +1,41 @@
+targetFileNotPositional — hold write/edit PATH in TARGET_FILE
+
+Why:
+apply_write_request and apply_edit_request take the
+destination as $1 (ssa:558-569, 625-668). POSIX sh has
+no local, so $1 avoids leaking a name (AGENTS.md: use $1
+or a different local; PATH is $1, never interpolated).
+apply_edit_request then threads that same $1 into a
+subshell, jq_apply_edit, and record_edit_failure. A
+named run-state variable is as safe when quoted and is
+readable. Write and edit never overlap.
+
+Do:
+Add TARGET_FILE to the Internal block (alphabetized).
+Set it in handle_write_request and handle_edit_request
+from first_action_line (the existing sed). apply_write_
+request, apply_edit_request, jq_apply_edit, and
+record_edit_failure use "$TARGET_FILE" and take no path
+argument. record_edit_failure keeps $1/$2 only if it still
+takes a reason string as $1; prefer TARGET_FILE plus one
+reason argument.
+
+Keep $1 for short helpers (check_command, create_file_
+no_overwrite, create_dir_no_overwrite, append_json_
+message). Do not eval or unquote the path. Do not write
+the path to a promptN/ scratch just to pass it. Do not
+add a setting.
+
+AGENTS.md Write requests and Edit requests: PATH is
+TARGET_FILE, quoted, never interpolated (replace the
+"$1" sentences). Style "do not shadow" still allows $1
+on one-argument helpers.
+
+Size:
+About 8-15 in ssa (one Internal name, drop path
+arguments, quoted uses). AGENTS.md extra.
+
+Tests:
+None if writePathWithSpaces and editPathWithSpaces still
+pass (path is still $1 at the sed, then TARGET_FILE).
+Fake curl, SSA_NO_ASK=1. Do not require a tty.

@@ -220,6 +220,7 @@ check_required_commands() {
     check_command head
     check_command jq
     check_command mkdir
+    check_command mv
     check_command rm
     check_command sed
     check_command tee

@@ -1,0 +1,77 @@
+perPromptWorkingFiles — move latest* turn files into promptN/
+
+Why:
+The temp root holds both run state (messages.json, context,
+auth) and per-turn working files named latest*. The loop is
+serial, so latestModelResponse.txt is overwritten every
+prompt. review_work then overwrites it again (ssa:815-823):
+after a successful run the file is the review text, not
+# complete. promptN/ already keeps HTTP and ask artifacts
+for that turn (body.json, response.txt, userAnswer.txt).
+The other latest* files are the same class: working files
+for the current turn that KEEP_TEMP users want per prompt.
+
+Do:
+Rebind these in setup_per_prompt_log_folder the way
+JSON_BODY_FILE is rebound (ssa:486-489). camelCase names,
+no latest prefix:
+
+  latestModelResponse.txt  -> promptN/modelResponse.txt
+  latestScriptOutput.txt   -> promptN/scriptOutput.txt
+  latestScriptExitCode.txt -> promptN/scriptExitCode.txt
+  latestUserTurn.txt       -> promptN/userTurn.txt
+  latestEditPayload.txt    -> promptN/editPayload.txt
+  latestEditedBytes.txt    -> promptN/editedBytes.txt
+
+Drop them from setup_temp_files. create_file_no_overwrite
+in the new prompt folder (it is a new path each turn).
+editPayload and editedBytes may wait until apply_edit_
+request so a script-only turn does not grow empty files.
+Write may extract through a file in promptN/ if that
+matches the write path; do not add a third edit scratch.
+
+Leave at the temp root: messages.json, messagesNext.json
+(run transcript, mutated across turns), context.txt,
+task.txt, url.txt, authHeader.txt, systemPrompt.txt.
+
+prompt0/ then holds the bootstrap reply and its script
+output (today it is often empty). The review POST keeps
+its own prompt folder; modelResponse there is the
+feedback. The last # complete stays in the previous
+folder.
+
+Do not collapse editPayload and editedBytes into one
+file. jq still needs the SEARCH/REPLACE and the computed
+bytes at the same time (fail-closed in-place edit). Do
+not mkdir promptN on demand as a substitute for this
+move; prompt1+ already mkdir's before curl. Do not add
+a setting. Do not change what is fed to sh or written
+to PATH.
+
+AGENTS.md Model (curl) / temp working files: promptN/
+holds the turn's extracted reply, script output, exit
+code, user turn, and edit scratches; the root list loses
+the latest* names. prompt0/ is no longer "empty except
+ask." -h unchanged.
+
+Size:
+About 15-25 in ssa (path binds move from setup_temp_files
+into setup_per_prompt_log_folder; create calls follow).
+AGENTS.md extra. No new setting.
+
+Tests:
+Fake curl, SSA_NO_ASK=1, SSA_KEEP_TEMP=1.
+- After done, promptN/modelResponse.txt is # complete
+  (or the last agent reply); the review folder's
+  modelResponse.txt is the feedback, not that reply.
+- prompt0/modelResponse.txt is the bootstrap # script
+  (pwd / uname). prompt0/ has no body.json.
+- A script turn: promptN/scriptOutput.txt and
+  scriptExitCode.txt match stdout / the user-turn
+  exit line. No latest* names at the temp root.
+- An edit turn: editPayload.txt and editedBytes.txt
+  exist only under that promptN/ (or are absent on a
+  script-only prompt if created on demand).
+Existing stories that only read promptN/messages.json
+or promptN/body.json should still pass. Do not require
+a tty.
