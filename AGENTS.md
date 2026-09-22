@@ -302,6 +302,12 @@ Built-in OpenAI-compatible `/chat/completions` client:
   `PROMPT_COUNTER`.
 - Per-prompt HTTP logs live under `promptN/` for model prompts:
   `body.json`, `requestExtra.json`, and `response.txt`
+- `messages.json` and each `promptN/messages.json` stay the full
+  log. `SSA_MAX_CONTEXT_BYTES` (default `0`) caps the POST. Above
+  `0`, `body.json` drops the oldest unpinned assistant/user pairs
+  until the sum of `.content` lengths is at most that many bytes.
+  The system turn and the first user turn stay. The newest pair
+  stays even when it alone is over budget. `0` sends every turn.
 - `call_curl` / jq read `messages.json` (not one concatenated user
   blob); no stdin prompt spool
 - Model replies are extracted with `jq -j` (and `jq -b` when that flag
@@ -322,6 +328,7 @@ Built-in OpenAI-compatible `/chat/completions` client:
 |---------|---------|
 | `SSA_KEEP_TEMP` | `0` (discard; `0` or `1`) |
 | `SSA_KEY` | empty (optional) |
+| `SSA_MAX_CONTEXT_BYTES` | `0` (no window) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
 | `SSA_MODEL` | unset (required) |
 | `SSA_NO_ASK` | `0` (ask) |

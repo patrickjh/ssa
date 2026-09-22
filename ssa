@@ -8,6 +8,7 @@ set -u
 # Users can set
 SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
 SSA_KEY="${SSA_KEY:-}"
+SSA_MAX_CONTEXT_BYTES="${SSA_MAX_CONTEXT_BYTES:-0}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
@@ -69,6 +70,8 @@ Environment:
   SSA_KEEP_TEMP           Keep per-run temp folder (0 = discard,
                           1 = keep, default = 0).
   SSA_KEY                 Bearer token (optional for local servers).
+  SSA_MAX_CONTEXT_BYTES   Max bytes of message content in each POST
+                          (0 = send every turn, default = 0).
   SSA_MAX_MODEL_PROMPTS   Stop after N model prompts (0 = no limit,
                           default = 20).
   SSA_MODEL               OpenAI-style model name (required).
@@ -184,6 +187,22 @@ def fail($m): $m | halt_error(1);
   end
 '
 
+# Pin messages 0 and 1 (system, first user). Drop the oldest
+# assistant/user pair while content length is over budget and a
+# pair remains after the newest one. Budget 0 sends every turn.
+CONTEXT_WINDOW_JQ='
+def nbytes: map(.content | length) | add // 0;
+def drop_pair: .[0:2] + .[4:];
+def over: nbytes > $budget;
+def droppable:
+  length > 4 and .[1].role != .[4].role;
+($messages[0]
+  | if $budget == 0 then .
+    else until((over | not) or (droppable | not); drop_pair)
+    end) as $kept
+| $extra[0] + {model: $model, messages: $kept}
+'
+
 main() {
     trap handle_die_signal USR1
     parse_arguments "$@"
@@ -232,6 +251,7 @@ check_command() {
 
 check_can_run() {
     check_task_is_set
+    check_max_context_bytes
     check_max_model_prompts
     check_no_ask
     check_no_edits
@@ -245,6 +265,12 @@ check_can_run() {
 
 check_task_is_set() {
     [ -n "$TASK" ] || die "task not found on CLI; see ssa -h for help"
+}
+
+check_max_context_bytes() {
+    case $SSA_MAX_CONTEXT_BYTES in
+        *[!0-9]*) die "invalid SSA_MAX_CONTEXT_BYTES; see ssa -h for help" ;;
+    esac
 }
 
 check_max_model_prompts() {
@@ -495,12 +521,17 @@ build_curl_json_request() {
         printf '%s\n' '{}' >"$REQUEST_EXTRA_FILE" ||
             die "cannot write request JSON extra"
     fi
+    write_windowed_request_body
+}
+
+write_windowed_request_body() {
     # shellcheck disable=SC2086
     jq $JQ_BINARY_FLAG -n \
         --arg model "$SSA_MODEL" \
+        --argjson budget "$SSA_MAX_CONTEXT_BYTES" \
         --slurpfile messages "$MESSAGES_FILE" \
         --slurpfile extra "$REQUEST_EXTRA_FILE" \
-        '$extra[0] + {model: $model, messages: $messages[0]}' \
+        "$CONTEXT_WINDOW_JQ" \
         >"$JSON_BODY_FILE" || die 'cannot build curl request JSON'
 }
 

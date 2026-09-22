@@ -1,0 +1,15 @@
+slidingContextWindow — POST drops old middle turns
+
+messages.json stays the full log. When SSA_MAX_CONTEXT_BYTES
+is above 0, body.json keeps the system turn, the first user
+turn, and the newest pair, and drops older assistant/user
+pairs until content length fits. 0 sends every turn.
+
+Acceptance:
+- Default 0: several large turns still POST every marker
+- Small budget: task and latest result stay in body.json;
+  an early marker is gone from the body and still in
+  promptN/messages.json; roles still alternate
+- Review POST uses the same window
+- Invalid SSA_MAX_CONTEXT_BYTES dies
+- Fake curl on PATH; no real network
