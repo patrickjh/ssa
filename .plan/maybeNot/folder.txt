@@ -11,3 +11,4 @@ helpInReadme.txt            shrink or drop -h
 subAgents.txt               nested agents / fifth reply shape
 taskInSystemPrompt.txt      argv task in the system message
 repeatTaskEachTurn.txt      suffix the argv task on each user turn
+questionSentinel.txt        model asks with # question

@@ -1,0 +1,67 @@
+questionSentinel — model asks with "# question"
+
+Why:
+Ask and the rejection reason are harness UI. The model
+never chooses them. The system prompt lists four reply
+shapes. A Reason: line shows up only after the user
+says No to a script. The model cannot ask "which file?"
+before it proposes a command. That is a real gap. It
+may still not belong in ssa.
+
+The shape, if it lands:
+
+# reasoning: two files match; need the user to pick
+# question
+Which file should I edit?
+
+First action line is "# question" (exact, like
+"# script"). Text after that line is the question.
+Empty payload is a format error. Show the question on
+stderr (same sanitize as ask). Read one line from
+/dev/tty. Append it as the next user turn (Answer: …).
+An empty line is still an answer, so the model knows
+the user skipped. The loop continues. It counts as a
+model prompt. No sh, no sh -n. Do not also prompt
+Y/N/Q; the question is the interaction.
+
+SSA_NO_QUESTIONS is 0 or 1 (default 0), same pattern
+as SSA_NO_WRITES. 0 puts the "# question" block in
+the reply spec. 1 omits that block, treats a
+"# question" reply as a format error, and does not
+read /dev/tty. The format-error text must not name
+SSA_NO_QUESTIONS. Any other value dies at startup.
+
+SSA_NO_ASK does not do this job. Ask only gates the
+yes/no prompt before a script. A question still needs
+a terminal when ask is off. A batch run sets both:
+SSA_NO_ASK=1 so scripts are not approved, and
+SSA_NO_QUESTIONS=1 so a question cannot block.
+
+Doubts (why this file is here, not tasks/):
+- Fifth reply shape. Write and edit exist to avoid
+  shell quoting. A question is conversation.
+- Models will ask instead of looking, and each ask
+  spends SSA_MAX_MODEL_PROMPTS.
+- The tty read cannot be covered by fake-curl
+  SSA_NO_ASK=1 stories.
+- ssa is near the 1000-line cap; the open queue is
+  shrinking the file.
+
+Do:
+Do not implement unless a human moves this file to
+tasks/ and lists the stem in plan.txt.
+
+Size:
+About 40–70 in ssa (spec text, first_action_line,
+handler, tty read, user turn, SSA_NO_QUESTIONS).
+One -h sentence for the setting. AGENTS.md Design.
+The answer path needs a pty; the no-questions
+format-error path does not.
+
+Tests:
+None until it moves. If it moves: SSA_NO_QUESTIONS=1
+makes "# question" a format error, omits it from
+the system prompt, and a later "# complete" still
+works. SSA_NO_ASK=1 alone still allows the shape.
+The answer path needs a pty. Do not require a real
+/dev/tty in the default fake-curl stories.

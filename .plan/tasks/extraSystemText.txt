@@ -1,0 +1,57 @@
+extraSystemText — SSA_EXTRA_SYSTEM_TEXT appended to the system prompt
+
+Why:
+The caller’s shell cannot add text to the system turn. SSA_REQUEST_JSON
+merges into the request body, and messages from ssa win on a key
+conflict (ssa:84-86). Project rules (“prefer edits”, “do not use
+sudo”) otherwise require a fork. One optional string covers that.
+
+Do:
+New setting SSA_EXTRA_SYSTEM_TEXT, default empty
+(`${SSA_EXTRA_SYSTEM_TEXT:-}`). Alphabetically first in the
+“Users can set” block (ssa:8-18), before SSA_KEEP_TEMP. Free text.
+No startup check. Unset and empty are the same: append nothing,
+including no extra blank line. Do not trim; a value of only spaces
+is still appended.
+
+In setup_messages_file (ssa:432-448), after intro plus REPLY_SPEC
+are written to systemPrompt.txt, if the value is non-empty append
+a blank line and then the value. Use printf '%s\n' so “%” and
+backslashes stay literal. Do not put the value inside
+reply_spec_text (ssa:451-460) or REPLY_SPEC. record_format_error
+(ssa:634-640) reprints REPLY_SPEC only; a format error must not
+paste this text back into the chat.
+
+No heading. The caller can put one in the value. No path setting;
+`SSA_EXTRA_SYSTEM_TEXT="$(cat rules.txt)"` is the long form. Do
+not special-case review: it uses the same system message. The
+bytes count toward SSA_MAX_CONTEXT_BYTES because they are system
+content (pinned). Do not add a separate cap. The fake first turn
+stays hardcoded and does not read this.
+
+One -h sentence, in alphabetical order with the other settings:
+appended to the system prompt; does not change which replies are
+accepted. AGENTS.md settings table (before SSA_KEEP_TEMP) and one
+sentence in Program flow where the system prompt is written: intro,
+reply spec, then this text when set.
+
+Size:
+About 10-15 lines in ssa (assignment, help line, append in
+setup_messages_file). AGENTS.md a table row and one sentence.
+
+Tests:
+New story tests/extraSystemText/. Fake curl, SSA_NO_ASK=1. Do not
+require a tty.
+
+- Value set to a marker: messages[0].content still has the reply
+  spec, “# complete” comes before the marker, and a blank line
+  separates them.
+- A value containing “%” and a backslash is stored literally.
+- A format-error turn (empty reply, then “# complete”) reprints
+  the spec and does not contain the marker. Loop still completes.
+- Unset: system content is intro plus reply spec only (no extra
+  trailing blank section).
+
+Update tests/showHelp/showHelpWithDashH.test.sh to expect
+SSA_EXTRA_SYSTEM_TEXT on stdout. Existing system-prompt greps
+(noWrites, noEdits, formatErrorRetry) stay green with the default.
