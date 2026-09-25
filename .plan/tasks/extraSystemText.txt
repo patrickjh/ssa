@@ -3,23 +3,23 @@ extraSystemText — SSA_EXTRA_SYSTEM_TEXT appended to the system prompt
 Why:
 The caller’s shell cannot add text to the system turn. SSA_REQUEST_JSON
 merges into the request body, and messages from ssa win on a key
-conflict (ssa:84-86). Project rules (“prefer edits”, “do not use
+conflict. Project rules (“prefer edits”, “do not use
 sudo”) otherwise require a fork. One optional string covers that.
 
 Do:
 New setting SSA_EXTRA_SYSTEM_TEXT, default empty
 (`${SSA_EXTRA_SYSTEM_TEXT:-}`). Alphabetically first in the
-“Users can set” block (ssa:8-18), before SSA_KEEP_TEMP. Free text.
+“Users can set” block, before SSA_KEEP_TEMP. Free text.
 No startup check. Unset and empty are the same: append nothing,
 including no extra blank line. Do not trim; a value of only spaces
 is still appended.
 
-In setup_messages_file (ssa:432-448), after intro plus REPLY_SPEC
+In setup_messages_file, after intro plus REPLY_SPEC
 are written to systemPrompt.txt, if the value is non-empty append
 a blank line and then the value. Use printf '%s\n' so “%” and
 backslashes stay literal. Do not put the value inside
-reply_spec_text (ssa:451-460) or REPLY_SPEC. record_format_error
-(ssa:634-640) reprints REPLY_SPEC only; a format error must not
+reply_spec_text or REPLY_SPEC. record_format_error
+reprints REPLY_SPEC only; a format error must not
 paste this text back into the chat.
 
 No heading. The caller can put one in the value. No path setting;

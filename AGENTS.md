@@ -5,7 +5,9 @@ Instructions for coding agents working in this repo. Humans: start with
 style rules are below; do not duplicate settings or behavior that `-h` and
 `ssa` already define. Open work lives in `.plan/`. A new file under
 `.plan/tasks/` is not added to `plan.txt`; only list a stem there when
-that job should run next. `.plan/maybeNot/` is ideas that may not
+that job should run next. Task files name functions, settings, and
+sections. Do not cite line numbers in `ssa` or this file.
+`.plan/maybeNot/` is ideas that may not
 belong in ssa; do not implement those unless a human moves the file
 to `tasks/`. Undecided ideas may be tried as a copy under
 `experiments/` (not product). Apply the change there, test that

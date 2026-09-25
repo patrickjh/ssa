@@ -2,7 +2,7 @@ targetFileNotPositional — hold write/edit PATH in TARGET_FILE
 
 Why:
 apply_write_request and apply_edit_request take the
-destination as $1 (ssa:558-569, 625-668). POSIX sh has
+destination as $1. POSIX sh has
 no local, so $1 avoids leaking a name (AGENTS.md: use $1
 or a different local; PATH is $1, never interpolated).
 apply_edit_request then threads that same $1 into a

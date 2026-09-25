@@ -10,6 +10,9 @@ Every file under tasks/ is a job except doNot.txt. Do not add
 README, folder.txt, or index files in that folder. When a job is
 done, delete its task file and drop it from plan.txt.
 
+Task files name functions, settings, and sections. Do not
+cite line numbers in ssa or AGENTS.md.
+
 doNot.txt is a permanent fence, not a scheduled job.
 maybeNot/ is not a queue. Do not implement those files unless
 a human moves one to tasks/ and lists the stem in plan.txt.

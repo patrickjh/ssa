@@ -4,7 +4,7 @@ Why:
 The temp root holds both run state (messages.json, context,
 auth) and per-turn working files named latest*. The loop is
 serial, so latestModelResponse.txt is overwritten every
-prompt. review_work then overwrites it again (ssa:815-823):
+prompt. review_work then overwrites it again:
 after a successful run the file is the review text, not
 # complete. promptN/ already keeps HTTP and ask artifacts
 for that turn (body.json, response.txt, userAnswer.txt).
@@ -13,7 +13,7 @@ for the current turn that KEEP_TEMP users want per prompt.
 
 Do:
 Rebind these in setup_per_prompt_log_folder the way
-JSON_BODY_FILE is rebound (ssa:486-489). camelCase names,
+JSON_BODY_FILE is rebound. camelCase names,
 no latest prefix:
 
   latestModelResponse.txt  -> promptN/modelResponse.txt

@@ -1,11 +1,11 @@
 nonFatalReview — a failed review POST is a warning, not a run failure
 
 Why:
-review_work (ssa:814-824) always runs one more model POST after the
+review_work always runs one more model POST after the
 loop, and a failed curl there is fatal (exit 1) even when the task
 itself completed (exit 0). That nonessential call adds latency and
 cost to every run and lets a flaky provider or network turn a
-success into a failure. AGENTS.md:145-149 and the test
+success into a failure. AGENTS.md Review and the test
 tests/reviewWork/missingReviewReplyIsFatal.test.sh lock this in.
 Review is a nicety, not part of the task.
 
@@ -19,9 +19,9 @@ setting to disable review (callers who want no review can point
 SSA_URL at a stub, or a later task can add SSA_NO_REVIEW if
 needed; not this job).
 
-Update AGENTS.md Review (ssa:145-149): a failed review curl is a
+Update AGENTS.md Review: a failed review curl is a
 warning, not fatal; the run keeps its loop exit status. Update
-HELP_TEXT (ssa:89) only if the one-line review mention implies
+HELP_TEXT only if the one-line review mention implies
 fatality (it does not name it; leave -h alone).
 
 Size:

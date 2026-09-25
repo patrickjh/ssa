@@ -2,25 +2,25 @@ editEncodingGuard — clear error when edit target is not UTF-8 text
 
 Why:
 apply_edit_request feeds the whole target file through jq as a
-string (--rawfile file "$1" in jq_apply_edit, ssa:654-665). jq strings
+string (--rawfile file "$1" in jq_apply_edit). jq strings
 must be valid UTF-8, so a binary or invalid-UTF-8 file makes jq error
 out. The edit then fails closed (file unchanged, which is safe), but
 the error reaches the model as a raw jq message, not a plain note.
 The user-facing text also claims "not valid UTF-8" for output omit
-while the actual check is NUL-only (see OUTPUT_OMITTED_NOT_UTF8,
-ssa:148-149). Edits are text operations; say so.
+while the actual check is NUL-only (see OUTPUT_OMITTED_NOT_UTF8).
+Edits are text operations; say so.
 
 Do:
 Before calling jq_apply_edit, check the target file is valid UTF-8
 with the same jq rawfile probe used for context (check_context_is_
-json_safe, ssa:374-380). On failure, record_edit_failure with a
+json_safe). On failure, record_edit_failure with a
 short plain note ("file is not valid UTF-8 text; edits are text
 only") instead of running jq. Do not change the on-disk file. Do
 not add a setting. Keep the existing 0/2+ match and missing-markers
 failures as-is.
 
 Document edits as UTF-8 text operations in AGENTS.md Edit requests
-section (near ssa:254-270) and the REPLY_SPEC_EDIT note is already
+section, and the REPLY_SPEC_EDIT note is already
 text-only; one sentence in AGENTS.md is enough. Do not add this to
 -h unless the error would otherwise be unclear (it will not; the
 note names the cause).
