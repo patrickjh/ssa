@@ -1,0 +1,63 @@
+logFolder — SSA_LOG_FOLDER is the parent of each run folder
+
+Why:
+setup_temp_folder always creates the run folder under
+${TMPDIR:-/tmp}. Setting TMPDIR groups runs, and it is also
+the temp directory for every script the model runs, so mktemp
+and similar land in that same tree. Callers want related ssa
+runs under one parent (a project folder) and other runs under
+/tmp, while scripts keep the caller's TMPDIR.
+
+Do:
+Add SSA_LOG_FOLDER. Default empty. Empty or unset: the parent
+stays ${TMPDIR:-/tmp}. When set, that path is the parent.
+setup_temp_folder still mkdirs
+ssa-${LOGNAME:-user}-<date>-$PID inside it with umask 077.
+A relative path is taken from the cwd at startup. Do not
+mkdir the parent. Do not change TMPDIR. This setting does
+not give model scripts a different temp directory.
+
+check_log_folder from check_can_run, next to check_keep_temp.
+A non-empty value must be an existing writable directory.
+Otherwise die and name SSA_LOG_FOLDER (; see ssa -h for
+help). A missing path, a file, or a directory that is not
+writable is that error. Do not start the loop.
+
+SSA_KEEP_TEMP stays its own switch. A set parent with
+SSA_KEEP_TEMP=0 is still deleted on exit. In -h, say to set
+SSA_KEEP_TEMP=1 when the folder should remain.
+
+Put the setting in the Users can set block in alphabetical
+order (after SSA_KEY, before SSA_MAX_CONTEXT_BYTES), in
+HELP_TEXT Environment the same way, and in the AGENTS.md
+Settings summary table. In AGENTS.md Program flow Start,
+say the run folder's parent is SSA_LOG_FOLDER when set,
+otherwise ${TMPDIR:-/tmp}. One sentence that the run
+directory stays mode 0700 and authHeader.txt is still
+removed on exit. Do not add a Shell-use row that tells
+callers to use TMPDIR for this.
+
+Do not flatten run files into the parent. Do not make a set
+folder imply keep. Do not create missing parents. Do not
+print the path on the status line (alwaysKeepTemp owns
+that). Do not change run_ssa_task; it may keep setting
+TMPDIR. README stays as it is.
+
+Size:
+About 15-25 lines in ssa (default, check_log_folder,
+setup_temp_folder parent choice, help lines). AGENTS.md a
+table row and two sentences.
+
+Tests:
+Fake curl, SSA_NO_ASK=1. New story logFolder. Set TMPDIR
+and SSA_LOG_FOLDER to two different directories under the
+test temp so they can be told apart. Do not require a tty.
+
+- Unset and empty SSA_LOG_FOLDER, with SSA_KEEP_TEMP=1:
+  the ssa-* folder is under TMPDIR.
+- SSA_LOG_FOLDER set to an existing directory and
+  SSA_KEEP_TEMP=1: one ssa-* folder is there, and none
+  under TMPDIR. A script that prints TMPDIR still sees the
+  TMPDIR the test set, not the log parent.
+- Missing parent, and a path that is a file: exit 1, stderr
+  names SSA_LOG_FOLDER, no ssa-* folder created.

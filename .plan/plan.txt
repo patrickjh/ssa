@@ -1,7 +1,13 @@
 Next jobs, in order. Full write-up for each is tasks/<stem>.txt.
 When done, delete that file and drop the stem here.
 
+logFolder
 hardenAskListingUnicode
+runOneStory
+values
+planTxtOnly
+layoutIndex
+perPromptWorkingFiles
 shortFunctions
 fewerLines
 unnecessaryVariables
@@ -11,10 +17,5 @@ fasterTests
 editEncodingGuard
 nonFatalReview
 httpDiagnostics
-perPromptWorkingFiles
 targetFileNotPositional
-values
-planTxtOnly
-runOneStory
-layoutIndex
 commentShellTraps
