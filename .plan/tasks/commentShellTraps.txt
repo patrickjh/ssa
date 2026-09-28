@@ -1,0 +1,37 @@
+commentShellTraps — comment defaults agents tidy away
+
+Why:
+SSA_NO_EDITS and SSA_NO_WRITES use ${VAR-0}. Every other
+user setting uses ${VAR:-default}. ${VAR-0} applies only
+when the variable is unset. An empty value stays empty and
+check_no_edits / check_no_writes reject it. Changing those
+two to ${VAR:-0} would accept empty as 0.
+
+JQ_BINARY_FLAG is empty or -b. The jq calls leave it
+unquoted, with a shellcheck disable, so an empty value
+adds no argument. Quoting it passes an empty argument and
+jq fails. setup_jq_binary_flag already says why -b is
+probed. It does not say to leave the expansion unquoted.
+dropJqBinaryFlag may remove the flag later. This task does
+not remove it.
+
+Do:
+Above the SSA_NO_EDITS and SSA_NO_WRITES assignments, one
+comment: ${VAR-0} applies only when unset; do not switch
+these two to ${VAR:-0}. Stay inside 80 columns. Do not
+change the expansions or check_no_edits / check_no_writes.
+
+If JQ_BINARY_FLAG is still in the script, add one sentence
+to the comment on setup_jq_binary_flag: leave
+$JQ_BINARY_FLAG unquoted so an empty value is not an
+argument. Do not quote the expansions. Do not remove the
+shellcheck disables. If dropJqBinaryFlag has already
+removed the flag, skip this sentence.
+
+No behavior change. Do not edit -h or AGENTS.md.
+
+Size:
+A few comment lines in ssa. No new tests.
+
+Tests:
+sh tests/runTests.sh still 0 failed.

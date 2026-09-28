@@ -1,0 +1,43 @@
+planTxtOnly — start a job only when plan.txt lists it
+
+Why:
+.plan/tasks/ holds jobs and drafts in one folder. plan.txt is
+the queue, but an agent that opens tasks/ will start a file
+that is not listed. .plan/folder.txt says every file under
+tasks/ is a job except doNot.txt. That fights the rule in
+AGENTS.md: a new tasks/ file is not added to plan.txt, and a
+stem is listed only when that job should run next.
+mixedReplyKinds says the idea is undecided and not required
+work, and it still sits in tasks/.
+
+Do:
+Rewrite the jobs paragraph in .plan/folder.txt. A stem is
+work to start only when plan.txt lists it. doNot.txt stays
+a fence, not a job. A tasks/*.txt file that is not listed is
+a write-up for later; do not start it. maybeNot/ stays not
+a queue: do not implement those files unless a human moves
+one to tasks/ and lists the stem in plan.txt.
+
+Move mixedReplyKinds.txt to maybeNot/ and add one line to
+the map in maybeNot/folder.txt:
+
+  mixedReplyKinds.txt         one reply, one kind (undecided)
+
+Do not move doNot.txt. Do not move a stem that plan.txt
+lists. Do not move other write-ups that are real jobs
+waiting to be listed (dropJqBinaryFlag,
+readmeHumanLanguage, and any later tasks/ file a human
+added).
+
+Add one sentence next to the plan.txt rule in AGENTS.md:
+do not start a stem that plan.txt does not list. Do not
+restate the whole .plan tree. Do not change ssa, -h, or
+tests.
+
+Size:
+0 lines in ssa. .plan/folder.txt, maybeNot/folder.txt,
+one moved file, one sentence in AGENTS.md.
+
+Tests:
+None. Read plan.txt, tasks/, and maybeNot/ and check the
+words match.

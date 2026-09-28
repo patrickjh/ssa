@@ -1,0 +1,29 @@
+layoutIndex — point the layout tree at folder.txt
+
+Why:
+The Layout tree in AGENTS.md names four story folders
+(completeSimpleTask, editLargeFileByChunks, showHelp,
+writeFileRequest). There are many more. Agents use that
+tree to choose a folder, then invent one or miss a story
+that already exists. The tree goes stale whenever a story
+is added.
+
+Do:
+In the Layout section of AGENTS.md, keep runTests.sh and
+testUtils.sh in the tree. Remove the named story folders.
+Do not paste the full list of stories into the tree.
+
+Under that tree, one sentence: each
+tests/<story>/folder.txt is the index for that story. One
+sentence: when adding an agent-loop case, copy
+tests/completeSimpleTask/scriptThenDone.test.sh.
+
+The shape of each folder.txt is the folderTxt task. Do not
+rewrite those files here. If you touch the same Layout
+paragraphs folderTxt describes, keep that task's shape
+(short blurb, one entry per *.test.sh, no checklists) and
+do not write a second description. Do not change ssa, -h,
+or tests.
+
+Size:
+A few lines in AGENTS.md. 0 in ssa. No new tests.

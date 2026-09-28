@@ -1,0 +1,44 @@
+runOneStory — runTests.sh takes one story or one case
+
+Why:
+sh tests/runTests.sh always starts every tests/*/*.test.sh.
+A full pass is slow (see fasterTests). An agent fixing one
+story cannot run that folder alone. Running a *.test.sh by
+itself is forbidden: the runner is what sets
+TEST_TEMP_FOLDER and TEST_UTILS_FILE.
+
+Do:
+Keep this runner. Do not add a second script, a flag, or an
+env var. With no arguments, start every tests/*/*.test.sh
+as now.
+
+With one argument, start only the match:
+
+- A story folder name (showHelp) or a path to that folder
+  (tests/showHelp): each tests/<story>/*.test.sh in it.
+- A path to one tests/<story>/<case>.test.sh: that file.
+
+Anything else (missing path, a file that is not one level
+deep, two arguments): print a short error on stderr, exit
+non-zero, and run nothing. Same per-test temp, same
+background start, same ran/failed summary.
+
+Name the filter in main and start_all_tests, or in one
+helper they call. Update the usage comment at the top of
+tests/runTests.sh and the Live tests bullet in AGENTS.md
+Setup and commands. Do not change ssa or -h. Do not skip
+prompt0 or the review reply. Do not make the runner read
+folder.txt. fasterTests still owns wall time of the full
+pass.
+
+Size:
+About 30-50 lines in tests/runTests.sh. A few lines in
+AGENTS.md. 0 in ssa.
+
+Tests:
+sh tests/runTests.sh still 0 failed.
+sh tests/runTests.sh showHelp runs only that folder; the
+summary count matches the *.test.sh files there.
+sh tests/runTests.sh tests/showHelp/showHelpWithDashH.test.sh
+runs that one case.
+A missing name prints an error and does not start a case.

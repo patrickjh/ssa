@@ -13,3 +13,8 @@ nonFatalReview
 httpDiagnostics
 perPromptWorkingFiles
 targetFileNotPositional
+values
+planTxtOnly
+runOneStory
+layoutIndex
+commentShellTraps
