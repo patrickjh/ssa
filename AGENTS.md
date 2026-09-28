@@ -109,7 +109,8 @@ repeat) with:
 ## Program flow
 
 1. **Start** — Parse `-h` and the task, validate settings and tools (`curl`,
-   `jq`, `head`, …), create temp folder, write system prompt and task
+   `jq`, `head`, …), create temp folder, write the system prompt (intro,
+   reply spec, then `SSA_EXTRA_SYSTEM_TEXT` when set) and the task
    into `messages.json` (if stdin is not a tty, those bytes are appended
    to the first user turn after `Context:`; empty stdin omits the block),
    create `prompt0/`, seed
@@ -328,6 +329,7 @@ Built-in OpenAI-compatible `/chat/completions` client:
 
 | Setting | Default |
 |---------|---------|
+| `SSA_EXTRA_SYSTEM_TEXT` | empty (append to the system prompt) |
 | `SSA_KEEP_TEMP` | `0` (discard; `0` or `1`) |
 | `SSA_KEY` | empty (optional) |
 | `SSA_MAX_CONTEXT_BYTES` | `0` (no window) |

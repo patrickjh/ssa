@@ -6,6 +6,7 @@
 set -u
 
 # Users can set
+SSA_EXTRA_SYSTEM_TEXT="${SSA_EXTRA_SYSTEM_TEXT:-}"
 SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
 SSA_KEY="${SSA_KEY:-}"
 SSA_MAX_CONTEXT_BYTES="${SSA_MAX_CONTEXT_BYTES:-0}"
@@ -67,6 +68,8 @@ Options:
           Show this help and exit.
 
 Environment:
+  SSA_EXTRA_SYSTEM_TEXT   appended to the system prompt; does not
+                          change which replies are accepted.
   SSA_KEEP_TEMP           Keep per-run temp folder (0 = discard,
                           1 = keep, default = 0).
   SSA_KEY                 Bearer token (optional for local servers).
@@ -435,6 +438,11 @@ setup_messages_file() {
     REPLY_SPEC=$(reply_spec_text)
     printf '%s\n\n%s\n' "$SYSTEM_PROMPT_INTRO" "$REPLY_SPEC" \
         >"$SYSTEM_PROMPT_FILE" || die "cannot write system prompt"
+    if [ -n "$SSA_EXTRA_SYSTEM_TEXT" ]; then
+        printf '\n%s\n' "$SSA_EXTRA_SYSTEM_TEXT" \
+            >>"$SYSTEM_PROMPT_FILE" ||
+            die "cannot write system prompt"
+    fi
     # shellcheck disable=SC2086
     jq $JQ_BINARY_FLAG -n \
         --rawfile system "$SYSTEM_PROMPT_FILE" \

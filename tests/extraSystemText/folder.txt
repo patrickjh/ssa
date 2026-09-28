@@ -1,0 +1,5 @@
+SSA_EXTRA_SYSTEM_TEXT is appended to the system prompt after the
+reply spec, separated by a blank line. Unset and empty append
+nothing. A format error reprints the reply spec only, so the extra
+text is not pasted back into the chat. Percent signs and backslashes
+in the value stay literal.
