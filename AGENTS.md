@@ -109,10 +109,13 @@ repeat) with:
 ## Program flow
 
 1. **Start** — Parse `-h` and the task, validate settings and tools (`curl`,
-   `jq`, `head`, …), create temp folder, write the system prompt (intro,
-   reply spec, then `SSA_EXTRA_SYSTEM_TEXT` when set) and the task
-   into `messages.json` (if stdin is not a tty, those bytes are appended
-   to the first user turn after `Context:`; empty stdin omits the block),
+   `jq`, `head`, …), create the run folder under `SSA_LOG_FOLDER` when
+   set, otherwise under `${TMPDIR:-/tmp}`. The run directory stays mode
+   0700, and `authHeader.txt` is still removed on exit. Write the
+   system prompt (intro, reply spec, then `SSA_EXTRA_SYSTEM_TEXT` when
+   set) and the task into `messages.json` (if stdin is not a tty,
+   those bytes are appended to the first user turn after `Context:`;
+   empty stdin omits the block),
    create `prompt0/`, seed
    with a bootstrap `# reasoning:` note, `# script`, then `pwd`
    and `uname -a` (ask-user applies when enabled).
@@ -332,6 +335,7 @@ Built-in OpenAI-compatible `/chat/completions` client:
 | `SSA_EXTRA_SYSTEM_TEXT` | empty (append to the system prompt) |
 | `SSA_KEEP_TEMP` | `0` (discard; `0` or `1`) |
 | `SSA_KEY` | empty (optional) |
+| `SSA_LOG_FOLDER` | empty (parent is `${TMPDIR:-/tmp}`) |
 | `SSA_MAX_CONTEXT_BYTES` | `0` (no window) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` |
 | `SSA_MODEL` | unset (required) |

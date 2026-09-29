@@ -1,0 +1,6 @@
+logFolder — SSA_LOG_FOLDER is the parent of each run folder
+
+Empty or unset keeps the parent at the caller's TMPDIR. A set
+value must already be a writable directory. ssa does not create
+that parent and does not change TMPDIR. SSA_KEEP_TEMP still
+decides whether the run folder is deleted on exit.
