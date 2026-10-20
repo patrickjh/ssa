@@ -76,3 +76,149 @@ approach has to say what that text becomes.
 Say what happens to the low-token goal and the
 kept-out line. Leave both as they are until that
 decision is written down.
+
+Ring the terminal when an ask is waiting
+
+When ssa waits for an answer, write the terminal
+bell (BEL) to /dev/tty. POSIX printf '\a' is the
+chime. Do not send it through sanitize_output.
+That path turns BEL into ?.
+
+Ring once before the loop that asks whether to
+apply the action, so a bad answer does not ring
+again. Ring again before the read that asks for
+a rejection reason. SSA_NO_ASK=1 never reaches
+those reads, so that path stays quiet.
+
+Add no SSA_* setting. Muting the bell is a
+terminal option. Add one sentence to the loop
+section of README.md so a silent terminal is
+not mistaken for a hang. Whether a sound plays
+depends on that terminal.
+
+Show progress only when SSA_VERBOSE=1
+
+SSA_VERBOSE is 0 or 1. The default is 0. A value
+other than 0 or 1 dies the same way as SSA_NO_ASK.
+
+At 0, ssa writes only failures to stderr. die
+stays there. Redirect ssa's stdout to /dev/null
+before llama-cli starts, so progress writes are
+discarded.
+
+At 1, leave stdout alone. Write the log path,
+each model line, format errors, action results,
+and the done line to stdout.
+
+Move those non-error lines off stderr. AGENTS.md
+says stderr is harness errors and the final
+status line. Change that to harness errors only.
+
+Point llama-cli stderr at ssa's stdout. In the
+llama-cli start, put 2>&1 before the redirect
+that sends stdout to the reply fifo. A later
+2>&1 copies the fifo, and the load text becomes
+part of the reply.
+
+llama-cli uses that stream for load text and for
+a real failure, such as a missing model file. At
+0 both are discarded. The run still dies with
+llama-cli exited on stderr. Those lines are not
+in the log today.
+
+The ask stays on /dev/tty at both levels.
+Document SSA_VERBOSE in README.md, and fix the
+sentences that say the log path and llama-cli
+write on stderr.
+
+Add a # question reply
+
+A question reply matches a script: one action
+line, a body, then # end.
+
+# reasoning: the path was not in the task
+# question
+Which file should I edit?
+# end
+
+The lines between # question and # end are the
+question. An empty body is a format error, the
+same as an empty script. first_action_line gains
+question$ so this line is recognized.
+
+There is no yes or no prompt. Show the question
+on /dev/tty and read one line. A blank line is
+still an answer. Interrupt is how the user
+quits. Ring the bell on this wait too, once
+that task is in ssa.
+
+The answer is the next user message. Log it as
+its own # sent to model chunk, as the answer
+text, with no action exit code. The following
+call already sends the latest chunk.
+
+SSA_NO_ASK=1 has no user to answer. # question
+is a format error in that run, and the error
+goes back to the model like a disallowed write.
+Add no SSA_* setting. Leave the startup check
+that stops a run when scripts, writes, and
+edits are all off.
+
+Add a short question spec beside the other
+reply specs. List this shape in the loop
+paragraph of README.md.
+
+Add a # response reply
+
+A response reply is the text outcome of the
+task. The user reads it, and the run ends. The
+shape matches a script: one action line, a
+body, then # end.
+
+# reasoning: the test failure is in this file
+# response
+ssa
+# end
+
+The lines between # response and # end are the
+text. An empty body is a format error.
+first_action_line gains response$. There is no
+yes or no prompt, and no bell.
+
+The run ends the same way # complete ends it,
+with exit status 0. The body is the result, so
+write it to the caller's stdout. SSA_VERBOSE=0
+still shows it. Keep a copy of that stdout
+before the verbose redirect, and write the body
+there. The load text and the live reply stay on
+the progress stream. With SSA_VERBOSE=1 the raw
+reply was already shown, and the body is
+printed again as the result.
+
+SSA_NO_ASK=1 does not block this. A response
+changes no files. Add no setting. # complete
+stays the ending for a task handled by a
+script, a write, or an edit.
+
+Add a short response spec beside the other
+reply specs. List this shape in the loop
+paragraph of README.md. Leave the startup check
+that requires a script, a write, or an edit.
+
+Print the log path at the start and the end
+
+setup_log prints "log file:" once, before the
+run. Print that same line again at the end, so
+a long transcript does not hide the path.
+
+finish_agent_loop prints it immediately before
+the done line. A failed run never reaches that
+function, so die prints the path too when the
+log file exists, right after the error.
+
+The verbose task moves this line off stderr
+onto stdout and shows it only when
+SSA_VERBOSE=1. Both copies follow that. At 0
+the progress stream is discarded. The path
+from die still shows, because that line stays
+with the error on stderr.
