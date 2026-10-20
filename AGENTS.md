@@ -1,513 +1,230 @@
 # AGENTS.md
 
-Instructions for coding agents working in this repo. Humans: start with
-[README.md](README.md). Settings and defaults: `./ssa -h`. Design details and
-style rules are below; do not duplicate settings or behavior that `-h` and
-`ssa` already define. Open work lives in `.plan/`. A new file under
-`.plan/tasks/` is not added to `plan.txt`; only list a stem there when
-that job should run next. Task files name functions, settings, and
-sections. Do not cite line numbers in `ssa` or this file.
-`.plan/maybeNot/` is ideas that may not
-belong in ssa; do not implement those unless a human moves the file
-to `tasks/`. Undecided ideas may be tried as a copy under
-`experiments/` (not product). Apply the change there, test that
-fork, and merge into `ssa` only what works. Do not treat an
-experiment as a second product (`bin/`, extra flags).
+Instructions for coding agents in this repo. Behavior is
+in `ssa`. This file is how to work, what stays out, and
+the style rules for the shell program.
 
-## Overview
+## This stage
 
-`ssa` is a Simple Shell Agent in one POSIX `sh` file: prompt a model for
-shell scripts, run them, feed output back, repeat until done.
-
-Inspired by [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent):
-only shell as the tool, each action in a fresh process, a simple loop.
+Open work is plan.txt. Change this file in place when a
+decision about editing, style, or scope changes. Behavior
+changes go in `ssa`. Cite no line numbers.
 
 ## Layout
 
+One executable, `ssa`, POSIX `sh`, at or under 1000 lines,
+80 columns. Edit `ssa` in place.
+
 ```
-ssa/
-├── AGENTS.md          # this file (agent instructions)
-├── LICENSE
-├── README.md          # human intro and try-it
-├── ssa                # the only source file — edit this
-├── tests/             # live stories + acceptance tests
-│   ├── runTests.sh    # only entry point; parallel, per-test temp
-│   ├── testUtils.sh   # functions only (sourced; no work on source)
-│   ├── completeSimpleTask/
-│   ├── editLargeFileByChunks/
-│   ├── showHelp/
-│   └── writeFileRequest/
+ssa
+├── AGENTS.md
+├── README.md           # help, outside the program
+├── plan.txt            # open work
+└── ssa                 # the only source file
 ```
 
-Prefer **camelCase** for story folder names under `tests/`
-(e.g. `showHelp`, `completeSimpleTask`).
-
-**One test case per `*.test.sh` file.** Name the file so it reads clearly
-when browsing the folder — longer, explicit names are good
-(e.g. `showHelpWithDashH.test.sh`, not `help1.test.sh`).
-
-**Test files live exactly one level deep**:
-`tests/<storyFolder>/<caseName>.test.sh`. The runner discovers only that
-pattern (`tests/*/*.test.sh`); files at other depths are silently
-skipped.
-
-`testUtils.sh` must **only define functions**. Sourcing it must not run
-checks, resolve paths, or set up state — callers invoke helpers such as
-`run_ssa` / `expect_*`, which do runtime checks when needed.
-
-## Setup and commands
-
-- Needs `curl`, `jq`, and usual POSIX tools on `PATH` (`cat`, `grep`,
-  `head`, `sed`, …). `ssa` checks these at startup (`head` is used to
-  take the first action line of a model reply).
-- ssa targets **POSIX systems only**. On Windows use WSL.
-- Help: `./ssa -h` (or `sh ssa -h`).
-- Smoke run (needs a real API): set `SSA_URL`, `SSA_KEY` if
-  required, and `SSA_MODEL`; add `SSA_NO_ASK=1` when there is no TTY.
-- Keep temp logs: `SSA_KEEP_TEMP=1` (`0` or `1`, like `SSA_NO_ASK`).
-- Live tests: **only** via `sh tests/runTests.sh`. The runner starts
-  each `*.test.sh` in a background process with its own temp folder
-  and harness env (`TEST_TEMP_FOLDER`, `TEST_UTILS_FILE`), waits,
-  then prints a ran/failed count and cleans up. Test files are
-  top-to-bottom scripts that source `testUtils.sh` and call its
-  functions; do not run `*.test.sh` alone.
-- When adding agent-loop stories: fake `curl` on `PATH`, canned
-  `replyN.txt` as chat-completions JSON, prefer `SSA_NO_ASK=1`; skip
-  `sudo`/`doas` and real `/dev/tty` requirements so tests run on
-  minimal POSIX setups.
+`README.md` is the help. Keep it short: how to run,
+environment, one loop paragraph, exit codes. Do not copy
+`ssa` into `README.md` beyond what a person needs to run
+the program. Update `README.md` when a setting's meaning
+would otherwise be unclear.
 
 ## Boundaries
 
-- Keep the product surface small: one executable (`ssa`) plus docs.
-  Keep `ssa` under 1000 lines.
-  Do not bring back `bin/` / `libexec/` / pluggable model runners.
-- Edit `ssa` in place; keep **≤80 characters per line**.
-- Do not invent flags or env vars for things the caller’s shell can do
-  (`cd`, `export`, redirects).
-- Keep `-h` short: `-h` / `--help`, environment, one loop paragraph,
-  exit codes. Do not copy Design or README recipes into help. When
-  behavior changes, update `ssa` and this file. Only add a help
-  sentence if a setting’s meaning would otherwise be unclear.
-- Ask before committing or pushing.
-- New acceptance coverage goes under `tests/` (camelCase story folders,
-  `folder.txt` explaining the folder, one case per explicitly named
-  `*.test.sh`).
+Keep the product surface small: one executable. Help is
+`README.md`, outside the program. This repo has no tests.
+Do not add `bin/` or `libexec/`. Do not invent flags or env vars
+for things the caller's shell can do (`cd`, `export`, redirects).
 
----
+`PID` is set once at startup. Do not replace it with `$$`
+inside a pipeline subshell.
 
-# Design
+## File writes
 
-## Goal
+Overwrite a file in place, on purpose. The file keeps its
+permissions and the rest of its attributes. A write that
+stops partway can leave a partial file. That risk is
+accepted. Users should keep backups or filesystem
+snapshots to recover from it.
 
-Agent loop (prompt → treat reply as shell script → run → messages →
-repeat) with:
+## Goals
 
-- OpenAI-compatible HTTP via **curl** and **jq** (built in)
-- **Ask-user** approval (on by default)
-- Scripts run with **`sh` on stdin**. Write and edit are harness I/O.
+One goal is a full log of each run. A person or an AI
+should be able to read it, debug any problems, and find
+better ways to use ssa. Keep every record that review needs.
 
-## Program flow
+Another goal is low token use. Some devices generate
+tokens slowly, and a run should stay usable there. Keep
+prompts and replies short, and do not add a turn or a
+thinking trace the device must generate.
 
-1. **Start** — Parse `-h` and the task, validate settings and tools (`curl`,
-   `jq`, `head`, …), create the run folder under `SSA_LOG_FOLDER` when
-   set, otherwise under `${TMPDIR:-/tmp}`. The run directory stays mode
-   0700, and `authHeader.txt` is still removed on exit. Write the
-   system prompt (intro, reply spec, then `SSA_EXTRA_SYSTEM_TEXT` when
-   set) and the task into `messages.json` (if stdin is not a tty,
-   those bytes are appended to the first user turn after `Context:`;
-   empty stdin omits the block),
-   create `prompt0/`, seed
-   with a bootstrap `# reasoning:` note, `# script`, then `pwd`
-   and `uname -a` (ask-user applies when enabled).
-2. **Loop** — For each model prompt (`prompt1+`), copy
-   `messages.json` to `promptN/messages.json` (temp log only), run
-   `call_curl` against `messages.json` (system / user / assistant
-   roles). Treat the reply as the script. If done marker, stop; if
-   write request
-   (first action line `# write file: PATH`, after leading blank lines
-   and `#` notes), write everything after that line to PATH in the
-   harness after ask; if edit request (first action line
-   `# edit file: PATH`), apply one unique SEARCH/REPLACE in the
-   harness then write the new bytes there; if first action line
-   is `# script`, run the payload after that line through ask then
-   `sh` (`sh -n` on the payload); if the reply is empty,
-   has no known first action line, has an empty `# script` payload,
-   has a markdown fence line, has thinking tags (`<think>` or
-   `<|channel>thought`), or `sh -n` fails, append `Format error:`
-   plus the same reply spec as the system prompt (not which check
-   fired) and continue (do not run it); else run through ask then
-   `sh`; capture script output, then append it to
-   `messages.json` (if jq cannot hold it, or it contains a NUL,
-   omit those bytes and append a short note plus the exit code
-   instead).
-3. **Stop** — Exit `0` when the first action line is `# complete`
-   (leading blank lines and `#` notes skipped; trailing newlines
-   ignored: `[ "$(first_action_line)" = '# complete' ]`).
-   `first_action_line` keeps `# complete`, `# write file:…`,
-   `# edit file:…`, or `# script` (`grep -E`), takes the first
-   (`head -n 1`), and fails if none remain (`grep .`). Exit `1` on
-   harness failure or max model prompts. SIGHUP / SIGINT /
-   SIGTERM → `129` / `130` / `143`.
-4. **Review** — After the loop (done or hit max), append a user turn
-   asking what would have made this run go better, POST once more (not
-   counted in `SSA_MAX_MODEL_PROMPTS` or the status prompt count),
-   print the reply on stderr through `sanitize_output`, and do not
-   run it. Skip on die / HUP / INT / TERM. A failed review curl is fatal.
+Another goal is a run with no network at all. The model,
+the files, and the log stay on the machine. A run should
+finish the same way with the network off.
 
-## Environment
+Another goal is a computer that stays responsive while a
+run is going. The model load and the reply can be slow.
+They should not lock the machine. Leave memory and CPU
+for the rest of the system, even when that slows
+llama-cli.
 
-Harness state is **not** exported into child processes (`sh`).
+Another goal is llama-cli options that work when the
+model weights are bigger than memory. The weights stream
+off a drive. A run should keep going in that case.
 
-Private (not exported): `PID`, `PROMPT_COUNTER`, `TEMP_FOLDER`.
-Startup unsets those names so an inherited export is dropped.
-Pipeline subshells inside the harness still see them; model scripts
-do not inherit them.
+## Kept out
 
-`PID` holds the agent PID at startup for `die` (SIGUSR1). It must
-not be replaced with `$$` inside a pipeline subshell.
+JSON tool calls. A tools array on the request. A second
+edit shape (unified diff). Fence unwrapping. A chunk-file
+compare protocol. Thinking left on, with the trace stripped
+from history. The end-of-run review generation. Splitting
+the file into lib or bin. A native Windows harness. An HTTP
+client for a model server.
+A fresh llama-cli process on every turn.
+Capping action output. Script output is appended in full.
+A long command can fill the context.
 
-User-facing settings (`SSA_MODEL`, `SSA_NO_ASK`, …) are environment
-knobs; see Settings below and `ssa -h`.
+## Style
 
-## Ask then sh
+Style rules only. Behavior is in `ssa`. `README.md` is the
+short help.
 
-Ask is optional. Scripts always run with `sh` on stdin. Isolation
-that should cover files wraps the whole `ssa` process (container,
-pledge, a different user). Hung scripts are not killed; wrap `ssa`
-with `timeout` in the caller’s shell.
-
-### Ask user — off when `SSA_NO_ASK=1` (default `0`)
-
-- `SSA_NO_ASK=0|1` (`1` skips ask).
-- When `0`: show each **model** script on **stderr**; print the
-  `[Y]es / [N]o / [Q]uit` prompt on stderr; read the answer from
-  `/dev/tty`.
-- Yes → run it. No → rejection text on stdout,
-  status `1` (loop continues); then `reason:` on stderr and one line
-  from `/dev/tty` (empty skips). A typed reason is logged to
-  `promptN/userFeedback.txt` and appended as `Reason: …` on the user
-  turn, not on stdout. Quit → `die`. Fake-curl `SSA_NO_ASK=1` stories
-  cannot cover this tty read.
-- Ask listing and other harness UI of untrusted bytes show CR as
-  `\r`, ESC as `\e`, and other non-print (except tab) as `?`. The
-  file fed to `sh` and live script stdout are unchanged.
-- Invalid answers print `invalid input: …` on stderr and re-prompt.
-- Answers are logged to `promptN/userAnswer.txt` when ask runs.
-- Requires an openable `/dev/tty` when ask is enabled. Read failure
-  from `/dev/tty` is fatal. Batch jobs: `SSA_NO_ASK=1`.
-
-### How the script is run
-
-After ask (or after ask is disabled):
-
-`sh < stdin`
-
-For `# script` turns, stdin is everything after that line, not
-the whole reply. Leading `#` notes are not fed to `sh`. Write and
-edit turns are harness I/O, not `sh`.
-
-## Script requests (`# script`)
-
-A reply whose **first action line** is `# script` (exact, like
-`# complete`) is a script, not leftover-as-default. Everything
-after that line is the program. Empty payload is a format error.
-Unknown first action line (bare `ls`, comments-only, empty
-`# write file:` with no path) is a format error. Detection is in
-`reply_is_script_request`; `sh -n` runs on the payload only.
-
-## Write requests (`# write file:`)
-
-A reply whose **first action line** is `# write file: PATH` (path
-runs to end of line, must be non-empty) is a file write request, not a
-script. Leading blank lines and `#` notes are skipped;
-`first_action_line` returns that line. Everything after the sentinel
-is the raw file contents — no heredocs, no quoting, no escaping.
-Detection is in `reply_is_write_request`; done-marker and blank-reply
-checks come first; `sh -n` is not applied to write requests.
-`SSA_NO_WRITES=1` makes `# write file: PATH` a format error (same
-`REPLY_SPEC`, no ask, file unchanged).
-
-- After ask, the harness extracts the payload (sentinel to end, drop
-  the sentinel) and writes it to PATH (`sed` to `"$1"`). PATH is
-  `$1` — never interpolated. Do not pipe writes through
-  `run_script`.
-- Success prints `wrote file: PATH`; failures (missing parent folder,
-  permissions) land in `messages.json` like any script failure. The
-  harness does **not** create parent folders; the model sends a
-  normal `mkdir` script turn first.
-- One file per reply. `save_model_reply_to_file` writes the model
-  string with `jq -j` (raw, no extra newline) straight onto
-  `latestModelResponse.txt`, so trailing blank lines in the payload
-  are kept. `jq -b` is added when the probe at startup succeeds, so
-  jq builds that would otherwise write CRLF do not.
-
-## Edit requests (`# edit file:`)
-
-A reply whose **first action line** is `# edit file: PATH` (path
-runs to end of line, must be non-empty) is a unique search-and-replace,
-not a script. Leading blank lines and `#` notes are skipped;
-`first_action_line` returns that line. Everything after the sentinel
-is one SEARCH/REPLACE pair:
-
-```
-<<<<<<< SEARCH
-old bytes, copied exactly
-=======
-new bytes
->>>>>>> REPLACE
-```
-
-Detection is in `reply_is_edit_request`; done-marker, blank-reply, and
-write-request checks come first; `sh -n` and fence/think checks are
-not applied (the payload may contain those bytes).
-`SSA_NO_EDITS=1` makes `# edit file: PATH` a format error (same
-`REPLY_SPEC`, no ask, file unchanged).
-
-- The harness extracts the payload (from the sentinel, minus that
-  line) and runs `jq` `split` so the old string matches **exactly
-  once**. Failed edits print `edit failed: PATH: …` on stdout
-  (file not found, missing markers, empty old string, matched 0 or
-  2+ times) with exit `1` and do not change the file. Same recovery
-  as a failed write.
-- On success the harness writes with `cat > "$1"` and prints
-  `edited file: PATH`. PATH is `$1` — never interpolated. Do not
-  pipe edits through `run_script`.
-- One file, one replace per reply. Empty new string deletes the
-  old block. Marker lines in old/new are ambiguous; fail closed.
-
-## Model (curl)
-
-Built-in OpenAI-compatible `/chat/completions` client:
-
-- Required: `SSA_URL` (URL curl POSTs the chat-completions body
-  to), `SSA_MODEL`
-- Optional: `SSA_KEY`, `SSA_REQUEST_JSON` (JSON object merged
-  into the request body; model and messages from ssa win on key
-  conflicts)
-- Extra curl flags: put a `curl` wrapper earlier on `PATH` (ssa has no
-  `--curl-args`). curl also honors `https_proxy` and related env vars.
-- At setup, if `SSA_KEY` is set, write
-  `$TEMP_FOLDER/authHeader.txt` for curl `-H @file`, then
-  `unset SSA_KEY` so model scripts do not inherit the key and
-  curl argv does not contain it. `authHeader.txt` is overwritten and
-  removed on every exit (including `SSA_KEEP_TEMP=1`).
-- Once per run, writes `SSA_URL` to `$TEMP_FOLDER/url.txt`
-  and the task to `$TEMP_FOLDER/task.txt` (log only). A non-tty stdin
-  is copied to `$TEMP_FOLDER/context.txt` (empty or a tty leaves it
-  empty).
-- Temp working files include `authHeader.txt` while the run needs it
-  (always deleted on exit), `messages.json`, `latestModelResponse.txt`,
-  `latestScriptExitCode.txt`, and `latestScriptOutput.txt` (tee’d
-  script output before the user-turn append to `messages.json`).
-  Output that `jq --rawfile` cannot hold, or that contains a NUL, is
-  omitted from that user turn; stdout is unchanged.
-- Before each **model** prompt (`prompt1+`), the harness copies
-  `messages.json` to `$TEMP_FOLDER/promptN/messages.json` for
-  debugging (`SSA_KEEP_TEMP=1`). `prompt0/` is created for the fake-first
-  bootstrap (no curl / no messages copy). `N` matches
-  `PROMPT_COUNTER`.
-- Per-prompt HTTP logs live under `promptN/` for model prompts:
-  `body.json`, `requestExtra.json`, and `response.txt`
-- `messages.json` and each `promptN/messages.json` stay the full
-  log. `SSA_MAX_CONTEXT_BYTES` (default `0`) caps the POST. Above
-  `0`, `body.json` drops the oldest unpinned assistant/user pairs
-  until the sum of `.content` lengths is at most that many bytes.
-  The system turn and the first user turn stay. The newest pair
-  stays even when it alone is over budget. `0` sends every turn.
-- `call_curl` / jq read `messages.json` (not one concatenated user
-  blob); no stdin prompt spool
-- Model replies are extracted with `jq -j` (and `jq -b` when that flag
-  works; probed once at startup) onto `latestModelResponse.txt`.
-  `choices[0].message.content` must be a JSON string; otherwise ssa
-  dies (`invalid chat response`). Empty content is a format error
-  and the loop continues.
-- Request body is `system` / `user` / `assistant` messages plus
-  `SSA_REQUEST_JSON` merged in. After the agent loop, one more POST
-  asks for plain-text feedback (not a script). Curl uses `--fail`,
-  `--retry`, `--retry-connrefused`, `--retry-max-time` 120,
-  `--connect-timeout` 30, and `--max-time` 900. A failed curl is
-  fatal.
-
-## Settings summary
-
-| Setting | Default |
-|---------|---------|
-| `SSA_EXTRA_SYSTEM_TEXT` | empty (append to the system prompt) |
-| `SSA_KEEP_TEMP` | `0` (discard; `0` or `1`) |
-| `SSA_KEY` | empty (optional) |
-| `SSA_LOG_FOLDER` | empty (parent is `${TMPDIR:-/tmp}`) |
-| `SSA_MAX_CONTEXT_BYTES` | `0` (no window) |
-| `SSA_MAX_MODEL_PROMPTS` | `20` |
-| `SSA_MODEL` | unset (required) |
-| `SSA_NO_ASK` | `0` (ask) |
-| `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
-| `SSA_NO_WRITES` | `0` (allow `# write file:`) |
-| `SSA_REQUEST_JSON` | empty |
-| `SSA_URL` | unset (required) |
-
-Settings are environment only. The only flags are `-h` / `--help`.
-Unknown `-*` is a bad option, not a task word. Per-run overrides:
-`VAR=value ssa …`.
-
-**Streams:** script output and help on **stdout**; ask UI (script listing,
-prompts, invalid-input lines), review feedback, harness errors, and the
-final status line on **stderr**.
-
----
-
-# Style
-
-Conventions for editing `ssa`. **Style rules only.** Wiring, settings,
-names, status codes, and behavior live in `ssa` and `-h`.
-
-## Unix conventions
+### Unix conventions
 
 `ssa` is a Unix-style CLI. When a rule here conflicts with a
-**well-established Unix or GNU convention**, follow the Unix convention
-unless this file documents a deliberate exception.
+well-established Unix or GNU convention, follow the Unix
+convention unless this file documents a deliberate exception.
 
-Examples: requested help (`-h`, `--help`) on **stdout**; interleaved
-script output live on **stdout**; `die` messages and the final status on
-**stderr**; exit `0` on success; exit `1` on harness failure or max model
-prompts; exit `129` / `130` / `143` on SIGHUP / SIGINT / SIGTERM (no
-status line; temp cleanup unless `SSA_KEEP_TEMP=1`).
+### Simple words
 
-## Simple words
+Readability comes first. Favor plain words of one or two
+syllables (`run`, `path`, `script`, `check`, `setup`). When one
+short word is not clear enough, use a longer phrase of short
+words (`check_can_run`, `setup_work_folder`).
 
-**Readability comes first.** Favor plain words of one or two syllables
-(`run`, `path`, `script`, `check`, `setup`). When one short word is not
-clear enough, use a longer phrase of short words (`check_can_run`,
-`setup_work_folder`).
+Prefer long, explicit function names when they describe the full
+job. No abbreviations (`argument` not `arg`, `command` not
+`cmd`). External tool names stay as-is (`llama-cli`, `head`,
+`sed`).
 
-**Prefer long, explicit function names** when they describe the full job.
-**No abbreviations** (`argument` not `arg`, `command` not `cmd`). External
-tool names stay as-is (`curl`, `jq`, `-f`, etc.).
+### Naming
 
-## Naming
+- Variables use `UPPER_CASE` (settings, run state, and locals).
+- Functions use `lower_case`.
+- User-facing settings use the `SSA_` prefix. Internal run state
+  does not.
+- Top-level variable blocks (`# Users can set` and `# Internal`)
+  keep names alphabetically ordered within each block. Do not
+  alphabetize large string constants (prompts) with
+  those lists.
 
-- **Variables** use `UPPER_CASE` (settings, run state, and locals).
-- **Functions** use `lower_case`.
-- **User-facing settings** use the `SSA_` prefix. Internal run
-  state does not.
-- **Top-level variable blocks** (`# Users can set` and `# Internal`) keep
-  names **alphabetically ordered** within each block. Do not alphabetize
-  large string constants (help text, prompts) with those lists.
+Do not shadow top-level variables. Use `$1`, `$2`, or a different
+local name inside helpers.
 
-Path suffix by what the variable holds:
+Prefer fewer variables. A value used in one place should be
+written there. A function that only fills a variable for the
+next line should print the value instead. Keep a variable when
+the same fact is read again later (`CHUNK_START`,
+`OUTPUT_START`).
 
-| Suffix | Holds |
-|--------|--------|
-| `_FILE` | A file |
-| `_FOLDER` | A folder |
-| `_SCRIPT` | Path to an executable file |
+### Settings and CLI
 
-On-disk names under the temp folder use **camelCase** (e.g.
-`messages.json`). Shell variables that hold paths use `UPPER_CASE`
-with `_FILE` / `_FOLDER` / `_SCRIPT`.
+Every user-facing setting is an environment variable (`SSA_*`).
+The program has no flags. The words on the command line are
+the task. Document settings in `README.md`.
+Internal run state is not a setting.
 
-**Do not shadow top-level variables.** Use `$1`, `$2`, or different local
-names inside helpers.
+### Error messages
 
-## Settings and CLI
-
-Every **user-facing setting** is an environment variable (`SSA_*`).
-The only flags are `-h` / `--help`. Unknown `-*` is a bad
-option, not a task word. Document settings in `-h`. Short forms are
-rare (`-h` only). Internal run state is not a setting.
-
-## Error messages
-
-When the user can fix a failure by changing a **user-facing setting**,
-say how: name the env var. Pattern:
+When the user can fix a failure by changing a user-facing
+setting, name the env var. Pattern:
 
 ```sh
-die "SSA_URL not set; see ssa -h for help"
+die "SSA_LOG_FOLDER is not a directory; see README.md"
 ```
 
 Keep hints one short clause after a semicolon. Prefer
-`; see ssa -h for help` at the end of usage errors when useful.
+`; see README.md` at the end of usage errors when useful.
 
-**Skip “set ENV” hints** when that would mislead:
+Skip a "set ENV" hint when it would mislead:
 
-- Internal harness failures (messages I/O, temp folder setup).
-- Missing OS tools on `PATH` (`curl`, `jq`, `head`, …) —
-  say to install or put the tool on `PATH`.
-- Failures fixed outside ssa (API billing, account quota).
+- Internal harness failures (transcript I/O, temp folder setup).
+- Missing OS tools on `PATH` (`llama-cli`, `head`, …). Say to
+  install the tool or put it on `PATH`.
+- Failures outside the harness (missing model file, `llama-cli`
+  exits).
 
-The task has **no env var** — say it was not found on the CLI.
+The task has no env var. Say it was not found on the CLI.
 
-`die` prints on stderr and sends SIGUSR1 to `PID`. Opening quote
-starts on the **same line** as `die`. Wrap at **80 columns** with
-adjacent quoted parts.
+The opening quote starts on the same line as `die`. Wrap at
+80 columns with adjacent quoted parts.
 
-## Status codes
+### Status codes
 
-Control-flow numbers used for `return` and loop status are **named
-constants** at the top of the script — not magic numbers in function
-bodies. Predicates used in `if name; then` return **0 when the named
-condition holds** (`IS_TRUE` / `IS_FALSE`). Keep predicates pure (no
-logging or side effects). Use `return $CONSTANT_NAME` (with `$`).
+A predicate used in `if name; then` returns 0 when the named
+condition holds and 1 when it does not. Write the number at
+the return. Keep predicates pure (no logging or side effects).
 
-## Functions
+### Functions
 
 - One clear job per function.
-- Prefer `if` over `[ test ] && command` when branching among actions.
+- Prefer `if` over `[ test ] && command` when branching among
+  actions.
 - Guard + `die`: `[ -n "$VAR" ] || die "…"`.
 - Guard + `return`: `if [ -z "$VAR" ]; then return; fi`
-  (or `return $CONSTANT_NAME`) when that is the whole branch.
+  (or `return 1`, or `return $CONSTANT_NAME`) when that is
+  the whole branch.
   Stay under 80 columns. A longer `then` stays a block.
 - `case` arms prefer one line: `pattern) action ;;`.
   Indent each arm 4 spaces from `case`.
 
-## Static strings
+### Static strings
 
-Long static text (prompts, help, errors) lives in **top-level
-variables**, not inside functions. Give **sed** programs a named local.
-Split fixed text from substitution; keep functions thin.
+Long static text (prompts and errors) lives in top-level
+variables, not inside functions. Give a long sed program a named local.
+Split fixed text from substitution. Keep functions thin.
 
-## Line length
+### Line length
 
-**Maximum 80 characters per line** in `ssa` (code, comments, static
-strings). Wrap with `\`, split quoted strings, or multiple `printf`s.
-Do not shorten names just to fit.
+Maximum 80 characters per line in `ssa` (code, comments, static
+strings). Wrap with `\`, split quoted strings, or multiple
+`printf`s. Do not shorten names just to fit.
 
-## Quoting
+### Quoting
 
-Quote string literals in assignments and in `[ ]` / `=` comparisons.
-Leave unquoted: numeric constants and status codes, `case` patterns,
-signal names in `trap`.
+Quote string literals in assignments and in `[ ]` / `=`
+comparisons. Leave unquoted: numeric constants and status codes,
+`case` patterns, signal names in `trap`.
 
-## Streams
+### Streams
 
-- **stdout** — interleaved script output and requested help.
-- **stderr** — ask UI, harness errors, final status line.
+- stdout: action and loop output.
+- `/dev/tty`: ask UI.
+- stderr: harness errors, final status line.
 
-## File order
+### File order
 
 Follow the call graph:
 
 1. Settings, run state, and static strings
-2. `main()` first, then callees in **call order**
+2. `main()` first, then callees in call order
 3. `main "$@"` on the last line
 
-Each function sits **below its last caller**. Among callees of the same
-caller, keep call order.
+Each function sits below its last caller. Among callees of the
+same caller, keep call order.
 
-## Shell use
+### Shell use
 
-Do not add flags or env vars for behavior the caller’s shell can handle
-in one line at the call site.
+Do not add flags or env vars for behavior the caller's shell can
+handle in one line at the call site.
 
-| Need | Shell, not agent |
-|------|------------------|
-| Working directory | `cd` before `ssa` |
-| Environment | `export VAR=value` or `VAR=value ssa …` |
-| Diagnostic log file | `ssa … 2>run.log` |
-| Keep temp logs | `SSA_KEEP_TEMP=1` |
-| Extra curl flags | `curl` wrapper earlier on `PATH` |
-| Hung script / open pipe | wrap `ssa` with `timeout` |
-| HTTP(S) proxy | `https_proxy` / `http_proxy` (curl) |
-| Repeat for many tasks | `for task in …; do …; done` |
+| Need                    | Shell, not the agent              |
+|-------------------------|-----------------------------------|
+| Working directory       | `cd` before `ssa`                 |
+| Environment             | `export VAR=value` or `VAR=value ssa …` |
+| Diagnostic log file     | `ssa … 2>run.log`                 |
+| Hung script / open pipe | wrap `ssa` with `timeout`         |
+| Repeat for many tasks   | `for task in …; do …; done`       |
 
-Ask: *could the user do this with `cd`, `export`, or a redirect?* If yes,
-leave it out of the agent.
+Ask: could the user do this with `cd`, `export`, or a redirect?
+If yes, leave it out of the agent.

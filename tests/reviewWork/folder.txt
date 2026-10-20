@@ -1,2 +1,0 @@
-Post-run review: one extra model call after the loop. Feedback
-on stderr, not run as a script. Status N is agent prompts only.

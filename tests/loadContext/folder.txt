@@ -1,3 +1,0 @@
-A non-tty stdin is extra user context on the first user turn
-after Context:. Empty stdin omits the block. NUL dies. A large
-stdin is kept on that first user turn.

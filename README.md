@@ -1,112 +1,97 @@
-# Simple Shell Agent (ssa)
+# ssa
 
-`ssa` is a simple AI agent in one POSIX `sh` file. Inspired by
-[mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent): give the
-model **only shell**, run each step in a **fresh process**, keep a
-**simple loop**. Feels like a unix util.
+`ssa` is one POSIX `sh` program. On Windows, run it under a
+POSIX shell such as WSL. It runs a local GGUF through
+`llama-cli`, takes a task, and repeats one action per reply
+until the model says `# complete`. When `llama-cli` is not
+on `PATH`, `ssa` runs `llama cli` after `llama cli --version`
+succeeds.
 
-## Requirements
+This file is the help. The program has no `-h` or `--help`.
 
-- POSIX `sh`, plus `curl` and `jq` on `PATH`
-- Linux and macOS work as usual; on Windows use WSL (ssa targets POSIX
-  systems only)
-- A chat-completions URL in `SSA_URL`. Curl
-  POSTs the OpenAI-style body there; the path need not end in
-  `/chat/completions`.
+## Run
 
-Any OpenAI-compatible endpoint works (OpenAI, local proxies, and similar
-providers). Set `SSA_KEY` when the provider requires auth.
-
-## Install
+Put the task on the command line. The task is part of
+the system prompt. The first user turn is the line
+`Context from stdin (may be blank):`. When stdin is not a terminal,
+those bytes follow that line.
 
 ```sh
-git clone https://github.com/patrickjh/ssa.git
-cd ssa
-chmod +x ssa
-export PATH="$PWD:$PATH"
-```
-
-Or download the `ssa` file alone, `chmod +x`, and put its folder on
-`PATH`.
-
-## Try it
-
-```sh
-export SSA_KEY="sk-..."
-export SSA_URL="https://api.openai.com/v1/chat/completions"
-export SSA_MODEL=gpt-4o-mini
-ssa summarize this repo
-```
-
-Context on stdin; task on argv:
-
-```sh
-cat a b | ssa summarize this repo
-ssa "$(cat task.txt)"
-```
-
-Batch / no TTY: `SSA_NO_ASK=1`. Keep temp logs: `SSA_KEEP_TEMP=1`. Extra
-request fields (`think`, `max_tokens`, sampling): `SSA_REQUEST_JSON`.
-
-**Unix-shaped.** Handle `cd`, env, and redirects in the shell. Script
-output streams live on **stdout**. Agent messages (ask UI, errors, final
-status) go to **stderr**.
-
-## Local models
-
-Point `SSA_URL` at llama.cpp (or another server that honors
-`think: false`). ssa does not default that; pass it in
-`SSA_REQUEST_JSON`. Local `max_tokens` defaults are often 256–2048 and
-will truncate write requests.
-
-```sh
-export SSA_URL=http://127.0.0.1:8080/v1/chat/completions
-export SSA_MODEL=gemma-4-31b
-export SSA_REQUEST_JSON='{"think":false,"max_tokens":8192,"temperature":1,"top_p":0.95}'
-export SSA_KEEP_TEMP=1
-export SSA_MAX_MODEL_PROMPTS=30
+export SSA_LLAMA_CLI_ARGS="-m /models/gemma.gguf -c 8192 -n 8192"
 ssa fix the failing test
+cat notes.txt | ssa summarize this repo
 ```
 
-Add `SSA_NO_ASK=1` when there is no TTY.
+The program prints no help of its own.
 
-## Safety
+A run with no terminal sets `SSA_NO_ASK=1`.
 
-`ssa` runs shell scripts written by the model in your current directory.
-Treat that like handing the model your terminal.
+## Loop
 
-- **Ask-user approval is on by default** — each model script is shown on
-  stderr; you approve from `/dev/tty` (`[Y]es` / `[N]o` / `[Q]uit`).
-- Scripts run with `sh` on stdin. Writes and edits are harness file
-  I/O after the same ask. Hung scripts are not killed; wrap `ssa`
-  with `timeout` (or a container / other user) in your shell.
+Each reply is one action: a shell script, a file write, a
+file edit, or `# complete`. A reply ends on a line that
+is exactly `# end`, and text after that line is
+rejected. `SSA_NO_SCRIPTS=1` leaves a write, an edit,
+or `# complete`. You approve each action
+unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
+with the answer. Stdout is the action and loop output:
+the reply as each line arrives, script output, write
+and edit results, rejections, and format errors.
+Script output is printed after the command exits.
+stderr shows the log path, a line before each reply,
+harness errors, and the done line.
 
-## Docs
+## Settings
 
-- Full usage and defaults: `ssa -h`
-- Design and coding style for contributors and coding agents:
-  [AGENTS.md](AGENTS.md)
+Set these in the environment. `VAR=value ssa …` covers one
+run.
 
-## Tests
+| Setting | Default |
+| --- | --- |
+| `SSA_EXTRA_SYSTEM_TEXT` | empty, appended to the system prompt |
+| `SSA_LLAMA_CLI_ARGS` | unset (required) |
+| `SSA_LOG_FOLDER` | temp directory (`TMPDIR`, or `/tmp`) |
+| `SSA_NO_ASK` | `0` (ask before each action) |
+| `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
+| `SSA_NO_SCRIPTS` | `0` (allow `# script`) |
+| `SSA_NO_WRITES` | `0` (allow `# write file:`) |
 
-```sh
-sh tests/runTests.sh
-```
+The log file stays after exit. Its name is the time, to
+the second, then the PID, and `.ssalog`. It is under
+`SSA_LOG_FOLDER`. The program prints the path on stderr.
+`llama-cli` writes on that same stderr. If it exits, the
+die message says so.
 
-That is the only supported entry point. Do not run `*.test.sh` files
-alone.
+`SSA_LLAMA_CLI_ARGS` is the caller's `llama-cli` flags,
+including `-m` or `--model`, plus any of `-c`, `-n`,
+`--context-shift`, and `--keep`. The run stops when
+neither `-m` nor `--model` is its own word with a path
+after it. Flags are split on spaces, so a path with a
+space does not work. A short `-n` can stop the reply
+before `# end`, and ssa waits for that line.
 
-## Layout
+`ssa` puts these flags in front of that string:
+`--offline`, `--reasoning off`, `--reasoning-budget 0`,
+`--simple-io`, `--no-display-prompt`, `--no-show-timings`,
+`-lm mmap`, `-np 1`, `--color off`, `--context-shift`,
+and `--keep -1`. It passes `-sys` with the system
+prompt before those flags. A later flag replaces an
+earlier one when `llama-cli` has a second form.
+`--context-shift` and `--keep -1` keep that prompt,
+including the task, and drop older tokens after it
+when the context fills. `--simple-io` and `--offline`
+have no off flag. Do not pass `--multiline-input`.
+Each line ssa sends ends in a backslash, and that
+flag ends the message there.
 
-```
-ssa/
-├── AGENTS.md   # design + style for coding agents
-├── LICENSE
-├── README.md   # this file
-├── ssa         # the agent (single file)
-└── tests/      # live stories; sh tests/runTests.sh
-```
+## Exit status
 
-## License
+| Code | Meaning |
+| --- | --- |
+| 0 | The task completed |
+| 1 | Bad arguments, harness failure, or user quit |
+| 129 | Hangup |
+| 130 | Interrupt |
+| 143 | Terminate |
 
-MIT — see [LICENSE](LICENSE).
+Hangup, interrupt, and terminate print no status line.
