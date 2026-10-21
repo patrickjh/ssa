@@ -292,22 +292,6 @@ the path is empty, record a format error that
 says the path is missing. Use that message for
 both actions.
 
-Sanitize the model reply on the way out
-
-log_llama_output prints each model line to
-stdout as it arrives. sanitize_output runs
-only for the ask on /dev/tty and for invalid
-input. A control byte in the reply goes
-straight to the caller.
-
-Pass the shown line through sanitize_output.
-Keep the logged line raw, aside from the
-carriage-return task, so a write or a script
-body stays the text the model sent.
-SSA_VERBOSE=0 hides stdout. This still
-applies to the stream that shows the live
-reply.
-
 Stop after repeated format errors
 
 A reply that fails the format checks is sent

@@ -478,7 +478,7 @@ log_llama_output() {
             die "llama-cli exited; see README.md"
         printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" ||
             die "cannot append log"
-        printf '%s\n' "$LLAMA_LINE" ||
+        printf '%s\n' "$LLAMA_LINE" | sanitize_output ||
             die "cannot show model reply"
         if [ "$LLAMA_LINE" = '# end' ]; then
             break
