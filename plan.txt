@@ -1,4 +1,4 @@
-﻿1) Review AGENTS.md
+1) Review AGENTS.md
 
 Read AGENTS.md. It should say how to edit this repo, the
 style rules, and what stays out. It should point at ssa
