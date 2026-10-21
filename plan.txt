@@ -1,4 +1,4 @@
-Review AGENTS.md
+1) "Review AGENTS.md"
 
 Read AGENTS.md. It should say how to edit this repo, the
 style rules, and what stays out. It should point at ssa
@@ -8,7 +8,7 @@ Cut any sentence that restates what ssa or README.md already
 shows. Keep a rule the code does not show. Fix wording that
 the later tasks made stale.
 
-Ask several models for changes
+2) "Ask several models for changes"
 
 Do this after the AGENTS.md review. Have more than one
 model read ssa and AGENTS.md. Each model suggests
@@ -17,7 +17,7 @@ changes that would improve the project.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are.
 
-Double check POSIX compliance
+3) "Double check POSIX compliance"
 
 ssa is POSIX sh. Read the script for features that are
 bash, ksh, or another shell: arrays, [[ ]], process
@@ -31,7 +31,7 @@ utility behavior.
 Fix what is not portable under the stated requirements.
 Leave a construct that is already portable and clear.
 
-Review the system prompt
+4) "Review the system prompt"
 
 Read the system prompt text in ssa. Cut sentences,
 examples, and repeated rules that the model can do
@@ -42,7 +42,7 @@ Leave the task line and any SSA_EXTRA_SYSTEM_TEXT
 in place. Update README.md only if a setting's
 meaning would otherwise be unclear.
 
-Figure out how to turn reasoning on
+5) "Figure out how to turn reasoning on"
 
 Reasoning is off. ssa passes --reasoning off and
 --reasoning-budget 0. AGENTS.md says not to add a
@@ -77,7 +77,7 @@ Say what happens to the low-token goal and the
 kept-out line. Leave both as they are until that
 decision is written down.
 
-Ring the terminal when an ask is waiting
+6) "Ring the terminal when an ask is waiting"
 
 When ssa waits for an answer, write the terminal
 bell (BEL) to /dev/tty. POSIX printf '\a' is the
@@ -96,7 +96,7 @@ section of README.md so a silent terminal is
 not mistaken for a hang. Whether a sound plays
 depends on that terminal.
 
-Add a # question reply
+7) "Add a # question reply"
 
 A question reply matches a script: one action
 line, a body, then # end.
@@ -133,7 +133,7 @@ Add a short question spec beside the other
 reply specs. List this shape in the loop
 paragraph of README.md.
 
-Add a # response reply
+8) "Add a # response reply"
 
 A response reply is the text outcome of the
 task. The user reads it, and the run ends. The
@@ -171,7 +171,7 @@ reply specs. List this shape in the loop
 paragraph of README.md. Leave the startup check
 that requires a script, a write, or an edit.
 
-Put the documented llama-cli flags back
+9) "Put the documented llama-cli flags back"
 
 README.md lists five flags the harness does not
 pass: --offline, --no-display-prompt,
@@ -194,7 +194,7 @@ prompt can still glue to the first line.
 README.md already describes these flags, so
 change it only if that list is then wrong.
 
-Take text after # end into this reply
+10) "Take text after # end into this reply"
 
 The reader stops at the first line that is
 exactly # end. Text the model already wrote
@@ -219,7 +219,7 @@ option that is not POSIX, document the
 required behavior, as the POSIX task says. A
 later turn must not see that text.
 
-Make the text-after-end check able to match
+11) "Make the text-after-end check able to match"
 
 reply_has_text_after_end scans the reply
 slice. The slice ends on the # end line the
@@ -233,7 +233,7 @@ Do this after the task that logs text after
 them. Any other text is the format error this
 check already records. Keep the check.
 
-Reject a body cut short by a marker line
+12) "Reject a body cut short by a marker line"
 
 A body cannot contain a line that is exactly
 # end. The reader stops there. Once text after
@@ -255,7 +255,7 @@ file.
 Say both limits in the reply specs the model
 reads.
 
-Stop after repeated format errors
+13) "Stop after repeated format errors"
 
 A reply that fails the format checks is sent
 back, and the loop continues. With
@@ -269,7 +269,7 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-Strip carriage returns from model lines
+14) "Strip carriage returns from model lines"
 
 Do this in the reader, before the line is
 logged and before it is compared to # end. A
@@ -280,7 +280,7 @@ body. One place only, so the slice, the end
 check, and the action body all see the same
 line.
 
-Document lines a body cannot hold
+15) "Document lines a body cannot hold"
 
 In the loop section of README.md, state the
 limits. A body must not contain a line that is
@@ -289,7 +289,7 @@ not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
 
-Cut comments that restate the code
+16) "Cut comments that restate the code"
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what
