@@ -307,12 +307,6 @@ file.
 Say both limits in the reply specs the model
 reads.
 
-Remove the unused fd 6 close
-
-finish_agent_loop closes fd 6. Nothing opens
-fd 6. start_llama uses 3, 4, and 5. Delete
-that close.
-
 Keep a file's bytes across an edit
 
 load_file always stores a trailing newline,

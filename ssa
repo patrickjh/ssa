@@ -791,7 +791,6 @@ file_contains_nul() {
 
 finish_agent_loop() {
     exec 5>&- || :
-    exec 6<&- || :
     printf 'done: after %s model prompts\n' "$PROMPT_COUNTER" >&2
     exit 0
 }
