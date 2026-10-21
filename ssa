@@ -104,16 +104,25 @@ function fail(message) {
     exit 1
 }
 
-function load_file(line) {
+function load_file(line, size, seen) {
     edit_path = ENVIRON["FILE_TO_EDIT"]
+    size = ENVIRON["FILE_SIZE"] + 0
     file_text = ""
-    while ((getline line < edit_path) > 0)
-        file_text = file_text "\n" line
+    while ((getline line < edit_path) > 0) {
+        if (seen) file_text = file_text "\n"
+        file_text = file_text line
+        seen = 1
+    }
     close(edit_path)
-    file_text = substr(file_text, 2) "\n"
+    if (!seen) return
+    if (length(file_text) + 1 == size)
+        file_text = file_text "\n"
+    else if (length(file_text) != size)
+        fail("cannot read file")
 }
 
 function count_search_matches(count, pos, at) {
+    if (search_block == "") fail("search block is empty")
     count = 0
     pos = 1
     while (1) {
@@ -172,6 +181,7 @@ replace_lines == 1 {
         if (search_started) search_block = search_block "\n"
         search_block = search_block $0
         search_started = 1
+        if ($0 != "") search_nonblank = 1
     }
 }
 
@@ -180,6 +190,7 @@ replace_lines == 1 {
         if (replace_started) replace_block = replace_block "\n"
         replace_block = replace_block $0
         replace_started = 1
+        if ($0 != "") replace_nonblank = 1
     }
 }
 
@@ -187,7 +198,11 @@ END {
     if (fail_called) exit 1
     if (replace_lines != 1)
         fail("bad format: missing replace marker")
-    if (search_block == "") fail("search block is empty")
+    if (!search_started) fail("search block is empty")
+    if (search_started && !search_nonblank)
+        search_block = search_block "\n"
+    if (replace_started && !replace_nonblank)
+        replace_block = replace_block "\n"
     load_file()
     count = count_search_matches()
     if (count != 1)
@@ -607,7 +622,10 @@ apply_edit_request() {
     fi
     if ! ERR=$(
         print_log_slice "$REPLY_START" "$REPLY_END" |
-            FILE_TO_EDIT="$FILE_TO_EDIT" awk "$EDIT_FILE_AWK" 2>&1
+            FILE_TO_EDIT="$FILE_TO_EDIT" \
+            FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" |
+                tr -d '[:space:]')" \
+            LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1
     ); then
         [ -n "$ERR" ] || die "cannot apply edit"
         record_edit_failure "$FILE_TO_EDIT" "$ERR"

@@ -255,30 +255,6 @@ file.
 Say both limits in the reply specs the model
 reads.
 
-Keep a file's bytes across an edit
-
-load_file always stores a trailing newline,
-and an empty file becomes one newline. A file
-that had no trailing newline gains one on
-every edit. An empty file can never match.
-
-Remember whether the file ended in a newline,
-and write it back that way. An empty file
-stays empty. A search that does not match
-still fails with the match-count message.
-
-A search block of one blank line is stored as
-an empty string and rejected as an empty
-search, same as a missing block. Allow a
-search that is one or more blank lines.
-search_started is already set when a line was
-seen. Still fail when no search line was seen.
-
-Do not call index on an empty string. In awk
-that matches at the current spot and the count
-loop would not move. Store a blank line so the
-match and the replace stay exact.
-
 Say when the action path is missing
 
 first_action_line matches a write or edit line
