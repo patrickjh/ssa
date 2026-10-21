@@ -197,6 +197,7 @@ END {
 
 main() {
     trap 'exit 1' USR1
+    trap 'die "llama-cli exited; see README.md"' PIPE
     TASK="$*"
     check_posix_commands
     check_llama
@@ -378,8 +379,10 @@ watch_llama() {
     exec 5<"$(llama_fifo_path lifeline)" || exit 1
     # HUP, INT, and TERM reach this process with ssa.
     # Ignore them so the lifeline close still arrives.
+    # Ignore PIPE. The main shell dies on that signal,
+    # and this watcher must not.
     # llama-cli inherits that and dies from SIGKILL.
-    trap '' HUP INT TERM
+    trap '' HUP INT TERM PIPE
     set -f
     umask 077
     # shellcheck disable=SC2086
@@ -441,9 +444,11 @@ call_llama() {
 
 send_user_message() {
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s\\\n' "$LINE" >&3
+        printf '%s\\\n' "$LINE" >&3 ||
+            die "llama-cli exited; see README.md"
     done || die "cannot read user message"
-    printf '\n' >&3 || die "cannot write to llama-cli"
+    printf '\n' >&3 ||
+        die "llama-cli exited; see README.md"
 }
 
 log_llama_output() {
@@ -792,6 +797,7 @@ finish_agent_loop() {
 }
 
 die() {
+    trap '' PIPE
     printf '%s\n' "$*" >&2
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
         if [ -s "$LOG_FILE" ]; then

@@ -307,25 +307,6 @@ file.
 Say both limits in the reply specs the model
 reads.
 
-Die when a write to llama-cli gets SIGPIPE
-
-send_user_message writes the user turn on fd
-3. The printf inside the read loop does not
-check its status. If llama-cli has exited,
-that write gets SIGPIPE and the shell can
-exit 141. Nothing is logged, and 141 is not
-an exit status in README.md.
-
-Trap PIPE on the main shell and die with a
-harness error, on the same idea as the
-existing llama-cli exited message. Check the
-printf in the loop too, so a failed write
-does not continue. Exit status stays 1. Do
-not add 141 to the table.
-
-Clear that trap in watch_llama. The watcher
-still exits only when the lifeline closes.
-
 Remove the unused fd 6 close
 
 finish_agent_loop closes fd 6. Nothing opens
