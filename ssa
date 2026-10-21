@@ -513,6 +513,8 @@ handle_model_response() {
         record_format_error "the reply had no # end line"
     elif [ "$(first_action_line)" = '# complete' ]; then
         return 2
+    elif action_path_is_missing; then
+        record_format_error "the path is missing"
     elif first_action_line | grep -q '^# write file: .'; then
         handle_write_request
     elif first_action_line | grep -q '^# edit file: .'; then
@@ -536,6 +538,10 @@ reply_has_text_after_end() {
 
 reply_has_end_marker() {
     print_log_slice "$REPLY_START" "$REPLY_END" | grep -qxF '# end'
+}
+
+action_path_is_missing() {
+    first_action_line | grep -q -E '^# (write|edit) file:[[:space:]]*$'
 }
 
 handle_write_request() {

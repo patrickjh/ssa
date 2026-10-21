@@ -255,19 +255,6 @@ file.
 Say both limits in the reply specs the model
 reads.
 
-Say when the action path is missing
-
-first_action_line matches a write or edit line
-with no path. handle_model_response then
-requires a character after the colon and the
-space. Otherwise it says the reply had no
-action line.
-
-When the action line is a write or an edit and
-the path is empty, record a format error that
-says the path is missing. Use that message for
-both actions.
-
 Stop after repeated format errors
 
 A reply that fails the format checks is sent
