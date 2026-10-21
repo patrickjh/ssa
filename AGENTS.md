@@ -200,7 +200,7 @@ comparisons. Leave unquoted: numeric constants and status codes,
 
 - stdout: action and loop output.
 - `/dev/tty`: ask UI.
-- stderr: harness errors, final status line.
+- stderr: harness errors only.
 
 ### File order
 

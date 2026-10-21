@@ -34,12 +34,14 @@ is exactly `# end`, and text after that line is
 rejected. `SSA_NO_SCRIPTS=1` leaves a write, an edit,
 or `# complete`. You approve each action
 unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
-with the answer. Stdout is the action and loop output:
-the reply as each line arrives, script output, write
-and edit results, rejections, and format errors.
-Script output is printed after the command exits.
-stderr shows the log path, a line before each reply,
-harness errors, and the done line.
+with the answer. `SSA_VERBOSE=1` shows progress on
+stdout: the log path, llama-cli load text, each model
+line, script output, write and edit results,
+rejections, format errors, and the done line. Script
+output is printed after the command exits.
+`SSA_VERBOSE=0` shows none of that. stderr is harness
+errors. A failure prints the log path there after the
+error.
 
 ## Settings
 
@@ -55,12 +57,14 @@ run.
 | `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
 | `SSA_NO_SCRIPTS` | `0` (allow `# script`) |
 | `SSA_NO_WRITES` | `0` (allow `# write file:`) |
+| `SSA_VERBOSE` | `0` (hide progress) |
 
 The log file stays after exit. Its name is the time, to
 the second, then the PID, and `.ssalog`. It is under
-`SSA_LOG_FOLDER`. The program prints the path on stderr.
-`llama-cli` writes on that same stderr. If it exits, the
-die message says so.
+`SSA_LOG_FOLDER`. With `SSA_VERBOSE=1`, the path is
+printed at the start and again before the done line.
+A failure prints the path on stderr after the error.
+If llama-cli exits, the die message says so.
 
 `SSA_LLAMA_CLI_ARGS` is the caller's `llama-cli` flags,
 including `-m` or `--model`, plus any of `-c`, `-n`,

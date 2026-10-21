@@ -96,41 +96,6 @@ section of README.md so a silent terminal is
 not mistaken for a hang. Whether a sound plays
 depends on that terminal.
 
-Show progress only when SSA_VERBOSE=1
-
-SSA_VERBOSE is 0 or 1. The default is 0. A value
-other than 0 or 1 dies the same way as SSA_NO_ASK.
-
-At 0, ssa writes only failures to stderr. die
-stays there. Redirect ssa's stdout to /dev/null
-before llama-cli starts, so progress writes are
-discarded.
-
-At 1, leave stdout alone. Write the log path,
-each model line, format errors, action results,
-and the done line to stdout.
-
-Move those non-error lines off stderr. AGENTS.md
-says stderr is harness errors and the final
-status line. Change that to harness errors only.
-
-Point llama-cli stderr at ssa's stdout. In the
-llama-cli start, put 2>&1 before the redirect
-that sends stdout to the reply fifo. A later
-2>&1 copies the fifo, and the load text becomes
-part of the reply.
-
-llama-cli uses that stream for load text and for
-a real failure, such as a missing model file. At
-0 both are discarded. The run still dies with
-llama-cli exited on stderr. Those lines are not
-in the log today.
-
-The ask stays on /dev/tty at both levels.
-Document SSA_VERBOSE in README.md, and fix the
-sentences that say the log path and llama-cli
-write on stderr.
-
 Add a # question reply
 
 A question reply matches a script: one action
@@ -188,12 +153,13 @@ yes or no prompt, and no bell.
 The run ends the same way # complete ends it,
 with exit status 0. The body is the result, so
 write it to the caller's stdout. SSA_VERBOSE=0
-still shows it. Keep a copy of that stdout
-before the verbose redirect, and write the body
-there. The load text and the live reply stay on
-the progress stream. With SSA_VERBOSE=1 the raw
-reply was already shown, and the body is
-printed again as the result.
+still shows it. start_llama points stdout at
+/dev/null when SSA_VERBOSE=0. Keep a copy of
+the caller's stdout before that redirect, and
+write the body there. The load text and the live
+reply stay on the progress stream. With
+SSA_VERBOSE=1 the raw reply was already shown,
+and the body is printed again as the result.
 
 SSA_NO_ASK=1 does not block this. A response
 changes no files. Add no setting. # complete
@@ -204,24 +170,6 @@ Add a short response spec beside the other
 reply specs. List this shape in the loop
 paragraph of README.md. Leave the startup check
 that requires a script, a write, or an edit.
-
-Print the log path at the start and the end
-
-setup_log prints "log file:" once, before the
-run. Print that same line again at the end, so
-a long transcript does not hide the path.
-
-finish_agent_loop prints it immediately before
-the done line. A failed run never reaches that
-function, so die prints the path too when the
-log file exists, right after the error.
-
-The verbose task moves this line off stderr
-onto stdout and shows it only when
-SSA_VERBOSE=1. Both copies follow that. At 0
-the progress stream is discarded. The path
-from die still shows, because that line stays
-with the error on stderr.
 
 Put the documented llama-cli flags back
 
@@ -355,8 +303,8 @@ straight to the caller.
 Pass the shown line through sanitize_output.
 Keep the logged line raw, aside from the
 carriage-return task, so a write or a script
-body stays the text the model sent. The
-verbose task may hide stdout. This still
+body stays the text the model sent.
+SSA_VERBOSE=0 hides stdout. This still
 applies to the stream that shows the live
 reply.
 
@@ -393,3 +341,20 @@ exactly # end. A search or replace block must
 not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
+
+Cut comments that restate the code
+
+Read the comments in ssa. Cut one that says
+what the next lines already show, or what
+README.md already says.
+
+Keep a comment that records a constraint the
+code does not show. The redirect order on
+llama-cli, a read past # end that would block,
+the signals the watcher ignores, and the fds a
+script must not hold are that kind.
+
+Leave the file header, the section labels, and
+the shellcheck directive. Do not change # lines
+inside the reply specs. Those are text the
+model reads.

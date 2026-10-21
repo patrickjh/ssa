@@ -12,6 +12,7 @@ SSA_NO_ASK="${SSA_NO_ASK:-0}"
 SSA_NO_EDITS="${SSA_NO_EDITS:-0}"
 SSA_NO_SCRIPTS="${SSA_NO_SCRIPTS:-0}"
 SSA_NO_WRITES="${SSA_NO_WRITES:-0}"
+SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
 # Harness flags first. The caller's flags follow.
 SSA_LLAMA_CLI_ARGS="--reasoning off \
@@ -240,6 +241,7 @@ check_can_run() {
     check_no_edits
     check_no_scripts
     check_no_writes
+    check_verbose
     check_some_action_left
     check_log_folder
     check_llama_cli_args
@@ -271,6 +273,12 @@ check_no_scripts() {
 check_no_writes() {
     if [ "$SSA_NO_WRITES" != 0 ] && [ "$SSA_NO_WRITES" != 1 ]; then
         die "SSA_NO_WRITES must be 0 or 1; see README.md"
+    fi
+}
+
+check_verbose() {
+    if [ "$SSA_VERBOSE" != 0 ] && [ "$SSA_VERBOSE" != 1 ]; then
+        die "SSA_VERBOSE must be 0 or 1; see README.md"
     fi
 }
 
@@ -314,7 +322,9 @@ setup_log() {
         LOG_FILE=""
         die "cannot create log file"
     }
-    printf 'log file: %s\n' "$LOG_FILE" >&2
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        printf 'log file: %s\n' "$LOG_FILE"
+    fi
 }
 
 setup_system_prompt() {
@@ -347,6 +357,11 @@ print_reply_specs() {
 }
 
 start_llama() {
+    # Progress uses stdout. At 0, drop it before
+    # llama-cli starts so load text goes there too.
+    if [ "$SSA_VERBOSE" = 0 ]; then
+        exec >/dev/null || die "cannot open /dev/null"
+    fi
     create_fifos
     watch_llama &
     # Stays open until this process exits. That close
@@ -354,8 +369,7 @@ start_llama() {
     exec 5>"$(llama_fifo_path lifeline)" ||
         die "cannot open llama lifeline"
     # Stdout, then stdin. Each open unblocks the
-    # matching llama-cli redirect. stderr is the
-    # caller's stderr.
+    # matching llama-cli redirect.
     exec 4<"$(llama_fifo_path output)" ||
         die "cannot open llama-cli output"
     exec 3>"$(llama_fifo_path input)" ||
@@ -385,10 +399,13 @@ watch_llama() {
     trap '' HUP INT TERM PIPE
     set -f
     umask 077
+    # 2>&1 first, so stderr is this shell's stdout.
+    # A later 2>&1 would copy the reply fifo.
     # shellcheck disable=SC2086
     exec_llama \
         -sys "$SYSTEM_PROMPT" \
         $SSA_LLAMA_CLI_ARGS \
+        2>&1 \
         >"$(llama_fifo_path output)" \
         <"$(llama_fifo_path input)" &
     LLAMA_PID=$!
@@ -557,8 +574,7 @@ handle_script_request() {
 
 reply_has_thinking_tags() {
     print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -qF -e '<think>' -e '</think>' \
-            -e '<|channel>thought'
+        grep -qF -e '<think>' -e '</think>' -e '<|channel>thought'
 }
 
 record_format_error() {
@@ -589,8 +605,7 @@ apply_write_request() {
     then
         die "cannot append log"
     fi
-    printf '\n' >>"$LOG_FILE" ||
-        die "cannot append log"
+    printf '\n' >>"$LOG_FILE" || die "cannot append log"
     finish_action_message "$ACTION_EXIT_CODE"
 }
 
@@ -791,7 +806,10 @@ file_contains_nul() {
 
 finish_agent_loop() {
     exec 5>&- || :
-    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER" >&2
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        printf 'log file: %s\n' "$LOG_FILE"
+    fi
+    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
     exit 0
 }
 
@@ -799,6 +817,7 @@ die() {
     trap '' PIPE
     printf '%s\n' "$*" >&2
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+        printf 'log file: %s\n' "$LOG_FILE" >&2
         if [ -s "$LOG_FILE" ]; then
             printf '\n' >>"$LOG_FILE" || :
         fi
