@@ -222,3 +222,199 @@ SSA_VERBOSE=1. Both copies follow that. At 0
 the progress stream is discarded. The path
 from die still shows, because that line stays
 with the error on stderr.
+
+Put the documented llama-cli flags back
+
+README.md lists five flags the harness does not
+pass: --offline, --no-display-prompt,
+--no-show-timings, -lm mmap, and -np 1. The
+prefix in ssa has the rest of that list. The
+caller's SSA_LLAMA_CLI_ARGS still follow the
+prefix.
+
+Add the five in the order README.md already
+uses. --offline is the no-network goal. -lm
+mmap is the goal that weights can be larger
+than memory. --no-display-prompt is what the
+comment in log_llama_output already assumes.
+--no-show-timings keeps timing lines out of
+the reply. -np 1 is already in the help; pass
+it too.
+
+Leave the > strip in first_action_line. A
+prompt can still glue to the first line.
+README.md already describes these flags, so
+change it only if that list is then wrong.
+
+Take text after # end into this reply
+
+The reader stops at the first line that is
+exactly # end. Text the model already wrote
+after that line stays in the output fifo. The
+next turn reads it first and treats it as part
+of the new reply. An action line, a markdown
+fence, or the tail of a cut file then lands in
+the wrong chunk.
+
+Before end_log_chunk, take that extra text
+into this reply's log chunk, after the # end
+line, and leave the fifo empty before the next
+send. The reply slice must include it, so the
+text-after-end check can see it.
+
+Do not block. A blocking read past # end waits
+forever. The comment in log_llama_output
+already says so. read -t is not POSIX, so do
+not use it. Read only what is already in the
+fifo, without waiting. If that needs a tool
+option that is not POSIX, document the
+required behavior, as the POSIX task says. A
+later turn must not see that text.
+
+Make the text-after-end check able to match
+
+reply_has_text_after_end scans the reply
+slice. The slice ends on the # end line the
+reader stopped at, so the check never matches.
+The extra text shows up as the start of the
+next reply instead.
+
+Do this after the task that logs text after
+# end in the same chunk. Blank lines after
+# end stay allowed. The awk already skips
+them. Any other text is the format error this
+check already records. Keep the check.
+
+Reject a body cut short by a marker line
+
+A body cannot contain a line that is exactly
+# end. The reader stops there. Once text after
+that line is part of the same slice, the
+text-after-end check runs before the action.
+A cut write, edit, or script must not be
+applied. Change the format error so it tells
+the model that a body line must not be exactly
+# end.
+
+An edit has the same limit on its own markers.
+A search or replace block cannot contain a
+line that is exactly ======= or
+>>>>>>> REPLACE. Those lines end the block
+early. Fail that edit with a message that
+names the limit. Do not write a shortened
+file.
+
+Say both limits in the reply specs the model
+reads.
+
+Die when a write to llama-cli gets SIGPIPE
+
+send_user_message writes the user turn on fd
+3. The printf inside the read loop does not
+check its status. If llama-cli has exited,
+that write gets SIGPIPE and the shell can
+exit 141. Nothing is logged, and 141 is not
+an exit status in README.md.
+
+Trap PIPE on the main shell and die with a
+harness error, on the same idea as the
+existing llama-cli exited message. Check the
+printf in the loop too, so a failed write
+does not continue. Exit status stays 1. Do
+not add 141 to the table.
+
+Clear that trap in watch_llama. The watcher
+still exits only when the lifeline closes.
+
+Remove the unused fd 6 close
+
+finish_agent_loop closes fd 6. Nothing opens
+fd 6. start_llama uses 3, 4, and 5. Delete
+that close.
+
+Keep a file's bytes across an edit
+
+load_file always stores a trailing newline,
+and an empty file becomes one newline. A file
+that had no trailing newline gains one on
+every edit. An empty file can never match.
+
+Remember whether the file ended in a newline,
+and write it back that way. An empty file
+stays empty. A search that does not match
+still fails with the match-count message.
+
+A search block of one blank line is stored as
+an empty string and rejected as an empty
+search, same as a missing block. Allow a
+search that is one or more blank lines.
+search_started is already set when a line was
+seen. Still fail when no search line was seen.
+
+Do not call index on an empty string. In awk
+that matches at the current spot and the count
+loop would not move. Store a blank line so the
+match and the replace stay exact.
+
+Say when the action path is missing
+
+first_action_line matches a write or edit line
+with no path. handle_model_response then
+requires a character after the colon and the
+space. Otherwise it says the reply had no
+action line.
+
+When the action line is a write or an edit and
+the path is empty, record a format error that
+says the path is missing. Use that message for
+both actions.
+
+Sanitize the model reply on the way out
+
+log_llama_output prints each model line to
+stdout as it arrives. sanitize_output runs
+only for the ask on /dev/tty and for invalid
+input. A control byte in the reply goes
+straight to the caller.
+
+Pass the shown line through sanitize_output.
+Keep the logged line raw, aside from the
+carriage-return task, so a write or a script
+body stays the text the model sent. The
+verbose task may hide stdout. This still
+applies to the stream that shows the live
+reply.
+
+Stop after repeated format errors
+
+A reply that fails the format checks is sent
+back, and the loop continues. With
+--context-shift and --keep -1 the context does
+not fill, so a model that keeps failing never
+stops.
+
+Count format errors in a row inside
+record_format_error. Any other reply resets
+the count. After 5 in a row, die. Add no
+SSA_* setting. The message should say the
+reply format failed repeatedly.
+
+Strip carriage returns from model lines
+
+Do this in the reader, before the line is
+logged and before it is compared to # end. A
+line that is # end plus a carriage return must
+count as # end. Leave the carriage return out
+of the log and out of a script, write, or edit
+body. One place only, so the slice, the end
+check, and the action body all see the same
+line.
+
+Document lines a body cannot hold
+
+In the loop section of README.md, state the
+limits. A body must not contain a line that is
+exactly # end. A search or replace block must
+not contain a line that is exactly ======= or
+>>>>>>> REPLACE. The reader and the edit awk
+stop on those lines. Keep the paragraph short.
