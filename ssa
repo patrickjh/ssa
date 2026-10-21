@@ -520,8 +520,7 @@ reply_has_text_after_end() {
 }
 
 reply_has_end_marker() {
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -qxF '# end'
+    print_log_slice "$REPLY_START" "$REPLY_END" | grep -qxF '# end'
 }
 
 handle_write_request() {
@@ -547,27 +546,15 @@ handle_edit_request() {
 handle_script_request() {
     if ! [ "$SSA_NO_SCRIPTS" = 0 ]; then
         record_format_error "# script is not allowed"
-        return
-    fi
-    if ! script_payload | grep -q '[^[:space:]]'; then
+    elif ! script_payload | grep -q '[^[:space:]]'; then
         record_format_error "the script was empty"
-        return
-    fi
-    if print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -q '^```'
-    then
+    elif print_log_slice "$REPLY_START" "$REPLY_END" | grep -q '^```'; then
         record_format_error "the reply used a markdown fence"
-        return
-    fi
-    if reply_has_thinking_tags; then
+    elif reply_has_thinking_tags; then
         record_format_error "the reply used a thinking tag"
-        return
-    fi
-    if ! script_payload | sh -n >/dev/null 2>&1; then
+    elif ! script_payload | sh -n >/dev/null 2>&1; then
         record_format_error "sh -n failed"
-        return
-    fi
-    if ask_to_run_action; then
+    elif ask_to_run_action; then
         run_script
     fi
 }
