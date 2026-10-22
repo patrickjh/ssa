@@ -113,67 +113,7 @@ section of README.md so a silent terminal is
 not mistaken for a hang. Whether a sound plays
 depends on that terminal.
 
-7) Add SSA_NO_QUESTIONS
-
-SSA_NO_QUESTIONS works like SSA_NO_SCRIPTS.
-Default 0. It must be 0 or 1. At 1, leave the
-# question spec out of the prompt and reject
-the reply.
-
-The question gate moves off SSA_NO_ASK.
-SSA_NO_ASK stays the approval prompt. A run
-can approve actions and still forbid
-questions.
-
-If /dev/tty cannot be opened, turn ask and
-question off. Do not die, and do not require
-the user to set a variable. Scripts, writes,
-and edits still run. Leave the startup check
-that requires one of those.
-
-Document the setting in README.md. A run with
-no terminal no longer needs SSA_NO_ASK=1.
-
-8) Add a # message reply
-
-A message is the model talking to the user.
-The run continues. The shape matches a script:
-one action line, a body, then # end.
-
-# reasoning: the test failure is in this file
-# message
-The test failure is in ssa.
-# end
-
-The lines between # message and # end are the
-text. An empty body is a format error.
-first_action_line gains message$. There is no
-yes or no prompt. Ringing for this is the bell
-task.
-
-Show the body on /dev/tty. Sanitize it on the
-way, as a question is sanitized. Do not keep a
-copy of the caller's stdout. A redirect of
-stdout does not capture this text.
-
-The loop continues after the body is shown.
-Log a short # sent to model chunk that the user
-was shown the message, with no action exit
-code. The following call sends that chunk.
-# complete still ends the run.
-
-SSA_NO_MESSAGES works like SSA_NO_QUESTIONS.
-At 1, leave the spec out of the prompt and
-reject the reply. A missing /dev/tty turns a
-message off too, the same way task 7 turns
-ask and question off.
-
-Add a short message spec beside the other
-reply specs. List this shape in the loop
-paragraph of README.md. Document the setting
-there.
-
-9) Stop after repeated format errors
+7) Stop after repeated format errors
 
 A reply that fails the format checks is sent
 back, and the loop continues. With
@@ -187,7 +127,7 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-10) Strip carriage returns from model lines
+8) Strip carriage returns from model lines
 
 Do this in the reader, before the line is
 logged and before it is compared to # end. A
@@ -198,7 +138,7 @@ question, or message body. One place only, so the
 slice, the end check, and the action body all
 see the same line.
 
-11) Document lines a body cannot hold
+9) Document lines a body cannot hold
 
 In the loop section of README.md, state the
 limits. A body must not contain a line that is
@@ -207,7 +147,7 @@ not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
 
-12) Cut comments that restate the code
+10) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what

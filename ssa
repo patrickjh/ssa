@@ -10,6 +10,8 @@ SSA_LLAMA_CLI_ARGS="${SSA_LLAMA_CLI_ARGS:-}"
 SSA_LOG_FOLDER="${SSA_LOG_FOLDER:-${TMPDIR:-/tmp}}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
 SSA_NO_EDITS="${SSA_NO_EDITS:-0}"
+SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-0}"
+SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-0}"
 SSA_NO_SCRIPTS="${SSA_NO_SCRIPTS:-0}"
 SSA_NO_WRITES="${SSA_NO_WRITES:-0}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
@@ -102,6 +104,17 @@ must not be exactly # end. Example:
 # reasoning: the path was not in the task
 # question
 Which file should I edit?
+# end'
+
+REPLY_SPEC_MESSAGE=\
+'A message is "# message" then text for the user.
+The text ends before the # end line. A body line
+must not be exactly # end. The run continues.
+Example:
+
+# reasoning: the test failure is in this file
+# message
+The test failure is in ssa.
 # end'
 
 REPLY_SPEC_COMPLETE=\
@@ -269,6 +282,8 @@ check_can_run() {
     check_task
     check_no_ask
     check_no_edits
+    check_no_messages
+    check_no_questions
     check_no_scripts
     check_no_writes
     check_verbose
@@ -291,6 +306,18 @@ check_no_ask() {
 check_no_edits() {
     if [ "$SSA_NO_EDITS" != 0 ] && [ "$SSA_NO_EDITS" != 1 ]; then
         die "SSA_NO_EDITS must be 0 or 1; see README.md"
+    fi
+}
+
+check_no_messages() {
+    if [ "$SSA_NO_MESSAGES" != 0 ] && [ "$SSA_NO_MESSAGES" != 1 ]; then
+        die "SSA_NO_MESSAGES must be 0 or 1; see README.md"
+    fi
+}
+
+check_no_questions() {
+    if [ "$SSA_NO_QUESTIONS" != 0 ] && [ "$SSA_NO_QUESTIONS" != 1 ]; then
+        die "SSA_NO_QUESTIONS must be 0 or 1; see README.md"
     fi
 }
 
@@ -335,9 +362,10 @@ check_llama_cli_args() {
 }
 
 check_tty() {
-    if [ "$SSA_NO_ASK" != 0 ]; then return; fi
-    ( exec <>/dev/tty ) 2>/dev/null ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    ( exec <>/dev/tty ) 2>/dev/null && return
+    SSA_NO_ASK=1
+    SSA_NO_QUESTIONS=1
+    SSA_NO_MESSAGES=1
 }
 
 setup_agent_loop() {
@@ -383,8 +411,11 @@ print_reply_specs() {
     if [ "$SSA_NO_EDITS" = 0 ]; then
         printf '\n\n%s' "$REPLY_SPEC_EDIT"
     fi
-    if [ "$SSA_NO_ASK" = 0 ]; then
+    if [ "$SSA_NO_QUESTIONS" = 0 ]; then
         printf '\n\n%s' "$REPLY_SPEC_QUESTION"
+    fi
+    if [ "$SSA_NO_MESSAGES" = 0 ]; then
+        printf '\n\n%s' "$REPLY_SPEC_MESSAGE"
     fi
     printf '\n\n%s\n' "$REPLY_SPEC_COMPLETE"
 }
@@ -530,6 +561,8 @@ handle_model_response() {
         handle_script_request
     elif first_action_line | grep -q '^# question$'; then
         handle_question_request
+    elif first_action_line | grep -q '^# message$'; then
+        handle_message_request
     else
         record_format_error "the reply had no action line"
     fi
@@ -603,7 +636,7 @@ reply_has_thinking_tags() {
 }
 
 handle_question_request() {
-    if [ "$SSA_NO_ASK" != 0 ]; then
+    if [ "$SSA_NO_QUESTIONS" != 0 ]; then
         record_format_error "# question is not allowed"
     elif ! print_action_body '^# question$' | grep -q '[^[:space:]]'; then
         record_format_error "the question was empty"
@@ -614,11 +647,29 @@ handle_question_request() {
 
 ask_question() {
     print_action_body '^# question$' | sanitize_output >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     IFS= read -r REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     begin_log_chunk "# sent to model"
     append_log '%s\n' "$REPLY"
+    end_log_chunk
+}
+
+handle_message_request() {
+    if [ "$SSA_NO_MESSAGES" != 0 ]; then
+        record_format_error "# message is not allowed"
+    elif ! print_action_body '^# message$' | grep -q '[^[:space:]]'; then
+        record_format_error "the message was empty"
+    else
+        show_message
+    fi
+}
+
+show_message() {
+    print_action_body '^# message$' | sanitize_output >/dev/tty ||
+        die "need /dev/tty or set SSA_NO_MESSAGES=1; see README.md"
+    begin_log_chunk "# sent to model"
+    append_log '%s\n' "The user was shown the message."
     end_log_chunk
 }
 
@@ -686,7 +737,8 @@ first_action_line() {
     # llama-cli can glue its > prompt to the
     # first line, with or without a space.
     print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -E '^>? ?# (complete$|write file:|edit file:|script$|question$)' |
+        grep -E '^>? ?# (complete$|write file:|'\
+'edit file:|script$|question$|message$)' |
         head -n 1 |
         sed -e 's/^>//' -e 's/^ //' |
         grep .

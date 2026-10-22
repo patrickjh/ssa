@@ -24,18 +24,20 @@ cat notes.txt | ssa summarize this repo
 
 The program prints no help of its own.
 
-A run with no terminal sets `SSA_NO_ASK=1`.
+A run with no terminal turns off ask, question,
+and message. Scripts, writes, and edits still run.
 
 ## Loop
 
 Each reply is one action: a shell script, a file write, a
-file edit, a question, or `# complete`. A reply ends on
-a line that is exactly `# end`, and text after that line
-is rejected. `SSA_NO_SCRIPTS=1` leaves a write, an edit,
-or `# complete`. You approve each action
+file edit, a question, a message, or `# complete`. A
+reply ends on a line that is exactly `# end`, and text
+after that line is rejected. `SSA_NO_SCRIPTS=1` leaves a
+write, an edit, or `# complete`. You approve each action
 unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
 with the answer. A `# question` is shown there too. The
-next line is the answer, and a blank line counts.
+next line is the answer, and a blank line counts. A
+`# message` is shown there too, and the run continues.
 `SSA_VERBOSE=1` shows progress on
 stdout: the log path, llama-cli load text, each model
 line, script output, write and edit results,
@@ -57,6 +59,8 @@ run.
 | `SSA_LOG_FOLDER` | temp directory (`TMPDIR`, or `/tmp`) |
 | `SSA_NO_ASK` | `0` (ask before each action) |
 | `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
+| `SSA_NO_MESSAGES` | `0` (allow `# message`) |
+| `SSA_NO_QUESTIONS` | `0` (allow `# question`) |
 | `SSA_NO_SCRIPTS` | `0` (allow `# script`) |
 | `SSA_NO_WRITES` | `0` (allow `# write file:`) |
 | `SSA_VERBOSE` | `0` (hide progress) |
