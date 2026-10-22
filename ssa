@@ -653,6 +653,7 @@ handle_question_request() {
 ask_question() {
     print_action_body '^# question$' | sanitize_output >/dev/tty ||
         die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
+    ring_terminal
     IFS= read -r REPLY </dev/tty ||
         die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     begin_log_chunk "# sent to model"
@@ -673,6 +674,7 @@ handle_message_request() {
 show_message() {
     print_action_body '^# message$' | sanitize_output >/dev/tty ||
         die "need /dev/tty or set SSA_NO_MESSAGES=1; see README.md"
+    ring_terminal
     begin_log_chunk "# sent to model"
     append_log '%s\n' "The user was shown the message."
     end_log_chunk
@@ -751,6 +753,7 @@ first_action_line() {
 
 ask_user_to_approve_action() {
     print_model_reply
+    ring_terminal
     handle_user_answers
 }
 
@@ -760,6 +763,10 @@ print_model_reply() {
     print_log_slice "$REPLY_START" "$REPLY_END" |
         sanitize_output >/dev/tty ||
         die "cannot show model reply"
+}
+
+ring_terminal() {
+    printf '\a' >/dev/tty || die "need /dev/tty; see README.md"
 }
 
 handle_user_answers() {

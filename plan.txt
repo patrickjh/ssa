@@ -77,57 +77,7 @@ Say what happens to the low-token goal and the
 kept-out line. Leave both as they are until that
 decision is written down.
 
-6) Ring the terminal when an ask is waiting
-
-When the computer is ready for the user, write
-the terminal bell (BEL) to /dev/tty. POSIX
-printf '\a' is the chime. Do not send it
-through sanitize_output. That path turns BEL
-into ?.
-
-Ring after the text is written, when the
-computer is ready for the user. A person who
-looks then can read it. They do not wait for
-model output or for the message still to
-appear. Do not ring before that text.
-
-Show the action, write the apply prompt, then
-ring once. A bad answer does not ring again.
-Write the rejection prompt, then ring once,
-then read the reason. SSA_NO_ASK=1 never
-reaches those reads.
-
-Show the # question text, then ring once, then
-read the answer. SSA_NO_QUESTIONS=1 never
-reaches that read.
-
-Write the # message body, then ring once. A
-message does not wait for a line.
-SSA_NO_MESSAGES=1 never reaches that write.
-
-A missing /dev/tty reaches none of these.
-
-Add no SSA_* setting. Muting the bell is a
-terminal option. Add one sentence to the loop
-section of README.md so a silent terminal is
-not mistaken for a hang. Whether a sound plays
-depends on that terminal.
-
-7) Stop after repeated format errors
-
-A reply that fails the format checks is sent
-back, and the loop continues. With
---context-shift and --keep -1 the context does
-not fill, so a model that keeps failing never
-stops.
-
-Count format errors in a row inside
-record_format_error. Any other reply resets
-the count. After 5 in a row, die. Add no
-SSA_* setting. The message should say the
-reply format failed repeatedly.
-
-8) Cut comments that restate the code
+6) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what

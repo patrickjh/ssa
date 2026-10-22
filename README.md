@@ -38,6 +38,9 @@ unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
 with the answer. A `# question` is shown there too. The
 next line is the answer, and a blank line counts. A
 `# message` is shown there too, and the run continues.
+The terminal bell rings when the ask, question, or
+message is ready, and whether a sound plays depends
+on the terminal.
 A body must not contain a line that is exactly
 `# end`. A search or replace block must not contain
 a line that is exactly `=======` or `>>>>>>> REPLACE`.

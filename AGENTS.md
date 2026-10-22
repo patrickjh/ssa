@@ -227,7 +227,11 @@ handle in one line at the call site.
 | Environment             | `export VAR=value` or `VAR=value ssa …` |
 | Diagnostic log file     | `ssa … 2>run.log`                 |
 | Hung script / open pipe | wrap `ssa` with `timeout`         |
+| Repeated format errors  | Ctrl-C, `timeout`, or `ulimit -t` |
 | Repeat for many tasks   | `for task in …; do …; done`       |
+
+A format error is sent back and the loop continues. Do not
+add a count that stops the run.
 
 Ask: could the user do this with `cd`, `export`, or a redirect?
 If yes, leave it out of the agent.
