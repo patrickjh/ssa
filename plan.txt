@@ -25,36 +25,7 @@ SSA_VERBOSE=1 can still print it. Update
 README.md only if a person would otherwise
 not know where that text goes.
 
-3) Stop a short -n from hanging the loop
-
-A finite -n, --predict, or --n-predict can
-end generation before a line that is exactly
-# end. ssa keeps reading that line.
-llama-cli is waiting for the next user turn.
-The two sides wait on each other.
-
-Pick one fix: reject that finite limit, pass
--n -1 after the caller flags, or detect the
-end of a reply another way. The loop must
-not hang. Update the README.md note about a
-short -n so it matches the fix.
-
-4) Leave CPU for the rest of the machine
-
-llama-cli can take every generation thread
-and poll while it waits. The model load and
-the reply can be slow. They should leave
-CPU for the rest of the machine.
-
-Pass --prio -1 and --poll 0 with the other
-flags ssa puts in front. Leave the thread
-count to SSA_LLAMA_CLI_ARGS. Add no new
-SSA_* setting. A later caller flag can
-still replace one of these. Pass a flag
-only when its default does not already do
-the job. List the flags in README.md.
-
-5) Record the run in the log
+3) Record the run in the log
 
 The log does not record the llama-cli version,
 the effective arguments, the working directory,
@@ -82,7 +53,7 @@ Add no SSA_* setting. Update README.md only if
 a person would otherwise not know what the log
 starts and ends with.
 
-6) Add a read-only file action
+4) Add a read-only file action
 
 A run with scripts, writes, and edits off cannot
 look at a file. Add "# read file: PATH". The
@@ -106,7 +77,7 @@ are allowed. Document SSA_NO_READS in README.md.
 If ssa would pass 1000 lines, raise that limit
 in AGENTS.md in the same change.
 
-7) Let # complete carry a final message
+5) Let # complete carry a final message
 
 # complete ends the run. A final word now needs
 a # message turn, then another turn that is only

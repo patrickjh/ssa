@@ -64,10 +64,9 @@ works with the network off. If the user points llama-cli
 at a model over the network, that is fine too.
 
 Another goal is a computer that stays responsive while a
-run is going. The model load and the reply can be slow.
-They should not lock the machine. Leave memory and CPU
-for the rest of the system, even when that slows
-llama-cli.
+run is going. The caller sets llama-cli priority and
+polling in SSA_LLAMA_CLI_ARGS. ssa does not add those
+flags.
 
 Another goal is llama-cli options that work when the
 model weights are bigger than memory. The weights stream
