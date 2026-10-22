@@ -58,9 +58,10 @@ tokens slowly, and a run should stay usable there. Keep
 prompts and replies short, and do not add a turn or a
 thinking trace the device must generate.
 
-Another goal is a run with no network at all. The model,
-the files, and the log stay on the machine. A run should
-finish the same way with the network off.
+Another goal is to be able to run with no network. The
+files and the log stay on the machine. A local model
+works with the network off. If the user points llama-cli
+at a model over the network, that is fine too.
 
 Another goal is a computer that stays responsive while a
 run is going. The model load and the reply can be slow.

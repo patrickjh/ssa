@@ -74,5 +74,193 @@ in # comments and to use no thinking tags. Any
 approach has to say what that text becomes.
 
 Say what happens to the low-token goal and the
-kept-out line. Leave both as they are until that
-decision is written down.
+kept-out line. The approach is task 15. Leave
+both as they are.
+
+6) Log llama-cli errors
+
+watch_llama sends llama-cli stderr to the
+stdout this process inherited. With
+SSA_VERBOSE=0 that text is dropped. With
+SSA_VERBOSE=1 it is printed and not stored.
+
+A load failure then dies with "llama-cli
+exited", and the useful text is gone. The
+full log needs that text.
+
+Write llama-cli stderr into the log.
+SSA_VERBOSE=0 still hides it from the screen.
+SSA_VERBOSE=1 can still print it. Update
+README.md only if a person would otherwise
+not know where that text goes.
+
+7) Fail a no-tty run that still asks
+
+Done. A run with no terminal and SSA_NO_ASK
+left at 0 stops. SSA_NO_ASK=1 still turns off
+questions and messages.
+
+8) Stop a short -n from hanging the loop
+
+A finite -n, --predict, or --n-predict can
+end generation before a line that is exactly
+# end. ssa keeps reading that line.
+llama-cli is waiting for the next user turn.
+The two sides wait on each other.
+
+Pick one fix: reject that finite limit, pass
+-n -1 after the caller flags, or detect the
+end of a reply another way. The loop must
+not hang. Update the README.md note about a
+short -n so it matches the fix.
+
+9) Leave CPU for the rest of the machine
+
+llama-cli can take every generation thread
+and poll while it waits. The model load and
+the reply can be slow. They should leave
+CPU for the rest of the machine.
+
+Pass --prio -1 and --poll 0 with the other
+flags ssa puts in front. Leave the thread
+count to SSA_LLAMA_CLI_ARGS. Add no new
+SSA_* setting. A later caller flag can
+still replace one of these. Pass a flag
+only when its default does not already do
+the job. List the flags in README.md.
+
+10) Keep fifos in a private directory
+
+The fifo paths sit under TMPDIR and can be
+guessed. clean_up_fifos removes those three
+paths even when this process did not create
+them. A signal during setup can also leave
+the fifos behind.
+
+Use mktemp -d, with umask 077, and put the
+fifos in that directory. Remove the
+directory on the way out, including when a
+signal arrives during setup. Add no SSA_*
+setting.
+
+11) Count question and message as actions
+
+Done. The run stops only when script, write,
+edit, question, and message are all off. After
+a no-terminal run turns questions and messages
+off, that check runs again.
+
+12) Record the run in the log
+
+The log does not record the llama-cli version,
+the effective arguments, the working directory,
+the runtime settings, the start time, the end
+time, or the final status. A later read of the
+log cannot rebuild the run.
+
+Write the start of the run before the system
+prompt. Use llama-cli --version, or llama cli
+--version when that is the command ssa runs.
+Record the working directory, each SSA_* value
+in effect after the startup checks, the flags
+ssa passes, and the start time. Use the same
+date form as the log file name. The system
+prompt is already its own chunk, so do not copy
+it again.
+
+When the run ends, record the end time and the
+final status. A completed task says it
+completed. A die says so and includes the die
+text. A hangup, interrupt, or terminate says
+which signal ended the run.
+
+Add no SSA_* setting. Update README.md only if
+a person would otherwise not know what the log
+starts and ends with.
+
+13) Add a read-only file action
+
+A run with scripts, writes, and edits off cannot
+look at a file. Add "# read file: PATH". The
+file is not changed. Its contents are the action
+output, so the next turn can read them.
+
+SSA_NO_READS defaults to 0. It must be 0 or 1.
+When it is 1, the reply is a format error. A
+missing path is a format error. Text after the
+read line, before # end, is a format error. A
+missing file, a directory, or a file with a NUL
+is a failed action, not a die. Do not cap the
+output. A long file can fill the context.
+
+Ask before the read unless SSA_NO_ASK is 1. A
+read counts as an action left. Include
+SSA_NO_READS in that check.
+
+Say the format in the system prompt when reads
+are allowed. Document SSA_NO_READS in README.md.
+If ssa would pass 1000 lines, raise that limit
+in AGENTS.md in the same change.
+
+14) Let # complete carry a final message
+
+# complete ends the run. A final word now needs
+a # message turn, then another turn that is only
+# complete.
+
+Let the lines after # complete, and before # end,
+be a message for the user. A blank body still
+ends the run. A body that is only space is blank.
+Show a non-blank body on /dev/tty the same way as
+# message, then end the run. Do not ask. Do not
+start another model turn.
+
+If SSA_NO_MESSAGES is 1, a non-blank body is a
+format error. A blank # complete still ends the
+run. A run with no terminal turns messages off,
+so the same rule applies there.
+
+The complete line stays its own action. Do not
+append it to another action. Text after it is
+the message, not another action.
+
+Say this in the system prompt. Update the
+README.md loop paragraph so a person knows the
+final message is shown and the run ends. Add no
+SSA_* setting. If ssa would pass 1000 lines,
+raise that limit in AGENTS.md in the same change.
+
+15) Keep a thinking trace out of the reply
+
+llama-cli can print a thinking prefix before the
+reply. The marker lines are [Start thinking] and
+[End thinking]. The reader stops at the first
+line that is exactly # end. A trace that contains
+that line, or an action line, is taken as the
+reply.
+
+Log the prefix as its own chunk, # thinking. Both
+marker lines go in that chunk. A # end inside it
+does not end the reply. [End thinking] closes the
+chunk. The lines after it are the # llama-cli
+output chunk. The reply range stays on that last
+chunk. The action checks do not see the trace.
+
+If [End thinking] never comes, record a format
+error. Do not take an action from the trace.
+
+--reverse-prompt is # end. Test whether that
+stops generation inside the trace. If it does,
+the rest is never printed. ssa waits for a line,
+and llama-cli waits for the next user turn. The
+chunk split cannot fix that. # end inside the
+trace must not halt generation. The reply still
+ends at the # end after the thinking chunk.
+
+Do not turn reasoning on. The low-token goal
+stays. The kept-out line stays. A later flag in
+SSA_LLAMA_CLI_ARGS can still turn reasoning on.
+Add no SSA_* setting. Update README.md only if a
+person would otherwise not know about the
+thinking chunk. If ssa would pass 1000 lines,
+raise that limit in AGENTS.md in the same change.

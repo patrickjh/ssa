@@ -9,23 +9,37 @@ succeeds.
 
 This file is the help. The program has no `-h` or `--help`.
 
+On `PATH`, `ssa` needs `awk`, `cat`, `date`, `grep`, `head`,
+`mkfifo`, `rm`, `sed`, `tr`, and `wc`, plus `llama-cli` or
+`llama`. The build is the one on `PATH`. The flags `ssa`
+adds match current llama.cpp `llama-cli`. An older build
+may reject one of them.
+
+A model file on disk needs no network. A flag in
+`SSA_LLAMA_CLI_ARGS` can still make `llama-cli` download
+a model or connect to a server.
+
 ## Run
 
 Put the task on the command line. The task is part of
 the system prompt. The first user turn is the line
-`Context from stdin (may be blank):`. When stdin is not a terminal,
-those bytes follow that line.
+`Context from stdin (may be blank):`. When stdin is not a
+terminal, those bytes follow that line, after NUL bytes
+are removed.
 
 ```sh
-export SSA_LLAMA_CLI_ARGS="-m /models/gemma.gguf -c 8192 -n 8192"
+export SSA_LLAMA_CLI_ARGS="-m /models/gemma.gguf -c 8192 -n -1"
 ssa fix the failing test
 cat notes.txt | ssa summarize this repo
 ```
 
 The program prints no help of its own.
 
-A run with no terminal turns off ask, question,
-and message. Scripts, writes, and edits still run.
+`SSA_NO_ASK=1` runs each script as you, with your
+permissions. Writes and edits run the same way. A run
+with no terminal stops when `SSA_NO_ASK` is `0`. Set
+`SSA_NO_ASK=1` for that run. Questions and messages
+are then off. Scripts, writes, and edits still run.
 
 ## Loop
 
@@ -33,10 +47,15 @@ Each reply is one action: a shell script, a file write, a
 file edit, a question, a message, or `# complete`. A
 reply ends on a line that is exactly `# end`, and text
 after that line is rejected. `SSA_NO_SCRIPTS=1` leaves a
-write, an edit, or `# complete`. You approve each action
-unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
-with the answer. A `# question` is shown there too. The
-next line is the answer, and a blank line counts. A
+write, an edit, a question, a message, or `# complete`.
+The run stops when scripts, writes, edits, questions,
+and messages are all off. `# complete` alone does not
+keep it going. You approve a script, a write, and an
+edit unless `SSA_NO_ASK=1`. A question and
+a message are shown without that approval. `# complete`
+needs no approval. The ask text goes to `/dev/tty` with
+the answer. A `# question` is shown there too. The next
+line is the answer, and a blank line counts. A
 `# message` is shown there too, and the run continues.
 The terminal bell rings when the ask, question, or
 message is ready, and whether a sound plays depends
@@ -63,7 +82,7 @@ run.
 | `SSA_EXTRA_SYSTEM_TEXT` | empty, appended to the system prompt |
 | `SSA_LLAMA_CLI_ARGS` | unset (required) |
 | `SSA_LOG_FOLDER` | temp directory (`TMPDIR`, or `/tmp`) |
-| `SSA_NO_ASK` | `0` (ask before each action) |
+| `SSA_NO_ASK` | `0` (ask before a script, write, or edit) |
 | `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
 | `SSA_NO_MESSAGES` | `0` (allow `# message`) |
 | `SSA_NO_QUESTIONS` | `0` (allow `# question`) |
@@ -77,14 +96,23 @@ the second, then the PID, and `.ssalog`. It is under
 printed at the start and again before the done line.
 A failure prints the path on stderr after the error.
 If llama-cli exits, the die message says so.
+NUL bytes in stdin and in script output are removed
+before they are logged. An edit fails when the file
+contains a NUL.
 
 `SSA_LLAMA_CLI_ARGS` is the caller's `llama-cli` flags,
 including `-m` or `--model`, plus any of `-c`, `-n`,
 `--context-shift`, and `--keep`. The run stops when
 neither `-m` nor `--model` is its own word with a path
-after it. Flags are split on spaces, so a path with a
-space does not work. A short `-n` can stop the reply
-before `# end`, and ssa waits for that line.
+after it. The value is split on the shell IFS (spaces,
+tabs, and newlines unless `IFS` was changed). A quote
+in the value is an ordinary character, so a path with a
+space does not work. A finite `-n`, `--predict`, or
+`--n-predict` can end the reply before a line that is
+exactly `# end`. `ssa` keeps reading for that line, and
+`llama-cli` waits for the next user turn, so the run
+hangs. Pass `-n -1`, or a limit long enough that the
+reply includes `# end`.
 
 `ssa` puts these flags in front of that string:
 `--reasoning off`, `--reasoning-budget 0`,

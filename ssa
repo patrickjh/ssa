@@ -340,9 +340,11 @@ check_verbose() {
 
 check_some_action_left() {
     if [ "$SSA_NO_SCRIPTS" = 1 ] && [ "$SSA_NO_WRITES" = 1 ] &&
-        [ "$SSA_NO_EDITS" = 1 ]
+        [ "$SSA_NO_EDITS" = 1 ] && [ "$SSA_NO_QUESTIONS" = 1 ] &&
+        [ "$SSA_NO_MESSAGES" = 1 ]
     then
-        die "SSA_NO_SCRIPTS, SSA_NO_WRITES, and SSA_NO_EDITS" \
+        die "SSA_NO_SCRIPTS, SSA_NO_WRITES, SSA_NO_EDITS," \
+            "SSA_NO_QUESTIONS, and SSA_NO_MESSAGES" \
             "are all 1; see README.md"
     fi
 }
@@ -362,9 +364,12 @@ check_llama_cli_args() {
 
 check_tty() {
     ( exec <>/dev/tty ) 2>/dev/null && return
-    SSA_NO_ASK=1
+    if [ "$SSA_NO_ASK" = 0 ]; then
+        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    fi
     SSA_NO_QUESTIONS=1
     SSA_NO_MESSAGES=1
+    check_some_action_left
 }
 
 setup_agent_loop() {
@@ -612,10 +617,7 @@ handle_edit_request() {
 }
 
 edit_body_has_repeated_marker_line() {
-    [ "$(
-        print_action_body '^# edit file: .' |
-            grep -cxF -- "$1"
-    )" -gt 1 ]
+    [ "$(print_action_body '^# edit file: .' | grep -cxF -e "$1")" -gt 1 ]
 }
 
 handle_script_request() {
@@ -905,7 +907,7 @@ print_log_slice() {
 }
 
 sanitize_output() {
-    sed -e "s/$(printf '\r')/\\\\r/g" \
+    LC_ALL=C sed -e "s/$(printf '\r')/\\\\r/g" \
         -e "s/$(printf '\033')/\\\\e/g" \
         -e "s/$(printf '[\001-\010\013\014\016-\037\177]')/?/g"
 }
