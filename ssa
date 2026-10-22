@@ -33,6 +33,9 @@ FIFO_DIR=""
 FILE_TO_EDIT=""
 FILE_TO_WRITE=""
 LOG_FILE=""
+LLAMA_REVERSE_PROMPT='
+# end
+'
 OUTPUT_END=0
 OUTPUT_START=0
 PID=$$
@@ -350,8 +353,7 @@ check_log_folder() {
 
 check_llama_cli_args() {
     printf '%s\n' "$SSA_LLAMA_CLI_ARGS" |
-        grep -q -E \
-            '(^|[[:space:]])(-m|--model)[[:space:]]+[^[:space:]]' ||
+        grep -q -E '(^|[[:space:]])(-m|--model)[[:space:]]+[^[:space:]]' ||
         die "SSA_LLAMA_CLI_ARGS needs -m or --model; see README.md"
 }
 
@@ -388,31 +390,37 @@ setup_log() {
         LOG_FILE=""
         die "cannot create log file"
     }
-    {
-        printf '# run\ntime: %s\ndirectory: %s\n' \
-            "$START_TIME" "$(pwd)"
-        if command -v llama-cli >/dev/null 2>&1; then
-            printf 'llama-cli --version\n'
-            llama-cli --version 2>&1 || :
-        else
-            printf 'llama cli --version\n'
-            llama cli --version 2>&1 || :
-        fi
-        printf '%s\n' \
-            "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
-            "SSA_LLAMA_CLI_ARGS=$SSA_LLAMA_CLI_ARGS" \
-            "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" "SSA_NO_ASK=$SSA_NO_ASK" \
-            "SSA_NO_EDITS=$SSA_NO_EDITS" \
-            "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
-            "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
-            "SSA_NO_SCRIPTS=$SSA_NO_SCRIPTS" \
-            "SSA_NO_WRITES=$SSA_NO_WRITES" "SSA_VERBOSE=$SSA_VERBOSE" \
-            "flags: -sys, SSA_LLAMA_CLI_ARGS, --reverse-prompt # end"
-        printf '\n'
-    } >>"$LOG_FILE" || die "cannot append log"
+    printf 'time: %s\n' "$START_TIME" >>"$LOG_FILE" || die "cannot append log"
+    printf 'directory: %s\n' "$(pwd)" >>"$LOG_FILE" || die "cannot append log"
+    log_llama_version
+    log_environment
     if [ "$SSA_VERBOSE" = 1 ]; then
         printf 'log file: %s\n' "$LOG_FILE"
     fi
+}
+
+log_llama_version() {
+    if command -v llama-cli >/dev/null 2>&1; then
+        printf 'llama-cli --version\n' >>"$LOG_FILE" || die "cannot append log"
+        llama-cli --version >>"$LOG_FILE" 2>&1 || :
+    else
+        printf 'llama cli --version\n' >>"$LOG_FILE" || die "cannot append log"
+        llama cli --version >>"$LOG_FILE" 2>&1 || :
+    fi
+}
+
+log_environment() {
+    printf '%s\n' \
+        "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
+        "SSA_LLAMA_CLI_ARGS=$SSA_LLAMA_CLI_ARGS" \
+        "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" "SSA_NO_ASK=$SSA_NO_ASK" \
+        "SSA_NO_EDITS=$SSA_NO_EDITS" \
+        "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
+        "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
+        "SSA_NO_SCRIPTS=$SSA_NO_SCRIPTS" \
+        "SSA_NO_WRITES=$SSA_NO_WRITES" "SSA_VERBOSE=$SSA_VERBOSE" \
+        "flags: -sys, SSA_LLAMA_CLI_ARGS, --reverse-prompt # end\n" \
+        >>"$LOG_FILE" || die "cannot append log"
 }
 
 setup_system_prompt() {
@@ -425,8 +433,7 @@ setup_system_prompt() {
         printf '\n%s\n%s\n' 'The task for this run:' "$TASK"
     )
     begin_log_chunk "# system"
-    printf '%s\n' "$SYSTEM_PROMPT" >>"$LOG_FILE" ||
-        die "cannot append log"
+    printf '%s\n' "$SYSTEM_PROMPT" >>"$LOG_FILE" || die "cannot append log"
     end_log_chunk
 }
 
@@ -460,21 +467,17 @@ start_llama() {
     watch_llama &
     # Stays open until this process exits. That close
     # is what tells the watcher to kill llama-cli.
-    exec 5>"$FIFO_DIR/lifeline" ||
-        die "cannot open llama lifeline"
+    exec 5>"$FIFO_DIR/lifeline" || die "cannot open llama lifeline"
     # Stdout, then stdin. Each open unblocks the
     # matching llama-cli redirect.
-    exec 4<"$FIFO_DIR/output" ||
-        die "cannot open llama-cli output"
-    exec 3>"$FIFO_DIR/input" ||
-        die "cannot open llama-cli input"
+    exec 4<"$FIFO_DIR/output" || die "cannot open llama-cli output"
+    exec 3>"$FIFO_DIR/input" || die "cannot open llama-cli input"
     clean_up_fifos
 }
 
 create_fifos() {
-    mkdir -m 700 "${TMPDIR:-/tmp}/ssa-$PID" ||
-        die "cannot create fifo directory"
     FIFO_DIR="${TMPDIR:-/tmp}/ssa-$PID"
+    mkdir -m 700 "$FIFO_DIR" || die "cannot create fifo directory"
     mkfifo "$FIFO_DIR/lifeline" "$FIFO_DIR/input" \
         "$FIFO_DIR/output" "$FIFO_DIR/stderr" ||
         die "cannot create fifo"
@@ -490,9 +493,7 @@ watch_llama() {
     exec_llama \
         -sys "$SYSTEM_PROMPT" \
         $SSA_LLAMA_CLI_ARGS \
-        --reverse-prompt '
-# end
-' \
+        --reverse-prompt "$LLAMA_REVERSE_PROMPT" \
         2>"$FIFO_DIR/stderr" \
         >"$FIFO_DIR/output" \
         <"$FIFO_DIR/input" &
@@ -506,15 +507,14 @@ watch_llama() {
 
 copy_llama_stderr() {
     exec 3>&1
-    STDERR_TEXT=$(
+    STDERR=$(
         while IFS= read -r LINE || [ -n "$LINE" ]; do
             printf '%s\n' "$LINE" >&3
             printf '%s\n' "$LINE"
         done <"$FIFO_DIR/stderr"
     )
-    if [ -n "$STDERR_TEXT" ]; then
-        printf '# llama-cli stderr\n%s\n' \
-            "$STDERR_TEXT" >>"$LOG_FILE" || exit 1
+    if [ -n "$STDERR" ]; then
+        printf '# llama-cli stderr\n%s\n' "$STDERR" >>"$LOG_FILE" || exit 1
     fi
 }
 
@@ -544,17 +544,14 @@ log_stdin_context() {
     begin_log_chunk "# sent to model"
     append_log '%s\n' 'Context from stdin (may be blank):'
     if [ ! -t 0 ]; then
-        tr -d '\000' >>"$LOG_FILE" ||
-            die "cannot append log"
-        printf '\n' >>"$LOG_FILE" ||
-            die "cannot append log"
+        tr -d '\000' >>"$LOG_FILE" || die "cannot append log"
+        printf '\n' >>"$LOG_FILE" || die "cannot append log"
     fi
     end_log_chunk
 }
 
 call_llama() {
-    print_log_slice "$CHUNK_START" "$CHUNK_END" |
-        send_user_message
+    print_log_slice "$CHUNK_START" "$CHUNK_END" | send_user_message
     USER_REJECTION_REASON=""
     log_llama_output
     REPLY_START=$CHUNK_START
@@ -563,23 +560,24 @@ call_llama() {
 
 send_user_message() {
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s\\\n' "$LINE" >&3 ||
-            die "llama-cli exited; see README.md"
+        printf '%s\\\n' "$LINE" >&3 || die "llama-cli exited; see README.md"
     done || die "cannot read user message"
-    printf '\n' >&3 ||
-        die "llama-cli exited; see README.md"
+    printf '\n' >&3 || die "llama-cli exited; see README.md"
 }
 
 log_llama_output() {
     begin_log_chunk "# llama-cli output"
+    FIRST_REPLY_LINE=1
     while :; do
-        IFS= read -r LLAMA_LINE <&4 ||
-            die "llama-cli exited; see README.md"
+        IFS= read -r LLAMA_LINE <&4 || die "llama-cli exited; see README.md"
         LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sanitize_end_line)
-        printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" ||
-            die "cannot append log"
-        printf '%s\n' "$LLAMA_LINE" | sanitize_output ||
-            die "cannot show model reply"
+        printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" || die "cannot append log"
+        if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
+            LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" |
+                sed 's/^> \{0,1\}//' | sanitize_end_line)
+            FIRST_REPLY_LINE=0
+        fi
+        printf '%s\n' "$LLAMA_LINE" | sanitize_output || die "cannot show reply"
         if [ "$LLAMA_LINE" = '# end' ]; then
             break
         fi
@@ -628,15 +626,11 @@ handle_write_request() {
 
 apply_write_request() {
     begin_action_message
-    if ! {
-        print_action_body '^# write file: .' \
-            >"$FILE_TO_WRITE" &&
+    {
+        print_action_body '^# write file: .' >"$FILE_TO_WRITE" &&
             printf 'wrote file: %s\n' "$FILE_TO_WRITE"
         ACTION_EXIT_CODE=$?
-    } >>"$LOG_FILE" 2>&1
-    then
-        die "cannot append log"
-    fi
+    } >>"$LOG_FILE" 2>&1 || die "cannot append log"
     printf '\n' >>"$LOG_FILE" || die "cannot append log"
     finish_action_message "$ACTION_EXIT_CODE"
 }
@@ -661,42 +655,30 @@ edit_body_has_repeated_marker_line() {
 }
 
 first_action_line() {
-    # llama-cli can glue its > prompt to the
-    # first line, with or without a space.
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -E '^>? ?# (complete$|write file:|'\
-'edit file:|script$|question$|message$)' |
-        head -n 1 |
-        sed -e 's/^>//' -e 's/^ //' |
-        grep .
+    print_model_reply | grep -E \
+    '^# (complete$|write file:|edit file:|script$|question$|message$)' |
+        head -n 1
 }
 
 apply_edit_request() {
     if [ ! -f "$FILE_TO_EDIT" ]; then
         record_edit_failure "$FILE_TO_EDIT" "file not found"
-        return
-    fi
-    if file_contains_nul "$FILE_TO_EDIT"; then
+    elif file_contains_nul "$FILE_TO_EDIT"; then
         record_edit_failure "$FILE_TO_EDIT" "file contains a NUL"
-        return
-    fi
-    if ! ERR=$(
-        print_log_slice "$REPLY_START" "$REPLY_END" |
+    elif ! ERR=$(print_model_reply |
             FILE_TO_EDIT="$FILE_TO_EDIT" \
-            FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" |
-                tr -d '[:space:]')" \
+            FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" | tr -d '[:space:]')" \
             LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1
     ); then
-        [ -n "$ERR" ] || die "cannot apply edit"
+        [ -n "$ERR" ] || die "edit failed with no error text"
         record_edit_failure "$FILE_TO_EDIT" "$ERR"
-        return
+    else
+        record_output_line "$(printf 'edited file: %s' "$FILE_TO_EDIT")" 0
     fi
-    record_output_line "$(printf 'edited file: %s' "$FILE_TO_EDIT")" 0
 }
 
 record_edit_failure() {
-    record_output_line \
-        "$(printf 'edit failed: %s: %s' "$1" "$2")" 1
+    record_output_line "$(printf 'edit failed: %s: %s' "$1" "$2")" 1
 }
 
 record_output_line() {
@@ -733,17 +715,15 @@ ask_to_run_action() {
 }
 
 ask_user_to_approve_action() {
-    print_model_reply
+    show_model_reply
     ring_terminal
     handle_user_answers
 }
 
-print_model_reply() {
+show_model_reply() {
     printf 'ssa action:\n' >/dev/tty ||
         die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        sanitize_output >/dev/tty ||
-        die "cannot show model reply"
+    print_model_reply | sanitize_output >/dev/tty || die "cannot show reply"
 }
 
 handle_user_answers() {
@@ -751,8 +731,7 @@ handle_user_answers() {
         printf '\nApply this action? [Y]es / [N]o / [Q]uit ' >/dev/tty ||
             die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
         read_ask_answer_from_tty
-        case $(printf '%s\n' "$REPLY" |
-            tr '[:upper:]' '[:lower:]') in
+        case $(printf '%s\n' "$REPLY" | tr '[:upper:]' '[:lower:]') in
             y|yes) return 0 ;;
             n|no) return 1 ;;
             q|quit) die "User chose to quit." ;;
@@ -778,8 +757,7 @@ print_invalid_input() {
 
 record_action_rejection() {
     begin_action_message
-    append_log '%s\n' \
-        "User rejected the action. Try something else."
+    append_log '%s\n' "User rejected the action. Try something else."
     ask_user_for_rejection_reason
     finish_action_message 1
 }
@@ -800,9 +778,7 @@ run_script() {
         exec 4>&1
         exec 3>>"$LOG_FILE"
         {
-            sh -c "$(script_payload)" \
-                </dev/null 2>&1 \
-                3>&- 4>&- 5>&-
+            sh -c "$(script_payload)" </dev/null 2>&1 3>&- 4>&- 5>&-
             printf '%s\n' "$?" >&4
         } 3>&1 | tr -d '\000' >&3
         COPY_STATUS=$?
@@ -828,16 +804,14 @@ script_payload() {
 finish_action_message() {
     OUTPUT_END=$(log_line_count)
     print_log_slice "$OUTPUT_START" "$OUTPUT_END" ||
-        die "cannot show action output"
+         die "cannot show action output"
     log_user_rejection_reason
     append_log '\n\nAction exit code: %s\n' "$1"
     end_log_chunk
 }
 
 log_user_rejection_reason() {
-    if printf '%s\n' "$USER_REJECTION_REASON" |
-        grep -q '[^[:space:]]'
-    then
+    if printf '%s\n' "$USER_REJECTION_REASON" | grep -q '[^[:space:]]'; then
         append_log '\nReason: %s\n' "$USER_REJECTION_REASON"
     fi
 }
@@ -890,9 +864,11 @@ show_message() {
 }
 
 print_action_body() {
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        sed -n "/$1/,/^# end\$/p" |
-        sed '1d;$d'
+    print_model_reply | sed -n "/$1/,/^# end\$/p" | sed '1d;$d'
+}
+
+print_model_reply() {
+    print_log_slice "$REPLY_START" "$REPLY_END" | sed '1s/^> \{0,1\}//'
 }
 
 print_log_slice() {
@@ -922,8 +898,7 @@ append_log() {
 }
 
 end_log_chunk() {
-    # The blank line after the body is outside
-    # the chunk.
+    # The blank line after the body is outside the chunk.
     CHUNK_END=$(log_line_count)
     printf '\n' >>"$LOG_FILE" || die "cannot append log"
 }
@@ -968,8 +943,8 @@ log_run_end() {
     if [ -z "${LOG_FILE:-}" ] || [ ! -f "$LOG_FILE" ]; then
         return 0
     fi
-    printf '\n# run end\ntime: %s\nstatus: %s\n' \
-        "$(date '+%Y-%m-%d_%H.%M.%S')" "$1" >>"$LOG_FILE" || :
+    printf '\ntime: %s\n' "$(date '+%Y-%m-%d_%H.%M.%S')" >>"$LOG_FILE" || :
+    printf 'status: %s\n' "$1" >>"$LOG_FILE" || :
 }
 
 main "$@"

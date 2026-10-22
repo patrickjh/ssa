@@ -101,12 +101,12 @@ the second, then the PID, and `.ssalog`. It is under
 printed at the start and again before the done line.
 A failure prints the path on stderr after the error.
 If llama-cli exits, the die message says so.
-The log starts with `# run`: the time, directory,
+The log starts with the time and directory, then the
 version, each `SSA_*` value, and the flags. The main
-process writes `# run end` (the end time and the
-status) and exits without waiting on llama-cli.
+process writes the end time and the status, and
+exits without waiting on llama-cli.
 `# llama-cli stderr` is appended when llama-cli
-exits, so that block can follow `# run end`.
+exits, so that block can follow the status line.
 NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.

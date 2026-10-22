@@ -8,54 +8,36 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-2) Strip the llama-cli prompt from the first line
-
-llama-cli glues > or >  to the first line of a
-reply. Only the action lookup strips it. The log,
-the action body, the edit parser, and the # end
-check use the raw line.
-
-If that first line is the action, a write saves an
-empty body and truncates the file. A script, a
-question, or a message looks empty. An edit fails
-its format check. If that first line is # end, the
-run never sees the end line and waits forever.
-
-The preferred solution is that the log is an
-accurate record of what actually happened. Leave
-the glued > on the logged line. Strip one leading
-> and one optional space from a copy of the first
-line before that copy is shown or compared to
-# end. Leave later lines as they are.
-
-3) Finish the log after the main process exits
+2) Finish the log after the main process exits
 
 # llama-cli stderr is written by watch_llama. The
-main process writes # run end and exits without
-waiting, on a normal finish, on die, and on
-hangup, interrupt, and terminate. The stderr block
-lands after # run end, and often after ssa has
-returned. die and the signal traps also remove the
-pipe directory while watch_llama still reads it.
+main process writes the end time and the status
+and exits without waiting, on a normal finish, on
+die, and on hangup, interrupt, and terminate. The
+stderr block lands after the status line, and
+often after ssa has returned. die and the signal
+traps also remove the pipe directory while
+watch_llama still reads it.
 
 Have watch_llama wait until the main process
 exits, then append # llama-cli stderr and then
-# run end. The main process records the status,
-then exits. It does not write # run end, and it
-does not remove the pipes. watch_llama removes
-them after the log tail is written. The main
-process must not wait on watch_llama, or the two
-wait on each other.
+the end time and the status. The main process
+records the status, then exits. It does not write
+the end time and the status, and it does not
+remove the pipes. watch_llama removes them after
+the log tail is written. The main process must
+not wait on watch_llama, or the two wait on each
+other.
 
 If llama-cli was never started, there is no
-watch_llama. The main process writes # run end
-itself, as it does now.
+watch_llama. The main process writes the end time
+and the status itself, as it does now.
 
-The log still ends with # run end. README already
-says that. Change README only if this makes a
-sentence wrong.
+The log still ends with the end time and the
+status. README already says that. Change README
+only if this makes a sentence wrong.
 
-4) Reject a bad edit before the ask
+3) Reject a bad edit before the ask
 
 Missing search, middle, or replace markers, and
 text after the replace marker, are found only
@@ -68,7 +50,7 @@ prompt. Send them back as format errors. Do not
 ask the user to apply an edit that will fail as
 a bad format.
 
-5) Keep the caller's llama-cli args in the environment
+4) Keep the caller's llama-cli args in the environment
 
 The harness prepends its flags to
 SSA_LLAMA_CLI_ARGS. A script inherits that value.
@@ -80,7 +62,7 @@ llama-cli at the exec. The log still records the
 caller's SSA_LLAMA_CLI_ARGS and the flags that
 were passed.
 
-6) Say how to fix a missing tool
+5) Say how to fix a missing tool
 
 AGENTS.md says a missing tool on PATH should
 tell the user to install it or put it on PATH.
@@ -92,7 +74,7 @@ Name the tool. Say to install it or put it on
 PATH. One short clause. Do not add a "set ENV"
 hint. A missing tool is not a setting.
 
-7) Spell out short names
+6) Spell out short names
 
 AGENTS.md forbids abbreviations. argument, not
 arg. command, not cmd. Tool names stay as they
@@ -117,7 +99,7 @@ The setting is user-facing. Put the new name in
 README. The log line that prints it changes
 with the name.
 
-8) Use if for an early return
+7) Use if for an early return
 
 AGENTS.md says prefer if over a test and a
 command when the branch chooses an action. A
@@ -135,7 +117,7 @@ from inside the if. The write handler returns
 from inside the if when the ask fails. Same
 behavior.
 
-9) Do not keep the write path as run state
+8) Do not keep the write path as run state
 
 AGENTS.md says a value used in one place is
 written there. Keep a variable when the same
@@ -152,7 +134,7 @@ function that writes the file. A local there is
 fine, because that function reads the path
 twice.
 
-10) One setting for what a run may do
+9) One setting for what a run may do
 
 Six settings each turn one thing off. They are
 SSA_NO_ASK, SSA_NO_EDITS, SSA_NO_MESSAGES,
