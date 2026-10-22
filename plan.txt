@@ -113,30 +113,7 @@ llama-cli at the exec. The log still records the
 caller's SSA_LLAMA_CLI_ARGS and the flags that
 were passed.
 
-8) Remove the dead reply checks
-
-The reply loop returns only after it has logged
-a # end line. The empty-reply check and the
-missing # end check in the response handler never
-fire. A reply that is only # end already fails as
-no action line.
-
-Remove those two checks. Do not add a stop count
-or another turn.
-
-9) Remove the unused action exit state
-
-ACTION_EXIT_CODE is cleared each turn and set
-again at the end of an action message. Nothing
-reads it after that. The write path only needs
-the exit code long enough to pass it into the
-action message.
-
-Drop it as run state. Pass the exit code straight
-through. Do not keep a variable the next turn
-never reads.
-
-10) Say how to fix a missing tool
+8) Say how to fix a missing tool
 
 AGENTS.md says a missing tool on PATH should
 tell the user to install it or put it on PATH.
@@ -148,7 +125,7 @@ Name the tool. Say to install it or put it on
 PATH. One short clause. Do not add a "set ENV"
 hint. A missing tool is not a setting.
 
-11) Spell out short names
+9) Spell out short names
 
 AGENTS.md forbids abbreviations. argument, not
 arg. command, not cmd. Tool names stay as they
@@ -174,7 +151,7 @@ The setting is user-facing. Put the new name in
 README. The log line that prints it changes
 with the name.
 
-12) Use if for an early return
+10) Use if for an early return
 
 AGENTS.md says prefer if over a test and a
 command when the branch chooses an action. A
@@ -192,12 +169,12 @@ from inside the if. The write handler returns
 from inside the if when the ask fails. Same
 behavior.
 
-13) Do not keep the write path as run state
+11) Do not keep the write path as run state
 
 AGENTS.md says a value used in one place is
 written there. Keep a variable when the same
-fact is read again later. Task 9 already drops
-ACTION_EXIT_CODE.
+fact is read again later. The exit code is
+already passed straight through.
 
 FILE_TO_WRITE is run state. The write handler
 sets it. The apply function reads it twice:
@@ -209,7 +186,7 @@ function that writes the file. A local there is
 fine, because that function reads the path
 twice.
 
-14) One setting for what a run may do
+12) One setting for what a run may do
 
 Six settings each turn one thing off. They are
 SSA_NO_ASK, SSA_NO_EDITS, SSA_NO_MESSAGES,

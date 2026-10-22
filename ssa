@@ -27,7 +27,6 @@ SSA_LLAMA_CLI_ARGS="--reasoning off \
 ${SSA_LLAMA_CLI_ARGS}"
 
 # Internal
-ACTION_EXIT_CODE=""
 CHUNK_END=0
 CHUNK_START=0
 FIFO_DIR=""
@@ -557,7 +556,6 @@ call_llama() {
     print_log_slice "$CHUNK_START" "$CHUNK_END" |
         send_user_message
     USER_REJECTION_REASON=""
-    ACTION_EXIT_CODE=""
     log_llama_output
     REPLY_START=$CHUNK_START
     REPLY_END=$CHUNK_END
@@ -594,11 +592,7 @@ sanitize_end_line() {
 }
 
 handle_model_response() {
-    if reply_is_empty; then
-        record_format_error "the reply was empty"
-    elif ! reply_has_end_marker; then
-        record_format_error "the reply had no # end line"
-    elif [ "$(first_action_line)" = '# complete' ]; then
+    if [ "$(first_action_line)" = '# complete' ]; then
         return 2
     elif action_path_is_missing; then
         record_format_error "the path is missing"
@@ -616,14 +610,6 @@ handle_model_response() {
         record_format_error "the reply had no action line"
     fi
     return 0
-}
-
-reply_is_empty() {
-    ! print_log_slice "$REPLY_START" "$REPLY_END" | grep -q '[^[:space:]]'
-}
-
-reply_has_end_marker() {
-    print_log_slice "$REPLY_START" "$REPLY_END" | grep -qxF '# end'
 }
 
 action_path_is_missing() {
@@ -846,7 +832,6 @@ finish_action_message() {
     log_user_rejection_reason
     append_log '\n\nAction exit code: %s\n' "$1"
     end_log_chunk
-    ACTION_EXIT_CODE=$1
 }
 
 log_user_rejection_reason() {
