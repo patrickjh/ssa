@@ -1,48 +1,14 @@
-1) Review AGENTS.md
+1) Ask several models for changes
 
-Read AGENTS.md. It should say how to edit this repo, the
-style rules, and what stays out. It should point at ssa
-for behavior.
-
-Cut any sentence that restates what ssa or README.md already
-shows. Keep a rule the code does not show. Fix wording that
-the later tasks made stale.
-
-2) Ask several models for changes
-
-Do this after the AGENTS.md review. Have more than one
-model read ssa and AGENTS.md. Each model suggests
-changes that would improve the project.
+Have more than one model read ssa and AGENTS.md.
+Each model suggests changes that would improve the
+project. Have them check AGENTS.md and POSIX
+compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are.
 
-3) Double check POSIX compliance
-
-ssa is POSIX sh. Read the script for features that are
-bash, ksh, or another shell: arrays, [[ ]], process
-substitution, local outside a function, and similar.
-
-Check external utility options too. The log uses sed
-line ranges. head -c is not POSIX. Replace any other
-non-POSIX use, or document the required GNU or BSD
-utility behavior.
-
-Fix what is not portable under the stated requirements.
-Leave a construct that is already portable and clear.
-
-4) Review the system prompt
-
-Read the system prompt text in ssa. Cut sentences,
-examples, and repeated rules that the model can do
-without. Keep a rule the harness still needs it to
-follow.
-
-Leave the task line and any SSA_EXTRA_SYSTEM_TEXT
-in place. Update README.md only if a setting's
-meaning would otherwise be unclear.
-
-5) Log llama-cli errors
+2) Log llama-cli errors
 
 watch_llama sends llama-cli stderr to the
 stdout this process inherited. With
@@ -59,7 +25,7 @@ SSA_VERBOSE=1 can still print it. Update
 README.md only if a person would otherwise
 not know where that text goes.
 
-6) Stop a short -n from hanging the loop
+3) Stop a short -n from hanging the loop
 
 A finite -n, --predict, or --n-predict can
 end generation before a line that is exactly
@@ -73,7 +39,7 @@ end of a reply another way. The loop must
 not hang. Update the README.md note about a
 short -n so it matches the fix.
 
-7) Leave CPU for the rest of the machine
+4) Leave CPU for the rest of the machine
 
 llama-cli can take every generation thread
 and poll while it waits. The model load and
@@ -88,7 +54,7 @@ still replace one of these. Pass a flag
 only when its default does not already do
 the job. List the flags in README.md.
 
-8) Record the run in the log
+5) Record the run in the log
 
 The log does not record the llama-cli version,
 the effective arguments, the working directory,
@@ -116,7 +82,7 @@ Add no SSA_* setting. Update README.md only if
 a person would otherwise not know what the log
 starts and ends with.
 
-9) Add a read-only file action
+6) Add a read-only file action
 
 A run with scripts, writes, and edits off cannot
 look at a file. Add "# read file: PATH". The
@@ -140,7 +106,7 @@ are allowed. Document SSA_NO_READS in README.md.
 If ssa would pass 1000 lines, raise that limit
 in AGENTS.md in the same change.
 
-10) Let # complete carry a final message
+7) Let # complete carry a final message
 
 # complete ends the run. A final word now needs
 a # message turn, then another turn that is only
