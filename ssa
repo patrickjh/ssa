@@ -56,7 +56,8 @@ REPLY_SPEC_HEAD='These are the valid reply formats:'
 REPLY_SPEC_SCRIPT=\
 'A script request is "# script" then a POSIX sh program. Each script
 is a new process. The program ends before the # end line. Do not
-prefix script lines with #. Example:
+prefix script lines with #. A body line must not be exactly # end.
+Example:
 
 # reasoning: look at the files in the folder
 # script
@@ -65,9 +66,10 @@ ls -la
 
 REPLY_SPEC_WRITE=\
 'A write request is "# write file: PATH" then raw file contents.
-The contents end before the # end line. A write does not create
-parent directories. Prefer this over POSIX tools for writing files
-because this has no quoting issues. Example:
+The contents end before the # end line. A body line must not be
+exactly # end. A write does not create parent directories. Prefer
+this over POSIX tools for writing files because this has no quoting
+issues. Example:
 
 # reasoning: write a hello.txt file
 # write file: hello.txt
@@ -77,9 +79,10 @@ world
 
 REPLY_SPEC_EDIT=\
 'An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
-block must match exactly once. The next line is # end. Prefer this
-for edits over sed and other POSIX tools because this has no quoting
-issues. Example:
+block must match exactly once. The next line is # end. A body line
+must not be exactly # end. A search or replace line must not be
+exactly ======= or >>>>>>> REPLACE. Prefer this for edits over sed
+and other POSIX tools because this has no quoting issues. Example:
 
 # reasoning: edit the hello.txt file
 # edit file: hello.txt
@@ -408,20 +411,16 @@ create_fifos() {
 
 watch_llama() {
     exec 5<"$(llama_fifo_path lifeline)" || exit 1
-    # HUP, INT, and TERM reach this process with ssa.
-    # Ignore them so the lifeline close still arrives.
-    # Ignore PIPE. The main shell dies on that signal,
-    # and this watcher must not.
-    # llama-cli inherits that and dies from SIGKILL.
     trap '' HUP INT TERM PIPE
     set -f
     umask 077
-    # 2>&1 first, so stderr is this shell's stdout.
-    # A later 2>&1 would copy the reply fifo.
     # shellcheck disable=SC2086
     exec_llama \
         -sys "$SYSTEM_PROMPT" \
         $SSA_LLAMA_CLI_ARGS \
+        --reverse-prompt '
+# end
+' \
         2>&1 \
         >"$(llama_fifo_path output)" \
         <"$(llama_fifo_path input)" &
@@ -486,9 +485,6 @@ send_user_message() {
 }
 
 log_llama_output() {
-    # --no-display-prompt hides the > prompt.
-    # Reading past # end waits forever on the
-    # fifo, so the reply ends on that line.
     begin_log_chunk "# llama-cli output"
     while :; do
         IFS= read -r LLAMA_LINE <&4 ||
@@ -509,8 +505,6 @@ handle_model_response() {
         grep -q '[^[:space:]]'
     then
         record_format_error "the reply was empty"
-    elif reply_has_text_after_end; then
-        record_format_error "the reply had text after # end"
     elif ! reply_has_end_marker; then
         record_format_error "the reply had no # end line"
     elif [ "$(first_action_line)" = '# complete' ]; then
@@ -527,15 +521,6 @@ handle_model_response() {
         record_format_error "the reply had no action line"
     fi
     return 0
-}
-
-reply_has_text_after_end() {
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        awk '
-            seen && $0 !~ /^[[:space:]]*$/ { found = 1 }
-            $0 == "# end" { seen = 1 }
-            END { exit !found }
-        '
 }
 
 reply_has_end_marker() {
@@ -559,11 +544,23 @@ handle_write_request() {
 handle_edit_request() {
     if ! [ "$SSA_NO_EDITS" = 0 ]; then
         record_format_error "# edit file: is not allowed"
-        return
+    elif edit_body_has_repeated_marker_line '======='; then
+        record_format_error \
+            "a search or replace line must not be exactly ======="
+    elif edit_body_has_repeated_marker_line '>>>>>>> REPLACE'; then
+        record_format_error \
+            "a search or replace line must not be exactly >>>>>>> REPLACE"
+    elif ask_to_run_action; then
+        FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
+        apply_edit_request
     fi
-    ask_to_run_action || return
-    FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
-    apply_edit_request
+}
+
+edit_body_has_repeated_marker_line() {
+    [ "$(
+        print_action_body '^# edit file: .' |
+            grep -cxF -- "$1"
+    )" -gt 1 ]
 }
 
 handle_script_request() {

@@ -171,68 +171,7 @@ reply specs. List this shape in the loop
 paragraph of README.md. Leave the startup check
 that requires a script, a write, or an edit.
 
-9) Take text after # end into this reply
-
-The reader stops at the first line that is
-exactly # end. Text the model already wrote
-after that line stays in the output fifo. The
-next turn reads it first and treats it as part
-of the new reply. An action line, a markdown
-fence, or the tail of a cut file then lands in
-the wrong chunk.
-
-Before end_log_chunk, take that extra text
-into this reply's log chunk, after the # end
-line, and leave the fifo empty before the next
-send. The reply slice must include it, so the
-text-after-end check can see it.
-
-Do not block. A blocking read past # end waits
-forever. The comment in log_llama_output
-already says so. read -t is not POSIX, so do
-not use it. Read only what is already in the
-fifo, without waiting. If that needs a tool
-option that is not POSIX, document the
-required behavior, as the POSIX task says. A
-later turn must not see that text.
-
-10) Make the text-after-end check able to match
-
-reply_has_text_after_end scans the reply
-slice. The slice ends on the # end line the
-reader stopped at, so the check never matches.
-The extra text shows up as the start of the
-next reply instead.
-
-Do this after the task that logs text after
-# end in the same chunk. Blank lines after
-# end stay allowed. The awk already skips
-them. Any other text is the format error this
-check already records. Keep the check.
-
-11) Reject a body cut short by a marker line
-
-A body cannot contain a line that is exactly
-# end. The reader stops there. Once text after
-that line is part of the same slice, the
-text-after-end check runs before the action.
-A cut write, edit, or script must not be
-applied. Change the format error so it tells
-the model that a body line must not be exactly
-# end.
-
-An edit has the same limit on its own markers.
-A search or replace block cannot contain a
-line that is exactly ======= or
->>>>>>> REPLACE. Those lines end the block
-early. Fail that edit with a message that
-names the limit. Do not write a shortened
-file.
-
-Say both limits in the reply specs the model
-reads.
-
-12) Stop after repeated format errors
+9) Stop after repeated format errors
 
 A reply that fails the format checks is sent
 back, and the loop continues. With
@@ -246,7 +185,7 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-13) Strip carriage returns from model lines
+10) Strip carriage returns from model lines
 
 Do this in the reader, before the line is
 logged and before it is compared to # end. A
@@ -257,7 +196,7 @@ body. One place only, so the slice, the end
 check, and the action body all see the same
 line.
 
-14) Document lines a body cannot hold
+11) Document lines a body cannot hold
 
 In the loop section of README.md, state the
 limits. A body must not contain a line that is
@@ -266,7 +205,7 @@ not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
 
-15) Cut comments that restate the code
+12) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what

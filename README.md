@@ -86,7 +86,11 @@ including the task, and drop older tokens after it
 when the context fills. `--simple-io` has no off
 flag. Do not pass `--multiline-input`.
 Each line ssa sends ends in a backslash, and that
-flag ends the message there.
+flag ends the message there. After the caller's
+flags, ssa passes `--reverse-prompt`. Generation
+stops after a line that is exactly `# end`. This
+flag is last, so a caller's `-r` does not replace
+it.
 
 ## Exit status
 
