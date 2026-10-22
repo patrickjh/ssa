@@ -131,41 +131,55 @@ function fail(message) {
     exit 1
 }
 
-function load_file(line, size, seen) {
-    edit_path = ENVIRON["FILE_TO_EDIT"]
-    size = ENVIRON["FILE_SIZE"] + 0
-    file_text = ""
-    while ((getline line < edit_path) > 0) {
-        if (seen) file_text = file_text "\n"
-        file_text = file_text line
-        seen = 1
+function load_file(line, total) {
+    file_lines_count = 0
+    while ((getline line < ENVIRON["FILE_TO_EDIT"]) > 0) {
+        file_lines_count++
+        file_lines_array[file_lines_count] = line
+        if (file_lines_count > 1) total++
+        total += length(line)
     }
-    close(edit_path)
-    if (!seen) return
-    if (length(file_text) + 1 == size)
-        file_text = file_text "\n"
-    else if (length(file_text) != size)
-        fail("cannot read file")
+    close(ENVIRON["FILE_TO_EDIT"])
+    if (file_lines_count == 0) return
+    if (total + 1 == ENVIRON["FILE_SIZE"] + 0) file_has_final_newline = 1
+    else if (total != ENVIRON["FILE_SIZE"] + 0) fail("cannot read file")
 }
 
-function count_search_matches(count, pos, at) {
-    if (search_block == "") fail("search block is empty")
+function require_one_match(count, start, offset) {
     count = 0
-    pos = 1
-    while (1) {
-        at = index(substr(file_text, pos), search_block)
-        if (at == 0) return count
-        count++
-        pos = pos + at + length(search_block) - 1
+    for (start = 1; start <= file_lines_count - search_count + 1; start++) {
+        for (offset = 1; offset <= search_count; offset++)
+            if (file_lines_array[start + offset - 1] !=
+                search_lines_array[offset])
+                break
+        if (offset > search_count) {
+            count++
+            match_at = start
+        }
     }
+    if (count != 1) fail("search block matched " count " times (need 1)")
 }
 
-function apply_edit(edit_location, before, after) {
-    edit_location = index(file_text, search_block)
-    before = substr(file_text, 1, edit_location - 1)
-    after = substr(file_text, edit_location + length(search_block))
-    printf("%s", before replace_block after) > edit_path
-    if (close(edit_path) != 0) fail("cannot write file")
+function write_line(text) {
+    if (written) printf("\n") > ENVIRON["FILE_TO_EDIT"]
+    printf("%s", text) > ENVIRON["FILE_TO_EDIT"]
+    written = 1
+}
+
+function apply_edit(number, offset) {
+    printf("") > ENVIRON["FILE_TO_EDIT"]
+    for (number = 1; number <= file_lines_count; number++) {
+        if (number != match_at) {
+            write_line(file_lines_array[number])
+            continue
+        }
+        for (offset = 1; offset <= replace_count; offset++)
+            write_line(replace_lines_array[offset])
+        number += search_count - 1
+    }
+    if (file_has_final_newline && written)
+      printf("\n") > ENVIRON["FILE_TO_EDIT"]
+    if (close(ENVIRON["FILE_TO_EDIT"]) != 0) fail("cannot write file")
 }
 
 replace_lines == 1 {
@@ -205,35 +219,24 @@ replace_lines == 1 {
 
 /^<<<<<<< SEARCH$/,/^=======$/ {
     if ($0 != "<<<<<<< SEARCH" && $0 != "=======") {
-        if (search_started) search_block = search_block "\n"
-        search_block = search_block $0
-        search_started = 1
-        if ($0 != "") search_nonblank = 1
+        search_count++
+        search_lines_array[search_count] = $0
     }
 }
 
 /^=======$/,/^>>>>>>> REPLACE$/ {
     if ($0 != "=======" && $0 != ">>>>>>> REPLACE") {
-        if (replace_started) replace_block = replace_block "\n"
-        replace_block = replace_block $0
-        replace_started = 1
-        if ($0 != "") replace_nonblank = 1
+        replace_count++
+        replace_lines_array[replace_count] = $0
     }
 }
 
 END {
     if (fail_called) exit 1
-    if (replace_lines != 1)
-        fail("bad format: missing replace marker")
-    if (!search_started) fail("search block is empty")
-    if (search_started && !search_nonblank)
-        search_block = search_block "\n"
-    if (replace_started && !replace_nonblank)
-        replace_block = replace_block "\n"
+    if (replace_lines != 1) fail("bad format: missing replace marker")
+    if (search_count == 0) fail("search block is empty")
     load_file()
-    count = count_search_matches()
-    if (count != 1)
-        fail("search block matched " count " times (need 1)")
+    require_one_match()
     apply_edit()
 }
 '
@@ -289,10 +292,10 @@ check_can_run() {
     check_no_scripts
     check_no_writes
     check_verbose
-    check_some_action_left
     check_log_folder
     check_llama_cli_args
     check_tty
+    check_some_action_left
 }
 
 check_task() {
@@ -361,7 +364,6 @@ check_tty() {
     fi
     SSA_NO_QUESTIONS=1
     SSA_NO_MESSAGES=1
-    check_some_action_left
 }
 
 check_some_action_left() {
