@@ -533,6 +533,7 @@ log_llama_output() {
     while :; do
         IFS= read -r LLAMA_LINE <&4 ||
             die "llama-cli exited; see README.md"
+        LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sanitize_end_line)
         printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" ||
             die "cannot append log"
         printf '%s\n' "$LLAMA_LINE" | sanitize_output ||
@@ -542,6 +543,10 @@ log_llama_output() {
         fi
     done
     end_log_chunk
+}
+
+sanitize_end_line() {
+    sed "s/^# end$(printf '\r')\$/# end/"
 }
 
 handle_model_response() {

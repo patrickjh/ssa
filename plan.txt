@@ -127,18 +127,7 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-8) Strip carriage returns from model lines
-
-Do this in the reader, before the line is
-logged and before it is compared to # end. A
-line that is # end plus a carriage return must
-count as # end. Leave the carriage return out
-of the log and out of a script, write, edit,
-question, or message body. One place only, so the
-slice, the end check, and the action body all
-see the same line.
-
-9) Cut comments that restate the code
+8) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what
