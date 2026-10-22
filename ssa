@@ -161,9 +161,9 @@ function require_one_match(count, start, offset) {
 }
 
 function write_line(text) {
-    if (written) printf("\n") > ENVIRON["FILE_TO_EDIT"]
+    if (wrote_line) printf("\n") > ENVIRON["FILE_TO_EDIT"]
     printf("%s", text) > ENVIRON["FILE_TO_EDIT"]
-    written = 1
+    wrote_line = 1
 }
 
 function apply_edit(number, offset) {
@@ -177,7 +177,7 @@ function apply_edit(number, offset) {
             write_line(replace_lines_array[offset])
         number += search_count - 1
     }
-    if (file_has_final_newline && written)
+    if (file_has_final_newline && wrote_line)
       printf("\n") > ENVIRON["FILE_TO_EDIT"]
     if (close(ENVIRON["FILE_TO_EDIT"]) != 0) fail("cannot write file")
 }
