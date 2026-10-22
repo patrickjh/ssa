@@ -42,42 +42,7 @@ Leave the task line and any SSA_EXTRA_SYSTEM_TEXT
 in place. Update README.md only if a setting's
 meaning would otherwise be unclear.
 
-5) Figure out how to turn reasoning on
-
-Reasoning is off. ssa passes --reasoning off and
---reasoning-budget 0. AGENTS.md says not to add a
-thinking trace the device must generate, and it
-lists thinking left on, with the trace stripped
-from history, as kept out.
-
-Work out a later change that turns reasoning on
-and still reads one action per reply. Do not
-change ssa, README.md, or AGENTS.md for this task.
-When the approach is clear, add it here as the
-next task.
-
-The reply and the trace share one stdout. On
-current llama-cli the trace is a prefix, marked
-by the lines [Start thinking] and [End thinking].
-The reader stops at the first line that is exactly
-# end. The first action line in that text is the
-action. A trace that contains an action line or
-# end is taken as the reply.
-
-ssa does not send the model reply back. llama-cli
-keeps the chat, so a trace stays in later turns
-unless a llama-cli flag drops it. Context shift
-drops old turns and keeps the system prompt.
-
-The system prompt tells the model to put reasoning
-in # comments and to use no thinking tags. Any
-approach has to say what that text becomes.
-
-Say what happens to the low-token goal and the
-kept-out line. The approach is task 15. Leave
-both as they are.
-
-6) Log llama-cli errors
+5) Log llama-cli errors
 
 watch_llama sends llama-cli stderr to the
 stdout this process inherited. With
@@ -94,13 +59,13 @@ SSA_VERBOSE=1 can still print it. Update
 README.md only if a person would otherwise
 not know where that text goes.
 
-7) Fail a no-tty run that still asks
+6) Fail a no-tty run that still asks
 
 Done. A run with no terminal and SSA_NO_ASK
 left at 0 stops. SSA_NO_ASK=1 still turns off
 questions and messages.
 
-8) Stop a short -n from hanging the loop
+7) Stop a short -n from hanging the loop
 
 A finite -n, --predict, or --n-predict can
 end generation before a line that is exactly
@@ -114,7 +79,7 @@ end of a reply another way. The loop must
 not hang. Update the README.md note about a
 short -n so it matches the fix.
 
-9) Leave CPU for the rest of the machine
+8) Leave CPU for the rest of the machine
 
 llama-cli can take every generation thread
 and poll while it waits. The model load and
@@ -129,7 +94,7 @@ still replace one of these. Pass a flag
 only when its default does not already do
 the job. List the flags in README.md.
 
-10) Keep fifos in a private directory
+9) Keep fifos in a private directory
 
 The fifo paths sit under TMPDIR and can be
 guessed. clean_up_fifos removes those three
@@ -143,14 +108,14 @@ directory on the way out, including when a
 signal arrives during setup. Add no SSA_*
 setting.
 
-11) Count question and message as actions
+10) Count question and message as actions
 
 Done. The run stops only when script, write,
 edit, question, and message are all off. After
 a no-terminal run turns questions and messages
 off, that check runs again.
 
-12) Record the run in the log
+11) Record the run in the log
 
 The log does not record the llama-cli version,
 the effective arguments, the working directory,
@@ -178,7 +143,7 @@ Add no SSA_* setting. Update README.md only if
 a person would otherwise not know what the log
 starts and ends with.
 
-13) Add a read-only file action
+12) Add a read-only file action
 
 A run with scripts, writes, and edits off cannot
 look at a file. Add "# read file: PATH". The
@@ -202,7 +167,7 @@ are allowed. Document SSA_NO_READS in README.md.
 If ssa would pass 1000 lines, raise that limit
 in AGENTS.md in the same change.
 
-14) Let # complete carry a final message
+13) Let # complete carry a final message
 
 # complete ends the run. A final word now needs
 a # message turn, then another turn that is only
@@ -228,39 +193,4 @@ Say this in the system prompt. Update the
 README.md loop paragraph so a person knows the
 final message is shown and the run ends. Add no
 SSA_* setting. If ssa would pass 1000 lines,
-raise that limit in AGENTS.md in the same change.
-
-15) Keep a thinking trace out of the reply
-
-llama-cli can print a thinking prefix before the
-reply. The marker lines are [Start thinking] and
-[End thinking]. The reader stops at the first
-line that is exactly # end. A trace that contains
-that line, or an action line, is taken as the
-reply.
-
-Log the prefix as its own chunk, # thinking. Both
-marker lines go in that chunk. A # end inside it
-does not end the reply. [End thinking] closes the
-chunk. The lines after it are the # llama-cli
-output chunk. The reply range stays on that last
-chunk. The action checks do not see the trace.
-
-If [End thinking] never comes, record a format
-error. Do not take an action from the trace.
-
---reverse-prompt is # end. Test whether that
-stops generation inside the trace. If it does,
-the rest is never printed. ssa waits for a line,
-and llama-cli waits for the next user turn. The
-chunk split cannot fix that. # end inside the
-trace must not halt generation. The reply still
-ends at the # end after the thinking chunk.
-
-Do not turn reasoning on. The low-token goal
-stays. The kept-out line stays. A later flag in
-SSA_LLAMA_CLI_ARGS can still turn reasoning on.
-Add no SSA_* setting. Update README.md only if a
-person would otherwise not know about the
-thinking chunk. If ssa would pass 1000 lines,
 raise that limit in AGENTS.md in the same change.
