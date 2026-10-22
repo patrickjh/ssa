@@ -149,7 +149,7 @@ function require_one_match(count, start, offset) {
     count = 0
     for (start = 1; start <= file_lines_count - search_count + 1; start++) {
         for (offset = 1; offset <= search_count; offset++)
-            if (file_lines_array[start + offset - 1] !=
+            if (file_lines_array[start + offset - 1] != \
                 search_lines_array[offset])
                 break
         if (offset > search_count) {
@@ -187,7 +187,7 @@ replace_lines == 1 {
     fail("bad format: text after the replace marker")
 }
 
-/^# edit file: ./ {
+search_lines == 0 && /^# edit file: ./ {
     if (edit_lines != 0 || search_lines != 0 ||
         mid_lines != 0 || replace_lines != 0)
         fail("bad format: too many or misplaced edit line")
@@ -195,7 +195,7 @@ replace_lines == 1 {
     edit_at = NR
 }
 
-/^<<<<<<< SEARCH$/ {
+search_lines == 0 && /^<<<<<<< SEARCH$/ {
     if (edit_lines != 1 || search_lines != 0 ||
         mid_lines != 0 || replace_lines != 0 ||
         NR != edit_at + 1)
@@ -217,11 +217,9 @@ replace_lines == 1 {
     replace_lines++
 }
 
-/^<<<<<<< SEARCH$/,/^=======$/ {
-    if ($0 != "<<<<<<< SEARCH" && $0 != "=======") {
-        search_count++
-        search_lines_array[search_count] = $0
-    }
+search_lines == 1 && mid_lines == 0 && NR != edit_at + 1 {
+    search_count++
+    search_lines_array[search_count] = $0
 }
 
 /^=======$/,/^>>>>>>> REPLACE$/ {
