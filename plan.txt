@@ -87,8 +87,10 @@ That path turns BEL into ?.
 Ring once before the loop that asks whether to
 apply the action, so a bad answer does not ring
 again. Ring again before the read that asks for
-a rejection reason. SSA_NO_ASK=1 never reaches
-those reads, so that path stays quiet.
+a rejection reason. Ring once before the read
+that waits for a # question answer.
+SSA_NO_ASK=1 never reaches those reads, so
+that path stays quiet.
 
 Add no SSA_* setting. Muting the bell is a
 terminal option. Add one sentence to the loop
@@ -96,44 +98,7 @@ section of README.md so a silent terminal is
 not mistaken for a hang. Whether a sound plays
 depends on that terminal.
 
-7) Add a # question reply
-
-A question reply matches a script: one action
-line, a body, then # end.
-
-# reasoning: the path was not in the task
-# question
-Which file should I edit?
-# end
-
-The lines between # question and # end are the
-question. An empty body is a format error, the
-same as an empty script. first_action_line gains
-question$ so this line is recognized.
-
-There is no yes or no prompt. Show the question
-on /dev/tty and read one line. A blank line is
-still an answer. Interrupt is how the user
-quits. Ring the bell on this wait too, once
-that task is in ssa.
-
-The answer is the next user message. Log it as
-its own # sent to model chunk, as the answer
-text, with no action exit code. The following
-call already sends the latest chunk.
-
-SSA_NO_ASK=1 has no user to answer. # question
-is a format error in that run, and the error
-goes back to the model like a disallowed write.
-Add no SSA_* setting. Leave the startup check
-that stops a run when scripts, writes, and
-edits are all off.
-
-Add a short question spec beside the other
-reply specs. List this shape in the loop
-paragraph of README.md.
-
-8) Add a # response reply
+7) Add a # response reply
 
 A response reply is the text outcome of the
 task. The user reads it, and the run ends. The
@@ -171,7 +136,7 @@ reply specs. List this shape in the loop
 paragraph of README.md. Leave the startup check
 that requires a script, a write, or an edit.
 
-9) Stop after repeated format errors
+8) Stop after repeated format errors
 
 A reply that fails the format checks is sent
 back, and the loop continues. With
@@ -185,18 +150,18 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-10) Strip carriage returns from model lines
+9) Strip carriage returns from model lines
 
 Do this in the reader, before the line is
 logged and before it is compared to # end. A
 line that is # end plus a carriage return must
 count as # end. Leave the carriage return out
-of the log and out of a script, write, or edit
-body. One place only, so the slice, the end
-check, and the action body all see the same
-line.
+of the log and out of a script, write, edit,
+or question body. One place only, so the
+slice, the end check, and the action body all
+see the same line.
 
-11) Document lines a body cannot hold
+10) Document lines a body cannot hold
 
 In the loop section of README.md, state the
 limits. A body must not contain a line that is
@@ -205,7 +170,7 @@ not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
 
-12) Cut comments that restate the code
+11) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what

@@ -29,12 +29,14 @@ A run with no terminal sets `SSA_NO_ASK=1`.
 ## Loop
 
 Each reply is one action: a shell script, a file write, a
-file edit, or `# complete`. A reply ends on a line that
-is exactly `# end`, and text after that line is
-rejected. `SSA_NO_SCRIPTS=1` leaves a write, an edit,
+file edit, a question, or `# complete`. A reply ends on
+a line that is exactly `# end`, and text after that line
+is rejected. `SSA_NO_SCRIPTS=1` leaves a write, an edit,
 or `# complete`. You approve each action
 unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
-with the answer. `SSA_VERBOSE=1` shows progress on
+with the answer. A `# question` is shown there too. The
+next line is the answer, and a blank line counts.
+`SSA_VERBOSE=1` shows progress on
 stdout: the log path, llama-cli load text, each model
 line, script output, write and edit results,
 rejections, format errors, and the done line. Script
