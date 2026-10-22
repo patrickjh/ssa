@@ -10,10 +10,10 @@ succeeds.
 This file is the help. The program has no `-h` or `--help`.
 
 On `PATH`, `ssa` needs `awk`, `cat`, `date`, `grep`, `head`,
-`mkfifo`, `rm`, `sed`, `tr`, and `wc`, plus `llama-cli` or
-`llama`. The build is the one on `PATH`. The flags `ssa`
-adds match current llama.cpp `llama-cli`. An older build
-may reject one of them.
+`mkdir`, `mkfifo`, `rm`, `sed`, `sh`, `tr`, and `wc`, plus
+`llama-cli` or `llama`. The build is the one on `PATH`. The
+flags `ssa` adds match current llama.cpp `llama-cli`. An
+older build may reject one of them.
 
 A model file on disk needs no network. A flag in
 `SSA_LLAMA_CLI_ARGS` can still make `llama-cli` download
@@ -45,24 +45,29 @@ are then off. Scripts, writes, and edits still run.
 
 Each reply is one action: a shell script, a file write, a
 file edit, a question, a message, or `# complete`. A
-reply ends on a line that is exactly `# end`, and text
-after that line is rejected. `SSA_NO_SCRIPTS=1` leaves a
+reply ends on a line that is exactly `# end`. `ssa`
+stops reading there. `SSA_NO_SCRIPTS=1` leaves a
 write, an edit, a question, a message, or `# complete`.
 The run stops when scripts, writes, edits, questions,
 and messages are all off. `# complete` alone does not
 keep it going. You approve a script, a write, and an
-edit unless `SSA_NO_ASK=1`. A question and
-a message are shown without that approval. `# complete`
-needs no approval. The ask text goes to `/dev/tty` with
-the answer. A `# question` is shown there too. The next
-line is the answer, and a blank line counts. A
-`# message` is shown there too, and the run continues.
-The terminal bell rings when the ask, question, or
-message is ready, and whether a sound plays depends
-on the terminal.
+edit unless `SSA_NO_ASK=1`. Answering no asks `reason:`
+on `/dev/tty`. A reason is sent to the model with the
+rejection when it contains a non-space character. A
+question and a message are shown without that approval.
+`# complete` needs no approval. The ask text goes to
+`/dev/tty` with the answer. A `# question` is shown
+there too. The next line is the answer, and a blank
+line counts. A `# message` is shown there too, and the
+run continues. The terminal bell rings when the ask,
+question, or message is ready, and whether a sound
+plays depends on the terminal.
 A body must not contain a line that is exactly
 `# end`. A search or replace block must not contain
-a line that is exactly `=======` or `>>>>>>> REPLACE`.
+a line that is exactly `<<<<<<< SEARCH`, `=======`,
+or `>>>>>>> REPLACE`, or a line that starts with
+`# edit file:`. Non-blank text between
+`>>>>>>> REPLACE` and `# end` is rejected.
 `SSA_VERBOSE=1` shows progress on
 stdout: the log path, llama-cli load text and errors,
 each model line, script output, write and edit results,
@@ -96,11 +101,12 @@ the second, then the PID, and `.ssalog`. It is under
 printed at the start and again before the done line.
 A failure prints the path on stderr after the error.
 If llama-cli exits, the die message says so.
-llama-cli stderr is appended to the log under
-`# llama-cli stderr` when llama-cli exits.
 The log starts with `# run`: the time, directory,
-version, each `SSA_*` value, and the flags. It ends
-with `# run end`: the end time and the status.
+version, each `SSA_*` value, and the flags. The main
+process writes `# run end` (the end time and the
+status) and exits without waiting on llama-cli.
+`# llama-cli stderr` is appended when llama-cli
+exits, so that block can follow `# run end`.
 NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.
@@ -132,10 +138,13 @@ when the context fills. `--simple-io` has no off
 flag. Do not pass `--multiline-input`.
 Each line ssa sends ends in a backslash, and that
 flag ends the message there. After the caller's
-flags, ssa passes `--reverse-prompt`. Generation
-stops after a line that is exactly `# end`. This
-flag is last, so a caller's `-r` does not replace
-it.
+flags, ssa passes `--reverse-prompt` so generation
+stops after a line that is exactly `# end`. A
+caller's `-r` or `--reverse-prompt` stays in effect
+too. llama-cli stops at the first match. When that
+match is not a line that is exactly `# end`, `ssa`
+keeps reading for that line and the run hangs. Do
+not pass `-r` or `--reverse-prompt`.
 
 ## Exit status
 

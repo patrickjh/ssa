@@ -6,4 +6,220 @@ project. Have them check AGENTS.md and POSIX
 compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
-and AGENTS.md as they are.
+and AGENTS.md as they are while collecting them.
+
+2) Strip the llama-cli prompt from the first line
+
+llama-cli glues > or >  to the first line of a
+reply. Only the action lookup strips it. The log,
+the action body, the edit parser, and the # end
+check use the raw line.
+
+If that first line is the action, a write saves an
+empty body and truncates the file. A script, a
+question, or a message looks empty. An edit fails
+its format check. If that first line is # end, the
+run never sees the end line and waits forever.
+
+Strip one leading > and one optional space from
+the first line of each reply before the line is
+logged, shown, or compared to # end. Leave later
+lines as they are.
+
+3) Finish the log after the main process exits
+
+# llama-cli stderr is written by watch_llama. The
+main process writes # run end and exits without
+waiting, on a normal finish, on die, and on
+hangup, interrupt, and terminate. The stderr block
+lands after # run end, and often after ssa has
+returned. die and the signal traps also remove the
+pipe directory while watch_llama still reads it.
+
+Have watch_llama wait until the main process
+exits, then append # llama-cli stderr and then
+# run end. The main process records the status,
+then exits. It does not write # run end, and it
+does not remove the pipes. watch_llama removes
+them after the log tail is written. The main
+process must not wait on watch_llama, or the two
+wait on each other.
+
+If llama-cli was never started, there is no
+watch_llama. The main process writes # run end
+itself, as it does now.
+
+The log still ends with # run end. README already
+says that. Change README only if this makes a
+sentence wrong.
+
+4) Match edit search and replace as whole lines
+
+The edit search is a raw substring. A search for
+foo matches inside foobar. The blocks drop the
+newline after the last line. One blank line in the
+replace becomes two in the file. An empty replace
+leaves a blank line instead of deleting the match.
+One blank line in the search matches every newline
+in the file.
+
+Match whole lines only. A match starts at the
+start of a line and ends at the end of a line.
+One blank search line matches one blank file line.
+N blank replace lines stay N blank lines. An empty
+replace deletes the matched lines and leaves no
+blank line. A match must still occur exactly once.
+
+5) Let edit bodies contain header lines
+
+The edit parser treats every line that is
+<<<<<<< SEARCH, or that starts with # edit file:,
+as a header. A search or replace block that
+contains one of those lines fails the format
+check. That blocks edits to this program and to
+the help.
+
+After the search block starts, those lines are
+body text. They must not start a new header or
+change the parse. A second header before the
+search block is still a bad format. A body line
+that is exactly # end, =======, or
+>>>>>>> REPLACE stays forbidden.
+
+6) Reject a bad edit before the ask
+
+Missing search, middle, or replace markers, and
+text after the replace marker, are found only
+after the user approves the edit. Repeated
+======= and >>>>>>> REPLACE lines are already
+rejected before the ask.
+
+Reject those format errors before the approval
+prompt. Send them back as format errors. Do not
+ask the user to apply an edit that will fail as
+a bad format.
+
+7) Narrow the fence and thinking-tag checks
+
+A script is rejected when any line of the reply
+starts with ```, or when the reply contains a
+thinking tag. A script that writes markdown, or
+a heredoc that contains a fence, is rejected.
+The same checks do not run for a write, an edit,
+a question, or a message.
+
+Reject a fence or a thinking tag on every action
+when it is part of the reply format: before the
+action line, or in a question or a message. A
+fence line or a thinking tag inside a script, a
+write, or an edit body is content. Keep it.
+
+Maybe we just don't need these checks any more.
+
+8) Keep the caller's llama-cli args in the environment
+
+The harness prepends its flags to
+SSA_LLAMA_CLI_ARGS. A script inherits that value.
+A nested ssa prepends the same flags again.
+
+Leave the caller's value in the variable. Pass
+the harness flags and the caller's flags to
+llama-cli at the exec. The log still records the
+caller's SSA_LLAMA_CLI_ARGS and the flags that
+were passed.
+
+9) Remove the dead reply checks
+
+The reply loop returns only after it has logged
+a # end line. The empty-reply check and the
+missing # end check in the response handler never
+fire. A reply that is only # end already fails as
+no action line.
+
+Remove those two checks. Do not add a stop count
+or another turn.
+
+10) Remove the unused action exit state
+
+ACTION_EXIT_CODE is cleared each turn and set
+again at the end of an action message. Nothing
+reads it after that. The write path only needs
+the exit code long enough to pass it into the
+action message.
+
+Drop it as run state. Pass the exit code straight
+through. Do not keep a variable the next turn
+never reads.
+
+11) Say how to fix a missing tool
+
+AGENTS.md says a missing tool on PATH should
+tell the user to install it or put it on PATH.
+The checks die with "not found on PATH" and
+"llama-cli or llama not found on PATH". Neither
+says that.
+
+Name the tool. Say to install it or put it on
+PATH. One short clause. Do not add a "set ENV"
+hint. A missing tool is not a setting.
+
+12) Spell out short names
+
+AGENTS.md forbids abbreviations. argument, not
+arg. command, not cmd. Tool names stay as they
+are: llama-cli, head, sed.
+
+These names are short forms:
+
+- ERR, the edit failure text
+- FIFO_DIR, the pipe directory
+- pos, the scan index in the edit program
+- mid_lines, the middle marker count
+- SSA_LLAMA_CLI_ARGS and check_llama_cli_args
+
+Use the full word. ERR becomes ERROR. FIFO_DIR
+becomes PIPE_DIRECTORY. pos becomes position.
+mid_lines becomes middle_lines. The setting
+becomes SSA_LLAMA_CLI_ARGUMENTS, and the check
+becomes check_llama_cli_arguments. ARGS is the
+short form. llama-cli stays llama-cli, because
+that is the tool name.
+
+The setting is user-facing. Put the new name in
+README. The log line that prints it changes
+with the name.
+
+13) Use if for an early return
+
+AGENTS.md says prefer if over a test and a
+command when the branch chooses an action. A
+guard that returns is an if, with the return
+inside.
+
+The tty check returns with && return when
+/dev/tty opens. The write handler returns with
+|| return when the user says no. The edit and
+the script handlers already use elif for that
+ask.
+
+Write both as if blocks. The tty check returns
+from inside the if. The write handler returns
+from inside the if when the ask fails. Same
+behavior.
+
+14) Do not keep the write path as run state
+
+AGENTS.md says a value used in one place is
+written there. Keep a variable when the same
+fact is read again later. Task 10 already drops
+ACTION_EXIT_CODE.
+
+FILE_TO_WRITE is run state. The write handler
+sets it. The apply function reads it twice:
+the redirect, and the wrote-file line. Nothing
+else reads it.
+
+Drop it from run state. Take the path in the
+function that writes the file. A local there is
+fine, because that function reads the path
+twice.

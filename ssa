@@ -30,9 +30,9 @@ ${SSA_LLAMA_CLI_ARGS}"
 ACTION_EXIT_CODE=""
 CHUNK_END=0
 CHUNK_START=0
+FIFO_DIR=""
 FILE_TO_EDIT=""
 FILE_TO_WRITE=""
-FIFO_DIR=""
 LOG_FILE=""
 OUTPUT_END=0
 OUTPUT_START=0
@@ -342,17 +342,6 @@ check_verbose() {
     fi
 }
 
-check_some_action_left() {
-    if [ "$SSA_NO_SCRIPTS" = 1 ] && [ "$SSA_NO_WRITES" = 1 ] &&
-        [ "$SSA_NO_EDITS" = 1 ] && [ "$SSA_NO_QUESTIONS" = 1 ] &&
-        [ "$SSA_NO_MESSAGES" = 1 ]
-    then
-        die "SSA_NO_SCRIPTS, SSA_NO_WRITES, SSA_NO_EDITS," \
-            "SSA_NO_QUESTIONS, and SSA_NO_MESSAGES" \
-            "are all 1; see README.md"
-    fi
-}
-
 check_log_folder() {
     if [ ! -d "$SSA_LOG_FOLDER" ] || [ ! -w "$SSA_LOG_FOLDER" ]; then
         die "SSA_LOG_FOLDER must be a writable directory; see README.md"
@@ -374,6 +363,17 @@ check_tty() {
     SSA_NO_QUESTIONS=1
     SSA_NO_MESSAGES=1
     check_some_action_left
+}
+
+check_some_action_left() {
+    if [ "$SSA_NO_SCRIPTS" = 1 ] && [ "$SSA_NO_WRITES" = 1 ] &&
+        [ "$SSA_NO_EDITS" = 1 ] && [ "$SSA_NO_QUESTIONS" = 1 ] &&
+        [ "$SSA_NO_MESSAGES" = 1 ]
+    then
+        die "SSA_NO_SCRIPTS, SSA_NO_WRITES, SSA_NO_EDITS," \
+            "SSA_NO_QUESTIONS, and SSA_NO_MESSAGES" \
+            "are all 1; see README.md"
+    fi
 }
 
 setup_agent_loop() {
@@ -640,6 +640,21 @@ handle_write_request() {
     apply_write_request
 }
 
+apply_write_request() {
+    begin_action_message
+    if ! {
+        print_action_body '^# write file: .' \
+            >"$FILE_TO_WRITE" &&
+            printf 'wrote file: %s\n' "$FILE_TO_WRITE"
+        ACTION_EXIT_CODE=$?
+    } >>"$LOG_FILE" 2>&1
+    then
+        die "cannot append log"
+    fi
+    printf '\n' >>"$LOG_FILE" || die "cannot append log"
+    finish_action_message "$ACTION_EXIT_CODE"
+}
+
 handle_edit_request() {
     if ! [ "$SSA_NO_EDITS" = 0 ]; then
         record_format_error "# edit file: is not allowed"
@@ -659,97 +674,15 @@ edit_body_has_repeated_marker_line() {
     [ "$(print_action_body '^# edit file: .' | grep -cxF -e "$1")" -gt 1 ]
 }
 
-handle_script_request() {
-    if ! [ "$SSA_NO_SCRIPTS" = 0 ]; then
-        record_format_error "# script is not allowed"
-    elif ! script_payload | grep -q '[^[:space:]]'; then
-        record_format_error "the script was empty"
-    elif print_log_slice "$REPLY_START" "$REPLY_END" | grep -q '^```'; then
-        record_format_error "the reply used a markdown fence"
-    elif reply_has_thinking_tags; then
-        record_format_error "the reply used a thinking tag"
-    elif ! script_payload | sh -n >/dev/null 2>&1; then
-        record_format_error "sh -n failed"
-    elif ask_to_run_action; then
-        run_script
-    fi
-}
-
-reply_has_thinking_tags() {
+first_action_line() {
+    # llama-cli can glue its > prompt to the
+    # first line, with or without a space.
     print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -qF -e '<think>' -e '</think>' -e '<|channel>thought'
-}
-
-handle_question_request() {
-    if [ "$SSA_NO_QUESTIONS" != 0 ]; then
-        record_format_error "# question is not allowed"
-    elif ! print_action_body '^# question$' | grep -q '[^[:space:]]'; then
-        record_format_error "the question was empty"
-    else
-        ask_question
-    fi
-}
-
-ask_question() {
-    print_action_body '^# question$' | sanitize_output >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
-    ring_terminal
-    IFS= read -r REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' "$REPLY"
-    end_log_chunk
-}
-
-handle_message_request() {
-    if [ "$SSA_NO_MESSAGES" != 0 ]; then
-        record_format_error "# message is not allowed"
-    elif ! print_action_body '^# message$' | grep -q '[^[:space:]]'; then
-        record_format_error "the message was empty"
-    else
-        show_message
-    fi
-}
-
-show_message() {
-    print_action_body '^# message$' | sanitize_output >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_MESSAGES=1; see README.md"
-    ring_terminal
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' "The user was shown the message."
-    end_log_chunk
-}
-
-record_format_error() {
-    printf '%s\n' "$*"
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' "$*"
-    end_log_chunk
-}
-
-ask_to_run_action() {
-    if [ "$SSA_NO_ASK" = 0 ]; then
-        ask_user_to_approve_action || {
-            record_action_rejection
-            return 1
-        }
-    fi
-    return 0
-}
-
-apply_write_request() {
-    begin_action_message
-    if ! {
-        print_action_body '^# write file: .' \
-            >"$FILE_TO_WRITE" &&
-            printf 'wrote file: %s\n' "$FILE_TO_WRITE"
-        ACTION_EXIT_CODE=$?
-    } >>"$LOG_FILE" 2>&1
-    then
-        die "cannot append log"
-    fi
-    printf '\n' >>"$LOG_FILE" || die "cannot append log"
-    finish_action_message "$ACTION_EXIT_CODE"
+        grep -E '^>? ?# (complete$|write file:|'\
+'edit file:|script$|question$|message$)' |
+        head -n 1 |
+        sed -e 's/^>//' -e 's/^ //' |
+        grep .
 }
 
 apply_edit_request() {
@@ -780,15 +713,46 @@ record_edit_failure() {
         "$(printf 'edit failed: %s: %s' "$1" "$2")" 1
 }
 
-first_action_line() {
-    # llama-cli can glue its > prompt to the
-    # first line, with or without a space.
+record_output_line() {
+    begin_action_message
+    append_log '%s\n' "$1"
+    finish_action_message "$2"
+}
+
+file_contains_nul() {
+    [ "$(wc -c <"$1" | tr -d '[:space:]')" -ne \
+        "$(tr -d '\000' <"$1" | wc -c | tr -d '[:space:]')" ]
+}
+
+handle_script_request() {
+    if ! [ "$SSA_NO_SCRIPTS" = 0 ]; then
+        record_format_error "# script is not allowed"
+    elif ! script_payload | grep -q '[^[:space:]]'; then
+        record_format_error "the script was empty"
+    elif print_log_slice "$REPLY_START" "$REPLY_END" | grep -q '^```'; then
+        record_format_error "the reply used a markdown fence"
+    elif reply_has_thinking_tags; then
+        record_format_error "the reply used a thinking tag"
+    elif ! script_payload | sh -n >/dev/null 2>&1; then
+        record_format_error "sh -n failed"
+    elif ask_to_run_action; then
+        run_script
+    fi
+}
+
+reply_has_thinking_tags() {
     print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -E '^>? ?# (complete$|write file:|'\
-'edit file:|script$|question$|message$)' |
-        head -n 1 |
-        sed -e 's/^>//' -e 's/^ //' |
-        grep .
+        grep -qF -e '<think>' -e '</think>' -e '<|channel>thought'
+}
+
+ask_to_run_action() {
+    if [ "$SSA_NO_ASK" = 0 ]; then
+        ask_user_to_approve_action || {
+            record_action_rejection
+            return 1
+        }
+    fi
+    return 0
 }
 
 ask_user_to_approve_action() {
@@ -803,10 +767,6 @@ print_model_reply() {
     print_log_slice "$REPLY_START" "$REPLY_END" |
         sanitize_output >/dev/tty ||
         die "cannot show model reply"
-}
-
-ring_terminal() {
-    printf '\a' >/dev/tty || die "need /dev/tty; see README.md"
 }
 
 handle_user_answers() {
@@ -878,26 +838,14 @@ run_script() {
     finish_action_message "$ACTION_EXIT_CODE"
 }
 
-script_payload() {
-    print_action_body '^# script$'
-}
-
-print_action_body() {
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        sed -n "/$1/,/^# end\$/p" |
-        sed '1d;$d'
-}
-
-record_output_line() {
-    begin_action_message
-    append_log '%s\n' "$1"
-    finish_action_message "$2"
-}
-
 begin_action_message() {
     begin_log_chunk "# sent to model"
     append_log 'Output from the action:\n\n'
     OUTPUT_START=$(($(log_line_count) + 1))
+}
+
+script_payload() {
+    print_action_body '^# script$'
 }
 
 finish_action_message() {
@@ -916,6 +864,76 @@ log_user_rejection_reason() {
     then
         append_log '\nReason: %s\n' "$USER_REJECTION_REASON"
     fi
+}
+
+handle_question_request() {
+    if [ "$SSA_NO_QUESTIONS" != 0 ]; then
+        record_format_error "# question is not allowed"
+    elif ! print_action_body '^# question$' | grep -q '[^[:space:]]'; then
+        record_format_error "the question was empty"
+    else
+        ask_question
+    fi
+}
+
+ask_question() {
+    print_action_body '^# question$' | sanitize_output >/dev/tty ||
+        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
+    ring_terminal
+    IFS= read -r REPLY </dev/tty ||
+        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
+    begin_log_chunk "# sent to model"
+    append_log '%s\n' "$REPLY"
+    end_log_chunk
+}
+
+handle_message_request() {
+    if [ "$SSA_NO_MESSAGES" != 0 ]; then
+        record_format_error "# message is not allowed"
+    elif ! print_action_body '^# message$' | grep -q '[^[:space:]]'; then
+        record_format_error "the message was empty"
+    else
+        show_message
+    fi
+}
+
+record_format_error() {
+    printf '%s\n' "$*"
+    begin_log_chunk "# sent to model"
+    append_log '%s\n' "$*"
+    end_log_chunk
+}
+
+show_message() {
+    print_action_body '^# message$' | sanitize_output >/dev/tty ||
+        die "need /dev/tty or set SSA_NO_MESSAGES=1; see README.md"
+    ring_terminal
+    begin_log_chunk "# sent to model"
+    append_log '%s\n' "The user was shown the message."
+    end_log_chunk
+}
+
+print_action_body() {
+    print_log_slice "$REPLY_START" "$REPLY_END" |
+        sed -n "/$1/,/^# end\$/p" |
+        sed '1d;$d'
+}
+
+print_log_slice() {
+    if [ "$1" -le 0 ] || [ "$2" -lt "$1" ]; then
+        return 0
+    fi
+    sed -n "$1,$2p" "$LOG_FILE"
+}
+
+sanitize_output() {
+    LC_ALL=C sed -e "s/$(printf '\r')/\\\\r/g" \
+        -e "s/$(printf '\033')/\\\\e/g" \
+        -e "s/$(printf '[\001-\010\013\014\016-\037\177]')/?/g"
+}
+
+ring_terminal() {
+    printf '\a' >/dev/tty || die "need /dev/tty; see README.md"
 }
 
 begin_log_chunk() {
@@ -938,34 +956,6 @@ log_line_count() {
     wc -l <"$LOG_FILE" | tr -d '[:space:]'
 }
 
-print_log_slice() {
-    if [ "$1" -le 0 ] || [ "$2" -lt "$1" ]; then
-        return 0
-    fi
-    sed -n "$1,$2p" "$LOG_FILE"
-}
-
-sanitize_output() {
-    LC_ALL=C sed -e "s/$(printf '\r')/\\\\r/g" \
-        -e "s/$(printf '\033')/\\\\e/g" \
-        -e "s/$(printf '[\001-\010\013\014\016-\037\177]')/?/g"
-}
-
-file_contains_nul() {
-    [ "$(wc -c <"$1" | tr -d '[:space:]')" -ne \
-        "$(tr -d '\000' <"$1" | wc -c | tr -d '[:space:]')" ]
-}
-
-finish_agent_loop() {
-    exec 5>&- || :
-    log_run_end "completed"
-    if [ "$SSA_VERBOSE" = 1 ]; then
-        printf 'log file: %s\n' "$LOG_FILE"
-    fi
-    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
-    exit 0
-}
-
 die() {
     trap '' PIPE
     printf '%s\n' "$*" >&2
@@ -982,18 +972,28 @@ die() {
     exit 1
 }
 
+clean_up_fifos() {
+    if [ -n "${FIFO_DIR:-}" ]; then
+        rm -rf "$FIFO_DIR" || :
+    fi
+}
+
+finish_agent_loop() {
+    exec 5>&- || :
+    log_run_end "completed"
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        printf 'log file: %s\n' "$LOG_FILE"
+    fi
+    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
+    exit 0
+}
+
 log_run_end() {
     if [ -z "${LOG_FILE:-}" ] || [ ! -f "$LOG_FILE" ]; then
         return 0
     fi
     printf '\n# run end\ntime: %s\nstatus: %s\n' \
         "$(date '+%Y-%m-%d_%H.%M.%S')" "$1" >>"$LOG_FILE" || :
-}
-
-clean_up_fifos() {
-    if [ -n "${FIFO_DIR:-}" ]; then
-        rm -rf "$FIFO_DIR" || :
-    fi
 }
 
 main "$@"
