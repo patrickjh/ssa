@@ -79,18 +79,33 @@ decision is written down.
 
 6) Ring the terminal when an ask is waiting
 
-When ssa waits for an answer, write the terminal
-bell (BEL) to /dev/tty. POSIX printf '\a' is the
-chime. Do not send it through sanitize_output.
-That path turns BEL into ?.
+When the computer is ready for the user, write
+the terminal bell (BEL) to /dev/tty. POSIX
+printf '\a' is the chime. Do not send it
+through sanitize_output. That path turns BEL
+into ?.
 
-Ring once before the loop that asks whether to
-apply the action, so a bad answer does not ring
-again. Ring again before the read that asks for
-a rejection reason. Ring once before the read
-that waits for a # question answer.
-SSA_NO_ASK=1 never reaches those reads, so
-that path stays quiet.
+Ring after the text is written, when the
+computer is ready for the user. A person who
+looks then can read it. They do not wait for
+model output or for the message still to
+appear. Do not ring before that text.
+
+Show the action, write the apply prompt, then
+ring once. A bad answer does not ring again.
+Write the rejection prompt, then ring once,
+then read the reason. SSA_NO_ASK=1 never
+reaches those reads.
+
+Show the # question text, then ring once, then
+read the answer. SSA_NO_QUESTIONS=1 never
+reaches that read.
+
+Write the # message body, then ring once. A
+message does not wait for a line.
+SSA_NO_MESSAGES=1 never reaches that write.
+
+A missing /dev/tty reaches none of these.
 
 Add no SSA_* setting. Muting the bell is a
 terminal option. Add one sentence to the loop
@@ -98,45 +113,67 @@ section of README.md so a silent terminal is
 not mistaken for a hang. Whether a sound plays
 depends on that terminal.
 
-7) Add a # response reply
+7) Add SSA_NO_QUESTIONS
 
-A response reply is the text outcome of the
-task. The user reads it, and the run ends. The
-shape matches a script: one action line, a
-body, then # end.
+SSA_NO_QUESTIONS works like SSA_NO_SCRIPTS.
+Default 0. It must be 0 or 1. At 1, leave the
+# question spec out of the prompt and reject
+the reply.
+
+The question gate moves off SSA_NO_ASK.
+SSA_NO_ASK stays the approval prompt. A run
+can approve actions and still forbid
+questions.
+
+If /dev/tty cannot be opened, turn ask and
+question off. Do not die, and do not require
+the user to set a variable. Scripts, writes,
+and edits still run. Leave the startup check
+that requires one of those.
+
+Document the setting in README.md. A run with
+no terminal no longer needs SSA_NO_ASK=1.
+
+8) Add a # message reply
+
+A message is the model talking to the user.
+The run continues. The shape matches a script:
+one action line, a body, then # end.
 
 # reasoning: the test failure is in this file
-# response
-ssa
+# message
+The test failure is in ssa.
 # end
 
-The lines between # response and # end are the
+The lines between # message and # end are the
 text. An empty body is a format error.
-first_action_line gains response$. There is no
-yes or no prompt, and no bell.
+first_action_line gains message$. There is no
+yes or no prompt. Ringing for this is the bell
+task.
 
-The run ends the same way # complete ends it,
-with exit status 0. The body is the result, so
-write it to the caller's stdout. SSA_VERBOSE=0
-still shows it. start_llama points stdout at
-/dev/null when SSA_VERBOSE=0. Keep a copy of
-the caller's stdout before that redirect, and
-write the body there. The load text and the live
-reply stay on the progress stream. With
-SSA_VERBOSE=1 the raw reply was already shown,
-and the body is printed again as the result.
+Show the body on /dev/tty. Sanitize it on the
+way, as a question is sanitized. Do not keep a
+copy of the caller's stdout. A redirect of
+stdout does not capture this text.
 
-SSA_NO_ASK=1 does not block this. A response
-changes no files. Add no setting. # complete
-stays the ending for a task handled by a
-script, a write, or an edit.
+The loop continues after the body is shown.
+Log a short # sent to model chunk that the user
+was shown the message, with no action exit
+code. The following call sends that chunk.
+# complete still ends the run.
 
-Add a short response spec beside the other
+SSA_NO_MESSAGES works like SSA_NO_QUESTIONS.
+At 1, leave the spec out of the prompt and
+reject the reply. A missing /dev/tty turns a
+message off too, the same way task 7 turns
+ask and question off.
+
+Add a short message spec beside the other
 reply specs. List this shape in the loop
-paragraph of README.md. Leave the startup check
-that requires a script, a write, or an edit.
+paragraph of README.md. Document the setting
+there.
 
-8) Stop after repeated format errors
+9) Stop after repeated format errors
 
 A reply that fails the format checks is sent
 back, and the loop continues. With
@@ -150,18 +187,18 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-9) Strip carriage returns from model lines
+10) Strip carriage returns from model lines
 
 Do this in the reader, before the line is
 logged and before it is compared to # end. A
 line that is # end plus a carriage return must
 count as # end. Leave the carriage return out
 of the log and out of a script, write, edit,
-or question body. One place only, so the
+question, or message body. One place only, so the
 slice, the end check, and the action body all
 see the same line.
 
-10) Document lines a body cannot hold
+11) Document lines a body cannot hold
 
 In the loop section of README.md, state the
 limits. A body must not contain a line that is
@@ -170,7 +207,7 @@ not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
 
-11) Cut comments that restate the code
+12) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what
