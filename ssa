@@ -18,6 +18,8 @@ SSA_VERBOSE="${SSA_VERBOSE:-0}"
 SSA_LLAMA_CLI_ARGS="--reasoning off \
 --reasoning-budget 0 \
 --simple-io \
+--no-display-prompt \
+--no-show-timings \
 --color off \
 --context-shift \
 --keep -1 \

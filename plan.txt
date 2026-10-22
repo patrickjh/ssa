@@ -171,30 +171,7 @@ reply specs. List this shape in the loop
 paragraph of README.md. Leave the startup check
 that requires a script, a write, or an edit.
 
-9) Put the documented llama-cli flags back
-
-README.md lists five flags the harness does not
-pass: --offline, --no-display-prompt,
---no-show-timings, -lm mmap, and -np 1. The
-prefix in ssa has the rest of that list. The
-caller's SSA_LLAMA_CLI_ARGS still follow the
-prefix.
-
-Add the five in the order README.md already
-uses. --offline is the no-network goal. -lm
-mmap is the goal that weights can be larger
-than memory. --no-display-prompt is what the
-comment in log_llama_output already assumes.
---no-show-timings keeps timing lines out of
-the reply. -np 1 is already in the help; pass
-it too.
-
-Leave the > strip in first_action_line. A
-prompt can still glue to the first line.
-README.md already describes these flags, so
-change it only if that list is then wrong.
-
-10) Take text after # end into this reply
+9) Take text after # end into this reply
 
 The reader stops at the first line that is
 exactly # end. Text the model already wrote
@@ -219,7 +196,7 @@ option that is not POSIX, document the
 required behavior, as the POSIX task says. A
 later turn must not see that text.
 
-11) Make the text-after-end check able to match
+10) Make the text-after-end check able to match
 
 reply_has_text_after_end scans the reply
 slice. The slice ends on the # end line the
@@ -233,7 +210,7 @@ Do this after the task that logs text after
 them. Any other text is the format error this
 check already records. Keep the check.
 
-12) Reject a body cut short by a marker line
+11) Reject a body cut short by a marker line
 
 A body cannot contain a line that is exactly
 # end. The reader stops there. Once text after
@@ -255,7 +232,7 @@ file.
 Say both limits in the reply specs the model
 reads.
 
-13) Stop after repeated format errors
+12) Stop after repeated format errors
 
 A reply that fails the format checks is sent
 back, and the loop continues. With
@@ -269,7 +246,7 @@ the count. After 5 in a row, die. Add no
 SSA_* setting. The message should say the
 reply format failed repeatedly.
 
-14) Strip carriage returns from model lines
+13) Strip carriage returns from model lines
 
 Do this in the reader, before the line is
 logged and before it is compared to # end. A
@@ -280,7 +257,7 @@ body. One place only, so the slice, the end
 check, and the action body all see the same
 line.
 
-15) Document lines a body cannot hold
+14) Document lines a body cannot hold
 
 In the loop section of README.md, state the
 limits. A body must not contain a line that is
@@ -289,7 +266,7 @@ not contain a line that is exactly ======= or
 >>>>>>> REPLACE. The reader and the edit awk
 stop on those lines. Keep the paragraph short.
 
-16) Cut comments that restate the code
+15) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what

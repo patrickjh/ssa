@@ -75,16 +75,16 @@ space does not work. A short `-n` can stop the reply
 before `# end`, and ssa waits for that line.
 
 `ssa` puts these flags in front of that string:
-`--offline`, `--reasoning off`, `--reasoning-budget 0`,
-`--simple-io`, `--no-display-prompt`, `--no-show-timings`,
-`-lm mmap`, `-np 1`, `--color off`, `--context-shift`,
+`--reasoning off`, `--reasoning-budget 0`,
+`--simple-io`, `--no-display-prompt`,
+`--no-show-timings`, `--color off`, `--context-shift`,
 and `--keep -1`. It passes `-sys` with the system
 prompt before those flags. A later flag replaces an
 earlier one when `llama-cli` has a second form.
 `--context-shift` and `--keep -1` keep that prompt,
 including the task, and drop older tokens after it
-when the context fills. `--simple-io` and `--offline`
-have no off flag. Do not pass `--multiline-input`.
+when the context fills. `--simple-io` has no off
+flag. Do not pass `--multiline-input`.
 Each line ssa sends ends in a backslash, and that
 flag ends the message there.
 

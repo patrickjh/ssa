@@ -72,6 +72,9 @@ Another goal is llama-cli options that work when the
 model weights are bigger than memory. The weights stream
 off a drive. A run should keep going in that case.
 
+Pass a llama-cli flag only when its default does
+not already do the job.
+
 ## Kept out
 
 JSON tool calls. A tools array on the request. A second
