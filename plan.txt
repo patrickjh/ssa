@@ -21,10 +21,12 @@ question, or a message looks empty. An edit fails
 its format check. If that first line is # end, the
 run never sees the end line and waits forever.
 
-Strip one leading > and one optional space from
-the first line of each reply before the line is
-logged, shown, or compared to # end. Leave later
-lines as they are.
+The preferred solution is that the log is an
+accurate record of what actually happened. Leave
+the glued > on the logged line. Strip one leading
+> and one optional space from a copy of the first
+line before that copy is shown or compared to
+# end. Leave later lines as they are.
 
 3) Finish the log after the main process exits
 
@@ -99,24 +101,7 @@ prompt. Send them back as format errors. Do not
 ask the user to apply an edit that will fail as
 a bad format.
 
-7) Narrow the fence and thinking-tag checks
-
-A script is rejected when any line of the reply
-starts with ```, or when the reply contains a
-thinking tag. A script that writes markdown, or
-a heredoc that contains a fence, is rejected.
-The same checks do not run for a write, an edit,
-a question, or a message.
-
-Reject a fence or a thinking tag on every action
-when it is part of the reply format: before the
-action line, or in a question or a message. A
-fence line or a thinking tag inside a script, a
-write, or an edit body is content. Keep it.
-
-Maybe we just don't need these checks any more.
-
-8) Keep the caller's llama-cli args in the environment
+7) Keep the caller's llama-cli args in the environment
 
 The harness prepends its flags to
 SSA_LLAMA_CLI_ARGS. A script inherits that value.
@@ -128,7 +113,7 @@ llama-cli at the exec. The log still records the
 caller's SSA_LLAMA_CLI_ARGS and the flags that
 were passed.
 
-9) Remove the dead reply checks
+8) Remove the dead reply checks
 
 The reply loop returns only after it has logged
 a # end line. The empty-reply check and the
@@ -139,7 +124,7 @@ no action line.
 Remove those two checks. Do not add a stop count
 or another turn.
 
-10) Remove the unused action exit state
+9) Remove the unused action exit state
 
 ACTION_EXIT_CODE is cleared each turn and set
 again at the end of an action message. Nothing
@@ -151,7 +136,7 @@ Drop it as run state. Pass the exit code straight
 through. Do not keep a variable the next turn
 never reads.
 
-11) Say how to fix a missing tool
+10) Say how to fix a missing tool
 
 AGENTS.md says a missing tool on PATH should
 tell the user to install it or put it on PATH.
@@ -163,7 +148,7 @@ Name the tool. Say to install it or put it on
 PATH. One short clause. Do not add a "set ENV"
 hint. A missing tool is not a setting.
 
-12) Spell out short names
+11) Spell out short names
 
 AGENTS.md forbids abbreviations. argument, not
 arg. command, not cmd. Tool names stay as they
@@ -189,7 +174,7 @@ The setting is user-facing. Put the new name in
 README. The log line that prints it changes
 with the name.
 
-13) Use if for an early return
+12) Use if for an early return
 
 AGENTS.md says prefer if over a test and a
 command when the branch chooses an action. A
@@ -207,11 +192,11 @@ from inside the if. The write handler returns
 from inside the if when the ask fails. Same
 behavior.
 
-14) Do not keep the write path as run state
+13) Do not keep the write path as run state
 
 AGENTS.md says a value used in one place is
 written there. Keep a variable when the same
-fact is read again later. Task 10 already drops
+fact is read again later. Task 9 already drops
 ACTION_EXIT_CODE.
 
 FILE_TO_WRITE is run state. The write handler
@@ -223,3 +208,40 @@ Drop it from run state. Take the path in the
 function that writes the file. A local there is
 fine, because that function reads the path
 twice.
+
+14) One setting for what a run may do
+
+Six settings each turn one thing off. They are
+SSA_NO_ASK, SSA_NO_EDITS, SSA_NO_MESSAGES,
+SSA_NO_QUESTIONS, SSA_NO_SCRIPTS, and
+SSA_NO_WRITES. Each must be 0 or 1. Each has
+its own check. The log prints all six. The
+system prompt adds a reply spec for each
+action that is still on. The run stops when
+scripts, writes, edits, questions, and
+messages are all off.
+
+SSA_NO_ASK is not an action. It skips the
+ask before a script, a write, or an edit.
+With no /dev/tty, it also turns questions
+and messages off.
+
+Maybe one setting, SSA_ALLOWED_ACTIONS, can
+stand in for the six. A bit map is one
+shape: one bit for a script, a write, an
+edit, a question, a message, and the ask.
+Unset means what the six defaults mean now:
+those actions on, and the ask on. # complete
+is not a bit. It still does not keep a run
+going by itself.
+
+POSIX sh has no bit test. A string of names,
+or a string of bits, both work. Pick a shape
+a person can set in the environment.
+
+The log and README record that one setting.
+Drop the six SSA_NO_* names. A bad value
+names SSA_ALLOWED_ACTIONS. No /dev/tty still
+needs the ask off, and still turns questions
+and messages off. No action left still stops
+the run.

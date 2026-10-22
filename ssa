@@ -729,20 +729,11 @@ handle_script_request() {
         record_format_error "# script is not allowed"
     elif ! script_payload | grep -q '[^[:space:]]'; then
         record_format_error "the script was empty"
-    elif print_log_slice "$REPLY_START" "$REPLY_END" | grep -q '^```'; then
-        record_format_error "the reply used a markdown fence"
-    elif reply_has_thinking_tags; then
-        record_format_error "the reply used a thinking tag"
     elif ! script_payload | sh -n >/dev/null 2>&1; then
         record_format_error "sh -n failed"
     elif ask_to_run_action; then
         run_script
     fi
-}
-
-reply_has_thinking_tags() {
-    print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -qF -e '<think>' -e '</think>' -e '<|channel>thought'
 }
 
 ask_to_run_action() {
