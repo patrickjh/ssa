@@ -106,7 +106,7 @@ version, each `SSA_*` value, and the flags. The main
 process writes the end time and the status, and
 exits without waiting on llama-cli.
 `# llama-cli stderr` is appended when llama-cli
-exits, so that block can follow the status line.
+exits, so that block follows the status line.
 NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.

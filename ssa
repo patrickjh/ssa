@@ -468,11 +468,9 @@ start_llama() {
     # Stays open until this process exits. That close
     # is what tells the watcher to kill llama-cli.
     exec 5>"$FIFO_DIR/lifeline" || die "cannot open llama lifeline"
-    # Stdout, then stdin. Each open unblocks the
-    # matching llama-cli redirect.
+    # Stdout, then stdin. Each open unblocks the matching llama-cli redirect.
     exec 4<"$FIFO_DIR/output" || die "cannot open llama-cli output"
     exec 3>"$FIFO_DIR/input" || die "cannot open llama-cli input"
-    clean_up_fifos
 }
 
 create_fifos() {
@@ -484,8 +482,8 @@ create_fifos() {
 }
 
 watch_llama() {
-    exec 5<"$FIFO_DIR/lifeline" || exit 1
     trap '' HUP INT TERM PIPE
+    exec 5<"$FIFO_DIR/lifeline" || exit 1
     set -f
     umask 077
     copy_llama_stderr &
@@ -499,6 +497,7 @@ watch_llama() {
         <"$FIFO_DIR/input" &
     LLAMA_PID=$!
     cat <&5 >/dev/null
+    exec 5<&-
     kill -KILL "$LLAMA_PID" 2>/dev/null || :
     # Reap llama-cli and the stderr reader.
     wait
@@ -924,14 +923,16 @@ die() {
 }
 
 clean_up_fifos() {
-    if [ -n "${FIFO_DIR:-}" ]; then
+    # The write end stays open in this process.
+    # The watcher closes its read end, then removes the pipes.
+    if [ -n "${FIFO_DIR:-}" ] && ! (true >&5) 2>/dev/null; then
         rm -rf "$FIFO_DIR" || :
     fi
 }
 
 finish_agent_loop() {
-    exec 5>&- || :
     log_run_end "completed"
+    exec 5>&- || :
     if [ "$SSA_VERBOSE" = 1 ]; then
         printf 'log file: %s\n' "$LOG_FILE"
     fi
