@@ -64,8 +64,8 @@ A body must not contain a line that is exactly
 `# end`. A search or replace block must not contain
 a line that is exactly `=======` or `>>>>>>> REPLACE`.
 `SSA_VERBOSE=1` shows progress on
-stdout: the log path, llama-cli load text, each model
-line, script output, write and edit results,
+stdout: the log path, llama-cli load text and errors,
+each model line, script output, write and edit results,
 rejections, format errors, and the done line. Script
 output is printed after the command exits.
 `SSA_VERBOSE=0` shows none of that. stderr is harness
@@ -96,6 +96,8 @@ the second, then the PID, and `.ssalog`. It is under
 printed at the start and again before the done line.
 A failure prints the path on stderr after the error.
 If llama-cli exits, the die message says so.
+llama-cli stderr is appended to the log under
+`# llama-cli stderr` when llama-cli exits.
 NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.
