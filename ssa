@@ -32,6 +32,7 @@ CHUNK_END=0
 CHUNK_START=0
 FILE_TO_EDIT=""
 FILE_TO_WRITE=""
+FIFO_DIR=""
 LOG_FILE=""
 OUTPUT_END=0
 OUTPUT_START=0
@@ -241,6 +242,9 @@ END {
 main() {
     trap 'exit 1' USR1
     trap 'die "llama-cli exited; see README.md"' PIPE
+    trap 'clean_up_fifos; exit 129' HUP
+    trap 'clean_up_fifos; exit 130' INT
+    trap 'clean_up_fifos; exit 143' TERM
     TASK="$*"
     check_posix_commands
     check_llama
@@ -434,31 +438,27 @@ start_llama() {
     watch_llama &
     # Stays open until this process exits. That close
     # is what tells the watcher to kill llama-cli.
-    exec 5>"$(llama_fifo_path lifeline)" ||
+    exec 5>"$FIFO_DIR/lifeline" ||
         die "cannot open llama lifeline"
     # Stdout, then stdin. Each open unblocks the
     # matching llama-cli redirect.
-    exec 4<"$(llama_fifo_path output)" ||
+    exec 4<"$FIFO_DIR/output" ||
         die "cannot open llama-cli output"
-    exec 3>"$(llama_fifo_path input)" ||
+    exec 3>"$FIFO_DIR/input" ||
         die "cannot open llama-cli input"
     clean_up_fifos
 }
 
 create_fifos() {
-    if ! ( umask 077; mkfifo "$(llama_fifo_path lifeline)" ); then
-        die "cannot create lifeline fifo"
-    fi
-    if ! ( umask 077; mkfifo "$(llama_fifo_path input)" ); then
-        die "cannot create input fifo"
-    fi
-    if ! ( umask 077; mkfifo "$(llama_fifo_path output)" ); then
-        die "cannot create output fifo"
-    fi
+    mkdir -m 700 "${TMPDIR:-/tmp}/ssa-$PID" ||
+        die "cannot create fifo directory"
+    FIFO_DIR="${TMPDIR:-/tmp}/ssa-$PID"
+    mkfifo "$FIFO_DIR/lifeline" "$FIFO_DIR/input" \
+        "$FIFO_DIR/output" || die "cannot create fifo"
 }
 
 watch_llama() {
-    exec 5<"$(llama_fifo_path lifeline)" || exit 1
+    exec 5<"$FIFO_DIR/lifeline" || exit 1
     trap '' HUP INT TERM PIPE
     set -f
     umask 077
@@ -470,8 +470,8 @@ watch_llama() {
 # end
 ' \
         2>&1 \
-        >"$(llama_fifo_path output)" \
-        <"$(llama_fifo_path input)" &
+        >"$FIFO_DIR/output" \
+        <"$FIFO_DIR/input" &
     LLAMA_PID=$!
     cat <&5 >/dev/null
     kill -KILL "$LLAMA_PID" 2>/dev/null || :
@@ -946,13 +946,9 @@ die() {
 }
 
 clean_up_fifos() {
-    rm -f "$(llama_fifo_path lifeline)" \
-        "$(llama_fifo_path input)" \
-        "$(llama_fifo_path output)" || :
-}
-
-llama_fifo_path() {
-    printf '%s/ssa-%s.%s' "${TMPDIR:-/tmp}" "$PID" "$1"
+    if [ -n "${FIFO_DIR:-}" ]; then
+        rm -rf "$FIFO_DIR" || :
+    fi
 }
 
 main "$@"

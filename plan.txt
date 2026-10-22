@@ -59,13 +59,7 @@ SSA_VERBOSE=1 can still print it. Update
 README.md only if a person would otherwise
 not know where that text goes.
 
-6) Fail a no-tty run that still asks
-
-Done. A run with no terminal and SSA_NO_ASK
-left at 0 stops. SSA_NO_ASK=1 still turns off
-questions and messages.
-
-7) Stop a short -n from hanging the loop
+6) Stop a short -n from hanging the loop
 
 A finite -n, --predict, or --n-predict can
 end generation before a line that is exactly
@@ -79,7 +73,7 @@ end of a reply another way. The loop must
 not hang. Update the README.md note about a
 short -n so it matches the fix.
 
-8) Leave CPU for the rest of the machine
+7) Leave CPU for the rest of the machine
 
 llama-cli can take every generation thread
 and poll while it waits. The model load and
@@ -94,28 +88,7 @@ still replace one of these. Pass a flag
 only when its default does not already do
 the job. List the flags in README.md.
 
-9) Keep fifos in a private directory
-
-The fifo paths sit under TMPDIR and can be
-guessed. clean_up_fifos removes those three
-paths even when this process did not create
-them. A signal during setup can also leave
-the fifos behind.
-
-Use mktemp -d, with umask 077, and put the
-fifos in that directory. Remove the
-directory on the way out, including when a
-signal arrives during setup. Add no SSA_*
-setting.
-
-10) Count question and message as actions
-
-Done. The run stops only when script, write,
-edit, question, and message are all off. After
-a no-terminal run turns questions and messages
-off, that check runs again.
-
-11) Record the run in the log
+8) Record the run in the log
 
 The log does not record the llama-cli version,
 the effective arguments, the working directory,
@@ -143,7 +116,7 @@ Add no SSA_* setting. Update README.md only if
 a person would otherwise not know what the log
 starts and ends with.
 
-12) Add a read-only file action
+9) Add a read-only file action
 
 A run with scripts, writes, and edits off cannot
 look at a file. Add "# read file: PATH". The
@@ -167,7 +140,7 @@ are allowed. Document SSA_NO_READS in README.md.
 If ssa would pass 1000 lines, raise that limit
 in AGENTS.md in the same change.
 
-13) Let # complete carry a final message
+10) Let # complete carry a final message
 
 # complete ends the run. A final word now needs
 a # message turn, then another turn that is only
