@@ -98,6 +98,9 @@ A failure prints the path on stderr after the error.
 If llama-cli exits, the die message says so.
 llama-cli stderr is appended to the log under
 `# llama-cli stderr` when llama-cli exits.
+The log starts with `# run`: the time, directory,
+version, each `SSA_*` value, and the flags. It ends
+with `# run end`: the end time and the status.
 NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.

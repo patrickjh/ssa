@@ -242,9 +242,9 @@ END {
 main() {
     trap 'exit 1' USR1
     trap 'die "llama-cli exited; see README.md"' PIPE
-    trap 'clean_up_fifos; exit 129' HUP
-    trap 'clean_up_fifos; exit 130' INT
-    trap 'clean_up_fifos; exit 143' TERM
+    trap 'log_run_end "hangup"; clean_up_fifos; exit 129' HUP
+    trap 'log_run_end "interrupt"; clean_up_fifos; exit 130' INT
+    trap 'log_run_end "terminate"; clean_up_fifos; exit 143' TERM
     TASK="$*"
     check_posix_commands
     check_llama
@@ -383,11 +383,34 @@ setup_agent_loop() {
 }
 
 setup_log() {
-    LOG_FILE="${SSA_LOG_FOLDER}/$(date '+%Y-%m-%d_%H.%M.%S').${PID}.ssalog"
+    START_TIME=$(date '+%Y-%m-%d_%H.%M.%S')
+    LOG_FILE="${SSA_LOG_FOLDER}/${START_TIME}.${PID}.ssalog"
     ( umask 077; set -C; : >"$LOG_FILE" ) || {
         LOG_FILE=""
         die "cannot create log file"
     }
+    {
+        printf '# run\ntime: %s\ndirectory: %s\n' \
+            "$START_TIME" "$(pwd)"
+        if command -v llama-cli >/dev/null 2>&1; then
+            printf 'llama-cli --version\n'
+            llama-cli --version 2>&1 || :
+        else
+            printf 'llama cli --version\n'
+            llama cli --version 2>&1 || :
+        fi
+        printf '%s\n' \
+            "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
+            "SSA_LLAMA_CLI_ARGS=$SSA_LLAMA_CLI_ARGS" \
+            "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" "SSA_NO_ASK=$SSA_NO_ASK" \
+            "SSA_NO_EDITS=$SSA_NO_EDITS" \
+            "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
+            "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
+            "SSA_NO_SCRIPTS=$SSA_NO_SCRIPTS" \
+            "SSA_NO_WRITES=$SSA_NO_WRITES" "SSA_VERBOSE=$SSA_VERBOSE" \
+            "flags: -sys, SSA_LLAMA_CLI_ARGS, --reverse-prompt # end"
+        printf '\n'
+    } >>"$LOG_FILE" || die "cannot append log"
     if [ "$SSA_VERBOSE" = 1 ]; then
         printf 'log file: %s\n' "$LOG_FILE"
     fi
@@ -596,8 +619,7 @@ handle_model_response() {
 }
 
 reply_is_empty() {
-    ! print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -q '[^[:space:]]'
+    ! print_log_slice "$REPLY_START" "$REPLY_END" | grep -q '[^[:space:]]'
 }
 
 reply_has_end_marker() {
@@ -936,6 +958,7 @@ file_contains_nul() {
 
 finish_agent_loop() {
     exec 5>&- || :
+    log_run_end "completed"
     if [ "$SSA_VERBOSE" = 1 ]; then
         printf 'log file: %s\n' "$LOG_FILE"
     fi
@@ -948,11 +971,8 @@ die() {
     printf '%s\n' "$*" >&2
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
         printf 'log file: %s\n' "$LOG_FILE" >&2
-        if [ -s "$LOG_FILE" ]; then
-            printf '\n' >>"$LOG_FILE" || :
-        fi
-        printf '# die\n%s\n' "$*" >>"$LOG_FILE" || :
     fi
+    log_run_end "die: $*"
     clean_up_fifos
     if [ -n "${PID:-}" ]; then
         kill -USR1 "$PID" 2>/dev/null || :
@@ -960,6 +980,14 @@ die() {
         printf 'PID not set; cannot signal parent process\n' >&2
     fi
     exit 1
+}
+
+log_run_end() {
+    if [ -z "${LOG_FILE:-}" ] || [ ! -f "$LOG_FILE" ]; then
+        return 0
+    fi
+    printf '\n# run end\ntime: %s\nstatus: %s\n' \
+        "$(date '+%Y-%m-%d_%H.%M.%S')" "$1" >>"$LOG_FILE" || :
 }
 
 clean_up_fifos() {

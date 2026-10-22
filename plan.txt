@@ -7,31 +7,3 @@ compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are.
-
-2) Record the run in the log
-
-The log does not record the llama-cli version,
-the effective arguments, the working directory,
-the runtime settings, the start time, the end
-time, or the final status. A later read of the
-log cannot rebuild the run.
-
-Write the start of the run before the system
-prompt. Use llama-cli --version, or llama cli
---version when that is the command ssa runs.
-Record the working directory, each SSA_* value
-in effect after the startup checks, the flags
-ssa passes, and the start time. Use the same
-date form as the log file name. The system
-prompt is already its own chunk, so do not copy
-it again.
-
-When the run ends, record the end time and the
-final status. A completed task says it
-completed. A die says so and includes the die
-text. A hangup, interrupt, or terminate says
-which signal ended the run.
-
-Add no SSA_* setting. Update README.md only if
-a person would otherwise not know what the log
-starts and ends with.
