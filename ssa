@@ -514,9 +514,7 @@ log_llama_output() {
 }
 
 handle_model_response() {
-    if ! print_log_slice "$REPLY_START" "$REPLY_END" |
-        grep -q '[^[:space:]]'
-    then
+    if reply_is_empty; then
         record_format_error "the reply was empty"
     elif ! reply_has_end_marker; then
         record_format_error "the reply had no # end line"
@@ -536,6 +534,11 @@ handle_model_response() {
         record_format_error "the reply had no action line"
     fi
     return 0
+}
+
+reply_is_empty() {
+    ! print_log_slice "$REPLY_START" "$REPLY_END" |
+        grep -q '[^[:space:]]'
 }
 
 reply_has_end_marker() {
