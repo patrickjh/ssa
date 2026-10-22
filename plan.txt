@@ -138,16 +138,7 @@ question, or message body. One place only, so the
 slice, the end check, and the action body all
 see the same line.
 
-9) Document lines a body cannot hold
-
-In the loop section of README.md, state the
-limits. A body must not contain a line that is
-exactly # end. A search or replace block must
-not contain a line that is exactly ======= or
->>>>>>> REPLACE. The reader and the edit awk
-stop on those lines. Keep the paragraph short.
-
-10) Cut comments that restate the code
+9) Cut comments that restate the code
 
 Read the comments in ssa. Cut one that says
 what the next lines already show, or what

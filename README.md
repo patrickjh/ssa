@@ -38,6 +38,9 @@ unless `SSA_NO_ASK=1`. The ask text goes to `/dev/tty`
 with the answer. A `# question` is shown there too. The
 next line is the answer, and a blank line counts. A
 `# message` is shown there too, and the run continues.
+A body must not contain a line that is exactly
+`# end`. A search or replace block must not contain
+a line that is exactly `=======` or `>>>>>>> REPLACE`.
 `SSA_VERBOSE=1` shows progress on
 stdout: the log path, llama-cli load text, each model
 line, script output, write and edit results,
