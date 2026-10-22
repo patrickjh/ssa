@@ -76,20 +76,3 @@ approach has to say what that text becomes.
 Say what happens to the low-token goal and the
 kept-out line. Leave both as they are until that
 decision is written down.
-
-6) Cut comments that restate the code
-
-Read the comments in ssa. Cut one that says
-what the next lines already show, or what
-README.md already says.
-
-Keep a comment that records a constraint the
-code does not show. The redirect order on
-llama-cli, a read past # end that would block,
-the signals the watcher ignores, and the fds a
-script must not hold are that kind.
-
-Leave the file header, the section labels, and
-the shellcheck directive. Do not change # lines
-inside the reply specs. Those are text the
-model reads.

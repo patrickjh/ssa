@@ -16,7 +16,6 @@ SSA_NO_SCRIPTS="${SSA_NO_SCRIPTS:-0}"
 SSA_NO_WRITES="${SSA_NO_WRITES:-0}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
-# Harness flags first. The caller's flags follow.
 SSA_LLAMA_CLI_ARGS="--reasoning off \
 --reasoning-budget 0 \
 --simple-io \
