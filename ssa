@@ -644,11 +644,14 @@ apply_write_request() {
     FILE_TO_WRITE=$(first_action_line | sed 's/^# write file: //')
     begin_action_message
     {
-        print_action_body '^# write file: .' >"$FILE_TO_WRITE" &&
+        ACTION_EXIT_CODE=$(
+            print_action_body '^# write file: .' >"$FILE_TO_WRITE"
+            printf '%s\n' "$?"
+        ) || ACTION_EXIT_CODE=1
+        if [ "$ACTION_EXIT_CODE" -eq 0 ]; then
             printf 'wrote file: %s\n' "$FILE_TO_WRITE"
-        ACTION_EXIT_CODE=$?
+        fi
     } >>"$LOG_FILE" 2>&1 || die "cannot append log"
-    printf '\n' >>"$LOG_FILE" || die "cannot append log"
     finish_action_message "$ACTION_EXIT_CODE"
 }
 
@@ -805,7 +808,6 @@ run_script() {
             printf '%s\n' "$?" >&4
         } 3>&1 | tr -d '\000' >&3
         COPY_STATUS=$?
-        printf '\n' >&3 || exit 1
         exit "$COPY_STATUS"
     )
     if [ $? -ne 0 ]; then
@@ -829,7 +831,11 @@ finish_action_message() {
     print_log_slice "$OUTPUT_START" "$OUTPUT_END" ||
          die "cannot show action output"
     log_user_rejection_reason
-    append_log '\n\nAction exit code: %s\n' "$1"
+    if [ "$OUTPUT_END" -lt "$OUTPUT_START" ]; then
+        append_log 'Action exit code: %s\n' "$1"
+    else
+        append_log '\nAction exit code: %s\n' "$1"
+    fi
     end_log_chunk
 }
 

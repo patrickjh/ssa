@@ -104,34 +104,6 @@ exists, has no NUL, and the search matches
 once. Send that failure back without
 asking. Apply the edit only after a yes.
 
-15) One blank line before the exit code
-
-A script and a write add a newline after
-the output. The action closer adds two more
-before "Action exit code:". The log shows
-several blank lines there. A command that
-prints nothing still leaves blank lines
-between the header and the exit code.
-
-Keep a single blank line between the output
-and "Action exit code:". Do that when the
-output is empty too. Add the newline in one
-place.
-
-16) A failed write must not exit the shell
-
-The write opens the target with a redirect
-on a function, in the main shell. A POSIX
-shell exits on a redirection error. If the
-file cannot be opened, ssa can exit instead
-of recording the failure and continuing the
-loop.
-
-Open the target so a failed open is an
-action error. Save that status, log it, and
-continue the loop. A failed append to the
-log is still a harness failure.
-
 19) Simplify README and keep it abstract
 
 AGENTS.md says the help stays short: how
