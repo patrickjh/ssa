@@ -22,20 +22,6 @@ not been seen, strip a leading "> " and skip blank
 lines. Then drop the same strip from
 print_model_reply.
 
-4) Start llama-cli in conversation mode
-
-stdin is a fifo, so llama-cli does not see a
-terminal. Without conversation mode it reads stdin
-until EOF before the first turn, and that read
-never ends because ssa keeps the input fifo open.
-
-In watch_llama, pass --conversation (or
---interactive-first) so llama-cli takes one turn at
-a time. Also pass -n -1 before
-SSA_LLAMA_CLI_ARGUMENTS so a reply is not cut off
-before "# end" when the user omits -n. The user's
-arguments still come later and can override it.
-
 7) Close llama-cli before the run status is logged
 
 finish_agent_loop, die, and the hangup, interrupt,
