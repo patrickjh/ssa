@@ -16,7 +16,7 @@ flags `ssa` adds match current llama.cpp `llama-cli`. An
 older build may reject one of them.
 
 A model file on disk needs no network. A flag in
-`SSA_LLAMA_CLI_ARGS` can still make `llama-cli` download
+`SSA_LLAMA_CLI_ARGUMENTS` can still make `llama-cli` download
 a model or connect to a server.
 
 ## Run
@@ -28,7 +28,7 @@ terminal, those bytes follow that line, after NUL bytes
 are removed.
 
 ```sh
-export SSA_LLAMA_CLI_ARGS="-m /models/gemma.gguf -c 8192 -n -1"
+export SSA_LLAMA_CLI_ARGUMENTS="-m /models/gemma.gguf -c 8192 -n -1"
 ssa fix the failing test
 cat notes.txt | ssa summarize this repo
 ```
@@ -85,7 +85,7 @@ run.
 | Setting | Default |
 | --- | --- |
 | `SSA_EXTRA_SYSTEM_TEXT` | empty, appended to the system prompt |
-| `SSA_LLAMA_CLI_ARGS` | unset (required) |
+| `SSA_LLAMA_CLI_ARGUMENTS` | unset (required) |
 | `SSA_LOG_FOLDER` | temp directory (`TMPDIR`, or `/tmp`) |
 | `SSA_NO_ASK` | `0` (ask before a script, write, or edit) |
 | `SSA_NO_EDITS` | `0` (allow `# edit file:`) |
@@ -111,7 +111,7 @@ NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.
 
-`SSA_LLAMA_CLI_ARGS` is the caller's `llama-cli` flags,
+`SSA_LLAMA_CLI_ARGUMENTS` is the caller's `llama-cli` flags,
 including `-m` or `--model`, plus any of `-c`, `-n`,
 `--context-shift`, and `--keep`. The run stops when
 neither `-m` nor `--model` is its own word with a path

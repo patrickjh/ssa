@@ -65,7 +65,7 @@ at a model over the network, that is fine too.
 
 Another goal is a computer that stays responsive while a
 run is going. The caller sets llama-cli priority and
-polling in SSA_LLAMA_CLI_ARGS. ssa does not add those
+polling in SSA_LLAMA_CLI_ARGUMENTS. ssa does not add those
 flags.
 
 Another goal is llama-cli options that work when the

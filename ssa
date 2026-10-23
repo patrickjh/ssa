@@ -6,7 +6,7 @@ set -u
 
 # Users can set
 SSA_EXTRA_SYSTEM_TEXT="${SSA_EXTRA_SYSTEM_TEXT:-}"
-SSA_LLAMA_CLI_ARGS="${SSA_LLAMA_CLI_ARGS:-}"
+SSA_LLAMA_CLI_ARGUMENTS="${SSA_LLAMA_CLI_ARGUMENTS:-}"
 SSA_LOG_FOLDER="${SSA_LOG_FOLDER:-${TMPDIR:-/tmp}}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
 SSA_NO_EDITS="${SSA_NO_EDITS:-0}"
@@ -19,7 +19,7 @@ SSA_VERBOSE="${SSA_VERBOSE:-0}"
 # Internal
 CHUNK_END=0
 CHUNK_START=0
-FIFO_DIR=""
+FIFO_DIRECTORY=""
 FILE_TO_EDIT=""
 FILE_TO_WRITE=""
 LLAMA_REVERSE_PROMPT='
@@ -299,7 +299,7 @@ check_can_run() {
     check_no_writes
     check_verbose
     check_log_folder
-    check_llama_cli_args
+    check_llama_cli_arguments
     check_tty
     check_some_action_left
 }
@@ -356,10 +356,10 @@ check_log_folder() {
     fi
 }
 
-check_llama_cli_args() {
-    printf '%s\n' "$SSA_LLAMA_CLI_ARGS" |
+check_llama_cli_arguments() {
+    printf '%s\n' "$SSA_LLAMA_CLI_ARGUMENTS" |
         grep -q -E '(^|[[:space:]])(-m|--model)[[:space:]]+[^[:space:]]' ||
-        die "SSA_LLAMA_CLI_ARGS needs -m or --model; see README.md"
+        die "SSA_LLAMA_CLI_ARGUMENTS needs -m or --model; see README.md"
 }
 
 check_tty() {
@@ -417,7 +417,7 @@ log_llama_version() {
 log_environment() {
     printf '%s\n' \
         "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
-        "SSA_LLAMA_CLI_ARGS=$SSA_LLAMA_CLI_ARGS" \
+        "SSA_LLAMA_CLI_ARGUMENTS=$SSA_LLAMA_CLI_ARGUMENTS" \
         "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" \
         "SSA_NO_ASK=$SSA_NO_ASK" \
         "SSA_NO_EDITS=$SSA_NO_EDITS" \
@@ -472,23 +472,23 @@ start_llama() {
     watch_llama &
     # Stays open until this process exits. That close
     # is what tells the watcher to kill llama-cli.
-    exec 5>"$FIFO_DIR/lifeline" || die "cannot open llama lifeline"
+    exec 5>"$FIFO_DIRECTORY/lifeline" || die "cannot open llama lifeline"
     # Stdout, then stdin. Each open unblocks the matching llama-cli redirect.
-    exec 4<"$FIFO_DIR/output" || die "cannot open llama-cli output"
-    exec 3>"$FIFO_DIR/input" || die "cannot open llama-cli input"
+    exec 4<"$FIFO_DIRECTORY/output" || die "cannot open llama-cli output"
+    exec 3>"$FIFO_DIRECTORY/input" || die "cannot open llama-cli input"
 }
 
 create_fifos() {
-    FIFO_DIR="${TMPDIR:-/tmp}/ssa-$PID"
-    mkdir -m 700 "$FIFO_DIR" || die "cannot create fifo directory"
-    mkfifo "$FIFO_DIR/lifeline" "$FIFO_DIR/input" \
-        "$FIFO_DIR/output" "$FIFO_DIR/stderr" ||
+    FIFO_DIRECTORY="${TMPDIR:-/tmp}/ssa-$PID"
+    mkdir -m 700 "$FIFO_DIRECTORY" || die "cannot create fifo directory"
+    mkfifo "$FIFO_DIRECTORY/lifeline" "$FIFO_DIRECTORY/input" \
+        "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" ||
         die "cannot create fifo"
 }
 
 watch_llama() {
     trap '' HUP INT TERM PIPE
-    exec 5<"$FIFO_DIR/lifeline" || exit 1
+    exec 5<"$FIFO_DIRECTORY/lifeline" || exit 1
     set -f
     umask 077
     copy_llama_stderr &
@@ -503,11 +503,11 @@ watch_llama() {
         --color off \
         --context-shift \
         --keep -1 \
-        $SSA_LLAMA_CLI_ARGS \
+        $SSA_LLAMA_CLI_ARGUMENTS \
         --reverse-prompt "$LLAMA_REVERSE_PROMPT" \
-        2>"$FIFO_DIR/stderr" \
-        >"$FIFO_DIR/output" \
-        <"$FIFO_DIR/input" &
+        2>"$FIFO_DIRECTORY/stderr" \
+        >"$FIFO_DIRECTORY/output" \
+        <"$FIFO_DIRECTORY/input" &
     LLAMA_PID=$!
     cat <&5 >/dev/null
     exec 5<&-
@@ -523,7 +523,7 @@ copy_llama_stderr() {
         while IFS= read -r LINE || [ -n "$LINE" ]; do
             printf '%s\n' "$LINE" >&3
             printf '%s\n' "$LINE"
-        done <"$FIFO_DIR/stderr"
+        done <"$FIFO_DIRECTORY/stderr"
     )
     if [ -n "$STDERR" ]; then
         printf '# llama-cli stderr\n%s\n' "$STDERR" >>"$LOG_FILE" || exit 1
@@ -683,13 +683,13 @@ apply_edit_request() {
         record_edit_failure "$FILE_TO_EDIT" "file not found"
     elif file_contains_nul "$FILE_TO_EDIT"; then
         record_edit_failure "$FILE_TO_EDIT" "file contains a NUL"
-    elif ! ERR=$(print_model_reply |
+    elif ! ERROR=$(print_model_reply |
             FILE_TO_EDIT="$FILE_TO_EDIT" \
             FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" | tr -d '[:space:]')" \
             LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1
     ); then
-        [ -n "$ERR" ] || die "edit failed with no error text"
-        record_edit_failure "$FILE_TO_EDIT" "$ERR"
+        [ -n "$ERROR" ] || die "edit failed with no error text"
+        record_edit_failure "$FILE_TO_EDIT" "$ERROR"
     else
         record_output_line "$(printf 'edited file: %s' "$FILE_TO_EDIT")" 0
     fi
@@ -944,8 +944,8 @@ die() {
 clean_up_fifos() {
     # The write end stays open in this process.
     # The watcher closes its read end, then removes the pipes.
-    if [ -n "${FIFO_DIR:-}" ] && ! (true >&5) 2>/dev/null; then
-        rm -rf "$FIFO_DIR" || :
+    if [ -n "${FIFO_DIRECTORY:-}" ] && ! (true >&5) 2>/dev/null; then
+        rm -rf "$FIFO_DIRECTORY" || :
     fi
 }
 
