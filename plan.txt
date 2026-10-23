@@ -8,18 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-3) Keep the caller's llama-cli args in the environment
-
-The harness prepends its flags to
-SSA_LLAMA_CLI_ARGS. A script inherits that value.
-A nested ssa prepends the same flags again.
-
-Leave the caller's value in the variable. Pass
-the harness flags and the caller's flags to
-llama-cli at the exec. The log still records the
-caller's SSA_LLAMA_CLI_ARGS and the flags that
-were passed.
-
 4) Say how to fix a missing tool
 
 AGENTS.md says a missing tool on PATH should

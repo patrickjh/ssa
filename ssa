@@ -16,26 +16,16 @@ SSA_NO_SCRIPTS="${SSA_NO_SCRIPTS:-0}"
 SSA_NO_WRITES="${SSA_NO_WRITES:-0}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
-SSA_LLAMA_CLI_ARGS="--reasoning off \
---reasoning-budget 0 \
---simple-io \
---no-display-prompt \
---no-show-timings \
---color off \
---context-shift \
---keep -1 \
-${SSA_LLAMA_CLI_ARGS}"
-
 # Internal
 CHUNK_END=0
 CHUNK_START=0
 FIFO_DIR=""
 FILE_TO_EDIT=""
 FILE_TO_WRITE=""
-LOG_FILE=""
 LLAMA_REVERSE_PROMPT='
 # end
 '
+LOG_FILE=""
 OUTPUT_END=0
 OUTPUT_START=0
 PID=$$
@@ -429,14 +419,14 @@ log_environment() {
     printf '%s\n' \
         "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
         "SSA_LLAMA_CLI_ARGS=$SSA_LLAMA_CLI_ARGS" \
-        "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" "SSA_NO_ASK=$SSA_NO_ASK" \
+        "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" \
+        "SSA_NO_ASK=$SSA_NO_ASK" \
         "SSA_NO_EDITS=$SSA_NO_EDITS" \
         "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
         "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
         "SSA_NO_SCRIPTS=$SSA_NO_SCRIPTS" \
-        "SSA_NO_WRITES=$SSA_NO_WRITES" "SSA_VERBOSE=$SSA_VERBOSE" \
-        "flags: -sys, SSA_LLAMA_CLI_ARGS, --reverse-prompt # end\n" \
-        >>"$LOG_FILE" || die "cannot append log"
+        "SSA_NO_WRITES=$SSA_NO_WRITES" \
+        "SSA_VERBOSE=$SSA_VERBOSE" >>"$LOG_FILE" || die "cannot append log"
 }
 
 setup_system_prompt() {
@@ -506,6 +496,14 @@ watch_llama() {
     # shellcheck disable=SC2086
     exec_llama \
         -sys "$SYSTEM_PROMPT" \
+        --reasoning off \
+        --reasoning-budget 0 \
+        --simple-io \
+        --no-display-prompt \
+        --no-show-timings \
+        --color off \
+        --context-shift \
+        --keep -1 \
         $SSA_LLAMA_CLI_ARGS \
         --reverse-prompt "$LLAMA_REVERSE_PROMPT" \
         2>"$FIFO_DIR/stderr" \
