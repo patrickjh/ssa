@@ -47,7 +47,7 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-11) Do not block forever on the stderr fifo
+3) Do not block forever on the stderr fifo
 
 The stderr reader opens the fifo for read and
 waits until a writer opens it. If llama-cli
@@ -60,7 +60,7 @@ on llama-cli being the first writer. If
 llama-cli dies first, the reader must finish
 and the watcher must clean up.
 
-12) Strip the prompt mark before the end line
+4) Strip the prompt mark before the end line
 
 The first reply line can start with "> ".
 The carriage return on "# end" is stripped
@@ -75,7 +75,7 @@ carriage return, and log that line. A first
 line that is the end marker must be stored
 as "# end".
 
-14) Check an edit before the ask
+5) Check an edit before the ask
 
 An empty search block passes the format
 check. The file check, the NUL check, and
@@ -89,7 +89,7 @@ exists, has no NUL, and the search matches
 once. Send that failure back without
 asking. Apply the edit only after a yes.
 
-19) Simplify README and keep it abstract
+6) Simplify README and keep it abstract
 
 AGENTS.md says the help stays short: how
 to run, the environment, one loop
