@@ -8,13 +8,13 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-8) One setting for what a run may do
+2) One setting for what a run may do
 
-Six settings each turn one thing off. They are
-SSA_NO_ASK, SSA_NO_EDITS, SSA_NO_MESSAGES,
+Five settings each turn one action off. They
+are SSA_NO_EDITS, SSA_NO_MESSAGES,
 SSA_NO_QUESTIONS, SSA_NO_SCRIPTS, and
 SSA_NO_WRITES. Each must be 0 or 1. Each has
-its own check. The log prints all six. The
+its own check. The log prints all five. The
 system prompt adds a reply spec for each
 action that is still on. The run stops when
 scripts, writes, edits, questions, and
@@ -23,24 +23,294 @@ messages are all off.
 SSA_NO_ASK is not an action. It skips the
 ask before a script, a write, or an edit.
 With no /dev/tty, it also turns questions
-and messages off.
+and messages off. Keep SSA_NO_ASK.
 
-Maybe one setting, SSA_ALLOWED_ACTIONS, can
-stand in for the six. A bit map is one
-shape: one bit for a script, a write, an
-edit, a question, a message, and the ask.
-Unset means what the six defaults mean now:
-those actions on, and the ask on. # complete
-is not a bit. It still does not keep a run
+Replace the five with SSA_ALLOWED_ACTIONS.
+It is a string of names separated by spaces:
+script, write, edit, question, and message.
+Unset means all five are on. # complete is
+not a name. It still does not keep a run
 going by itself.
 
-POSIX sh has no bit test. A string of names,
-or a string of bits, both work. Pick a shape
-a person can set in the environment.
+A name that is not one of those five is a
+bad value. The message names
+SSA_ALLOWED_ACTIONS. An empty value means
+no action is on, so the run stops. That
+message names SSA_ALLOWED_ACTIONS too.
 
-The log and README record that one setting.
-Drop the six SSA_NO_* names. A bad value
-names SSA_ALLOWED_ACTIONS. No /dev/tty still
-needs the ask off, and still turns questions
-and messages off. No action left still stops
-the run.
+The log and README record
+SSA_ALLOWED_ACTIONS and SSA_NO_ASK. Drop
+the five SSA_NO_* action names. The system
+prompt still adds a reply spec for each
+name that is on. No /dev/tty still needs
+SSA_NO_ASK=1, and still turns questions
+and messages off. No action left still
+stops the run.
+
+3) README edit markers do not match ssa
+
+README says a search or replace block must not
+contain a line that is exactly <<<<<<< SEARCH,
+=======, or >>>>>>> REPLACE, or a line that
+starts with # edit file:.
+
+The edit reply spec only forbids a search or
+replace line that is exactly ======= or
+>>>>>>> REPLACE. The format check and the
+edit program allow <<<<<<< SEARCH and a line
+that starts with # edit file: inside the
+search block and the replace block.
+
+Make README and ssa agree. The reply spec
+already matches the checks.
+
+4) README lists mkdir and sh
+
+README says ssa needs awk, cat, date, grep,
+head, mkdir, mkfifo, rm, sed, sh, tr, and wc
+on PATH.
+
+check_posix_commands checks awk, cat, date,
+grep, head, mkfifo, rm, sed, tr, and wc. It
+does not check mkdir or sh.
+
+ssa calls mkdir for the fifo directory. A
+missing mkdir dies as cannot create fifo
+directory and does not name mkdir. sh runs
+the program, sh -n, and each script.
+
+Check mkdir and sh the same way as the other
+tools, or drop them from README.
+
+5) README says the log records the flags
+
+README says the log starts with the time and
+directory, then the version, each SSA_* value,
+and the flags.
+
+The log writes the time, the directory, the
+llama-cli version, and each SSA_* value. The
+llama-cli flags are only the
+SSA_LLAMA_CLI_ARGUMENTS line. Nothing else
+records the flags. The next block is the
+system prompt.
+
+Update README so it describes that header.
+
+6) README says stderr follows the status
+
+README says # llama-cli stderr is appended
+when llama-cli exits, so that block follows
+the status line.
+
+On a completed run, the status is written,
+then the lifeline closes, then the stderr
+copy appends that block. When llama-cli
+exits early, the stderr copy and die both
+write the log. The stderr block can land
+before the status line.
+
+Make the stderr block follow the status
+line, or change README to say it can come
+first when llama-cli exits early.
+
+7) FILE_TO_EDIT is set once and read once
+
+AGENTS.md says a value used in one place
+should be written there. Keep a top-level
+variable when the same fact is read again
+later.
+
+FILE_TO_EDIT is in the internal block. The
+edit handler sets it, and only the function
+that applies the edit reads it. The write
+path is set inside the function that writes
+the file, and it is not top-level.
+
+Set the edit path in the function that
+applies the edit. Drop FILE_TO_EDIT from
+the internal block.
+
+8) Function order and the call graph
+
+AGENTS.md says each function sits below its
+last caller. Callees of the same caller stay
+in call order. A callee's own callees sit
+under it before the parent's next call.
+main is already ordered that way.
+
+finish_agent_loop is called only from main,
+as the last call. It sits below die and
+clean_up_fifos. Those two do not call it.
+
+show_message calls print_action_body, then
+sanitize_output, then ring_terminal.
+print_model_reply and print_log_slice sit
+under print_action_body, before
+sanitize_output. That matches the rule.
+
+Move finish_agent_loop so it follows the
+rule. Leave the show_message block.
+
+9) Style in ssa is not one form
+
+One line in the edit awk program is indented
+two spaces. The other lines in that program
+use four.
+
+The write, edit, and script handlers test
+the flag with if ! [ "$SSA_NO_..." = 0 ].
+The question and message handlers test with
+if [ "$SSA_NO_..." != 0 ].
+
+Two loops use while :. The ask loop uses
+while true.
+
+finish_agent_loop prints the log path only
+when SSA_VERBOSE is 1. Stdout is already
+/dev/null when SSA_VERBOSE is 0, and the
+done line is printed with no such test.
+
+Use four spaces in the edit awk program.
+Use if ! [ "$SSA_NO_..." = 0 ] for questions
+and messages. Use while : in the ask loop.
+Print the log path the same way as the done
+line.
+
+10) Send the user turn in the current shell
+
+call_llama pipes the log slice into
+send_user_message. A pipeline subshell resets
+the PIPE trap. If llama-cli is already gone,
+the write gets SIGPIPE and the subshell dies
+before die runs. The loop status is not
+checked, so the run continues into the read
+and dies there.
+
+Send that turn in the current shell. If the
+write fails because llama-cli has exited, die
+with the llama-cli message.
+
+11) Do not block forever on the stderr fifo
+
+The stderr reader opens the fifo for read and
+waits until a writer opens it. If llama-cli
+is killed before it opens stderr, that open
+waits forever. wait never returns, and the
+fifo directory is left behind.
+
+Open the fifo so the reader does not depend
+on llama-cli being the first writer. If
+llama-cli dies first, the reader must finish
+and the watcher must clean up.
+
+12) Strip the prompt mark before the end line
+
+The first reply line can start with "> ".
+The carriage return on "# end" is stripped
+before that mark is removed. A first line
+"> # end" with a carriage return is logged
+with the mark and the return still on it.
+Later reads of that line are not exactly
+"# end".
+
+Remove the prompt mark first, then strip the
+carriage return, and log that line. A first
+line that is the end marker must be stored
+as "# end".
+
+13) A write or edit path needs a space
+
+The first action line matches "# write file:"
+and "# edit file:" with no space after the
+colon. The missing-path check only matches a
+blank path. "# write file:foo" or a tab
+before the path is not a missing path, and
+it does not match the write or edit handler.
+The reply is reported as having no action
+line.
+
+A path must come after one space, as in the
+reply spec. Any other shape means the path
+is missing. Say that.
+
+14) Check an edit before the ask
+
+An empty search block passes the format
+check. The file check, the NUL check, and
+the match count run only after the user
+approves. The ask runs for an edit that
+will fail as soon as it is applied.
+
+Reject an empty search block as a format
+error. Before the ask, check that the file
+exists, has no NUL, and the search matches
+once. Send that failure back without
+asking. Apply the edit only after a yes.
+
+15) One blank line before the exit code
+
+A script and a write add a newline after
+the output. The action closer adds two more
+before "Action exit code:". The log shows
+several blank lines there. A command that
+prints nothing still leaves blank lines
+between the header and the exit code.
+
+Keep a single blank line between the output
+and "Action exit code:". Do that when the
+output is empty too. Add the newline in one
+place.
+
+16) A failed write must not exit the shell
+
+The write opens the target with a redirect
+on a function, in the main shell. A POSIX
+shell exits on a redirection error. If the
+file cannot be opened, ssa can exit instead
+of recording the failure and continuing the
+loop.
+
+Open the target so a failed open is an
+action error. Save that status, log it, and
+continue the loop. A failed append to the
+log is still a harness failure.
+
+17) die must not signal itself
+
+die sends USR1 to the startup PID. In the
+main process that PID is this process. The
+USR1 trap exits, so die can be cut off by
+its own signal. The signal is there so a
+subshell can stop the main process.
+
+Ignore USR1 while die runs. Signal the main
+process only from a subshell. In the main
+process, finish the log and the fifo
+cleanup, then exit 1.
+
+18) Tell the model what a later turn is
+
+The intro says later turns are prior
+commands and their output. After the first
+turn, each user message is the output or
+the error from the last reply. The model
+already has that reply.
+
+Say that. Leave the first turn as the
+stdin context.
+
+The edit spec says the search block must
+match exactly once. The next sentence says
+the next line is # end. That sentence sits
+after the search block, so the model can
+end the reply there.
+
+Say the search block must not be empty and
+must match exactly once. Say the line after
+the replace marker is # end.
+
+The edit program sends a failure through
+cat on stderr. The caller already takes
+stderr with stdout. Print the message and
+drop the cat.
