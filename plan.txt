@@ -8,19 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-2) Reject a bad edit before the ask
-
-Missing search, middle, or replace markers, and
-text after the replace marker, are found only
-after the user approves the edit. Repeated
-======= and >>>>>>> REPLACE lines are already
-rejected before the ask.
-
-Reject those format errors before the approval
-prompt. Send them back as format errors. Do not
-ask the user to apply an edit that will fail as
-a bad format.
-
 3) Keep the caller's llama-cli args in the environment
 
 The harness prepends its flags to
@@ -55,12 +42,10 @@ These names are short forms:
 
 - ERR, the edit failure text
 - FIFO_DIR, the pipe directory
-- mid_lines, the middle marker count
 - SSA_LLAMA_CLI_ARGS and check_llama_cli_args
 
 Use the full word. ERR becomes ERROR. FIFO_DIR
-becomes PIPE_DIRECTORY. mid_lines becomes
-middle_lines. The setting
+becomes PIPE_DIRECTORY. The setting
 becomes SSA_LLAMA_CLI_ARGUMENTS, and the check
 becomes check_llama_cli_arguments. ARGS is the
 short form. llama-cli stays llama-cli, because
