@@ -22,16 +22,6 @@ not been seen, strip a leading "> " and skip blank
 lines. Then drop the same strip from
 print_model_reply.
 
-3) Strip a trailing carriage return from every line
-
-sanitize_end_line only strips a trailing carriage
-return from "# end". If llama-cli emits CRLF, every
-other line keeps it. Action lines, edit markers, and
-file paths then fail to match.
-
-Strip a trailing carriage return from every line
-read in log_llama_output.
-
 4) Start llama-cli in conversation mode
 
 stdin is a fifo, so llama-cli does not see a

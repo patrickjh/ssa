@@ -592,23 +592,23 @@ log_llama_output() {
     begin_log_chunk "# llama-cli output"
     FIRST_REPLY_LINE=1
     while :; do
-        IFS= read -r LLAMA_LINE <&4 || die "llama-cli exited; see README.md"
+        IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
         if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
-            LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sed 's/^> \{0,1\}//')
+            LINE=$(printf '%s\n' "$LINE" | sed 's/^> \{0,1\}//')
             FIRST_REPLY_LINE=0
         fi
-        LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sanitize_end_line)
-        printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" || die "cannot append log"
-        printf '%s\n' "$LLAMA_LINE" | sanitize_output || die "cannot show reply"
-        if [ "$LLAMA_LINE" = '# end' ]; then
+        LINE=$(printf '%s\n' "$LINE" | strip_trailing_carriage_return)
+        printf '%s\n' "$LINE" >>"$LOG_FILE" || die "cannot append log"
+        printf '%s\n' "$LINE" | sanitize_output || die "cannot show reply"
+        if [ "$LINE" = '# end' ]; then
             break
         fi
     done
     end_log_chunk
 }
 
-sanitize_end_line() {
-    sed "s/^# end$(printf '\r')\$/# end/"
+strip_trailing_carriage_return() {
+    sed "s/$(printf '\r')\$//"
 }
 
 handle_model_response() {
