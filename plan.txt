@@ -8,23 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-7) Do not keep the write path as run state
-
-AGENTS.md says a value used in one place is
-written there. Keep a variable when the same
-fact is read again later. The exit code is
-already passed straight through.
-
-FILE_TO_WRITE is run state. The write handler
-sets it. The apply function reads it twice:
-the redirect, and the wrote-file line. Nothing
-else reads it.
-
-Drop it from run state. Take the path in the
-function that writes the file. A local there is
-fine, because that function reads the path
-twice.
-
 8) One setting for what a run may do
 
 Six settings each turn one thing off. They are

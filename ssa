@@ -21,7 +21,6 @@ CHUNK_END=0
 CHUNK_START=0
 FIFO_DIRECTORY=""
 FILE_TO_EDIT=""
-FILE_TO_WRITE=""
 LLAMA_REVERSE_PROMPT='
 # end
 '
@@ -631,12 +630,12 @@ handle_write_request() {
     if ! [ "$SSA_NO_WRITES" = 0 ]; then
         record_format_error "# write file: is not allowed"
     elif ask_to_run_action; then
-        FILE_TO_WRITE=$(first_action_line | sed 's/^# write file: //')
         apply_write_request
     fi
 }
 
 apply_write_request() {
+    FILE_TO_WRITE=$(first_action_line | sed 's/^# write file: //')
     begin_action_message
     {
         print_action_body '^# write file: .' >"$FILE_TO_WRITE" &&
