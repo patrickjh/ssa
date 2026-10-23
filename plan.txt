@@ -8,46 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-2) Strip the llama-cli prompt prefix
-
-llama-cli prints a blank line, then "> ", before the
-reply. log_llama_output only strips "> " from the
-first line it reads, so that blank line uses up the
-strip and the next line still starts with "> ".
-first_action_line then misses "# script",
-"# complete", and the other action lines.
-
-In log_llama_output, while the first real line has
-not been seen, strip a leading "> " and skip blank
-lines. Then drop the same strip from
-print_model_reply.
-
-7) Close llama-cli before the run status is logged
-
-finish_agent_loop, die, and the hangup, interrupt,
-and terminate traps write the final time and status
-before watch_llama exits. llama-cli stderr can land
-in the log after that status, and die does not
-close the lifeline, so the fifo directory is left
-for the watcher to remove after ssa has exited.
-
-Close the llama input, output, and lifeline, then
-wait for watch_llama, before log_run_end. The
-stderr record then sits above the final time and
-status, and the fifos are gone before exit.
-
-8) Send the user message without a turn fifo
-
-send_user_message copies the log slice through the
-turn fifo in a background job. If llama-cli exits
-mid-message, die runs while that job still holds
-the lifeline.
-
-The log is already a file. Pipe the slice through
-sed to add the trailing backslash and write it to
-llama-cli, then print the blank line that ends the
-message. Drop the turn fifo from create_fifos.
-
 10) Sanitize action output, and skip it when quiet
 
 finish_action_message prints the script output with
@@ -69,12 +29,6 @@ error in handle_edit_request, and write the status
 at each return. check_llama and check_tty should
 follow that too.
 
-AGENTS.md says callees of one caller stay in call
-order. die calls log_run_end and then
-clean_up_fifos, but clean_up_fifos is above
-log_run_end. Task 7, which runs cleanup before the
-status line, also fixes that order.
-
 OUTPUT_END is set at the top and only used inside
 finish_action_message. Drop the top-level copy, or
 keep top-level and local state consistent. In
@@ -95,3 +49,4 @@ check_some_action_left rejects that at startup
 with status 1. Say the run ends when the model
 completes the task or the user quits, and that at
 least one action must stay on.
+

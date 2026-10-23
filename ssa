@@ -34,6 +34,7 @@ REPLY_START=0
 SYSTEM_PROMPT=""
 TASK=""
 USER_REJECTION_REASON=""
+WATCH_PID=""
 
 SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. The
 task for this run is at the end of this system prompt. After the first
@@ -251,9 +252,9 @@ END {
 main() {
     trap 'exit 1' USR1
     trap 'die "llama-cli exited; see README.md"' PIPE
-    trap 'log_run_end "hangup"; clean_up_fifos; exit 129' HUP
-    trap 'log_run_end "interrupt"; clean_up_fifos; exit 130' INT
-    trap 'log_run_end "terminate"; clean_up_fifos; exit 143' TERM
+    trap 'stop_llama; log_run_end "hangup"; clean_up_fifos; exit 129' HUP
+    trap 'stop_llama; log_run_end "interrupt"; clean_up_fifos; exit 130' INT
+    trap 'stop_llama; log_run_end "terminate"; clean_up_fifos; exit 143' TERM
     TASK="$*"
     check_posix_commands
     check_llama
@@ -475,8 +476,8 @@ start_llama() {
     fi
     create_fifos
     watch_llama &
-    # Stays open until this process exits. That close
-    # is what tells the watcher to kill llama-cli.
+    WATCH_PID=$!
+    # Close this to stop llama-cli. The watcher kills it and removes the fifos.
     exec 5>"$FIFO_DIRECTORY/lifeline" || die "cannot open llama lifeline"
     # Stdout, then stdin. Each open unblocks the matching llama-cli redirect.
     exec 4<"$FIFO_DIRECTORY/output" || die "cannot open llama-cli output"
@@ -488,8 +489,7 @@ create_fifos() {
         die "cannot create fifo directory"
     FIFO_DIRECTORY="${TMPDIR:-/tmp}/ssa-$PID"
     mkfifo "$FIFO_DIRECTORY/lifeline" "$FIFO_DIRECTORY/input" \
-        "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" \
-        "$FIFO_DIRECTORY/turn" ||
+        "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" ||
         die "cannot create fifo"
 }
 
@@ -584,11 +584,8 @@ call_llama() {
 }
 
 send_user_message() {
-    print_log_slice "$CHUNK_START" "$CHUNK_END" >"$FIFO_DIRECTORY/turn" &
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s\\\n' "$LINE" >&3 || die "llama-cli exited; see README.md"
-    done <"$FIFO_DIRECTORY/turn" || die "cannot read user message"
-    wait "$!" || die "cannot read user message"
+    print_log_slice "$CHUNK_START" "$CHUNK_END" | sed 's/$/\\/' >&3 ||
+        die "llama-cli exited; see README.md"
     printf '\n' >&3 || die "llama-cli exited; see README.md"
 }
 
@@ -597,11 +594,14 @@ log_llama_output() {
     FIRST_REPLY_LINE=1
     while :; do
         IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
+        LINE=$(printf '%s\n' "$LINE" | strip_trailing_carriage_return)
         if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
             LINE=$(printf '%s\n' "$LINE" | sed 's/^> \{0,1\}//')
+            if [ -z "$LINE" ]; then
+                continue
+            fi
             FIRST_REPLY_LINE=0
         fi
-        LINE=$(printf '%s\n' "$LINE" | strip_trailing_carriage_return)
         printf '%s\n' "$LINE" >>"$LOG_FILE" || die "cannot append log"
         printf '%s\n' "$LINE" | sanitize_output || die "cannot show reply"
         if [ "$LINE" = '# end' ]; then
@@ -897,7 +897,7 @@ print_action_body() {
 }
 
 print_model_reply() {
-    print_log_slice "$REPLY_START" "$REPLY_END" | sed '1s/^> \{0,1\}//'
+    print_log_slice "$REPLY_START" "$REPLY_END"
 }
 
 print_log_slice() {
@@ -937,8 +937,9 @@ log_line_count() {
 }
 
 finish_agent_loop() {
+    stop_llama
     log_run_end "completed"
-    exec 5>&- || :
+    clean_up_fifos
     printf 'log file: %s\n' "$LOG_FILE"
     printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
     exit 0
@@ -950,6 +951,7 @@ die() {
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
         printf 'log file: %s\n' "$LOG_FILE" >&2
     fi
+    stop_llama
     log_run_end "die: $*"
     clean_up_fifos
     if [ "$(exec sh -c 'echo "$PPID"')" != "$$" ] && [ -n "${PID:-}" ]; then
@@ -958,12 +960,25 @@ die() {
     exit 1
 }
 
-clean_up_fifos() {
-    # The write end stays open in this process.
-    # The watcher closes its read end, then removes the pipes.
-    if [ -n "${FIFO_DIRECTORY:-}" ] && ! (true >&5) 2>/dev/null; then
-        rm -rf "$FIFO_DIRECTORY" || :
+stop_llama() {
+    if [ -z "$WATCH_PID" ]; then
+        return
     fi
+    # The watcher blocks in open until this write end
+    # exists. Kill it there so the wait can return.
+    if (true >&5) 2>/dev/null; then
+        if (true >&3) 2>/dev/null; then
+            exec 3>&-
+        fi
+        if (true <&4) 2>/dev/null; then
+            exec 4<&-
+        fi
+        exec 5>&-
+    else
+        kill -KILL "$WATCH_PID" 2>/dev/null || :
+    fi
+    wait "$WATCH_PID" || :
+    WATCH_PID=""
 }
 
 log_run_end() {
@@ -972,6 +987,14 @@ log_run_end() {
     fi
     printf '\ntime: %s\n' "$(date '+%Y-%m-%d_%H.%M.%S')" >>"$LOG_FILE" || :
     printf 'status: %s\n' "$1" >>"$LOG_FILE" || :
+}
+
+clean_up_fifos() {
+    # The write end stays open in this process.
+    # The watcher closes its read end, then removes the pipes.
+    if [ -n "${FIFO_DIRECTORY:-}" ] && ! (true >&5) 2>/dev/null; then
+        rm -rf "$FIFO_DIRECTORY" || :
+    fi
 }
 
 main "$@"
