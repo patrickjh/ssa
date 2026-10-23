@@ -36,9 +36,10 @@ TASK=""
 USER_REJECTION_REASON=""
 
 SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. The
-task for this run is at the end of this system prompt. Later turns are
-prior commands and their output. Continue from there with exactly one
-of the reply formats below.
+task for this run is at the end of this system prompt. After the first
+turn, each user message is the output or the error from your last
+reply. You already have that reply. Continue from there with exactly
+one of the reply formats below.
 No markdown fences, no thinking tags. Put reasoning in # comments.
 End every reply with a line that is exactly # end.
 Put nothing after that line.'
@@ -71,10 +72,11 @@ world
 
 REPLY_SPEC_EDIT=\
 'An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
-block must match exactly once. The next line is # end. A body line
-must not be exactly # end. A search or replace line must not be
-exactly ======= or >>>>>>> REPLACE. Prefer this for edits over sed
-and other POSIX tools because this has no quoting issues. Example:
+block must not be empty and must match exactly once. The line after
+the replace marker is # end. A body line must not be exactly # end.
+A search or replace line must not be exactly ======= or
+>>>>>>> REPLACE. Prefer this for edits over sed and other POSIX
+tools because this has no quoting issues. Example:
 
 # reasoning: edit the hello.txt file
 # edit file: hello.txt
@@ -167,8 +169,7 @@ END {
 
 EDIT_FILE_AWK='
 function fail(message) {
-    print message | "cat >&2"
-    close("cat >&2")
+    print message
     fail_called = 1
     exit 1
 }
@@ -938,17 +939,15 @@ finish_agent_loop() {
 }
 
 die() {
-    trap '' PIPE
+    trap '' PIPE USR1
     printf '%s\n' "$*" >&2
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
         printf 'log file: %s\n' "$LOG_FILE" >&2
     fi
     log_run_end "die: $*"
     clean_up_fifos
-    if [ -n "${PID:-}" ]; then
+    if [ "$(exec sh -c 'echo "$PPID"')" != "$$" ] && [ -n "${PID:-}" ]; then
         kill -USR1 "$PID" 2>/dev/null || :
-    else
-        printf 'PID not set; cannot signal parent process\n' >&2
     fi
     exit 1
 }

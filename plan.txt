@@ -132,45 +132,6 @@ action error. Save that status, log it, and
 continue the loop. A failed append to the
 log is still a harness failure.
 
-17) die must not signal itself
-
-die sends USR1 to the startup PID. In the
-main process that PID is this process. The
-USR1 trap exits, so die can be cut off by
-its own signal. The signal is there so a
-subshell can stop the main process.
-
-Ignore USR1 while die runs. Signal the main
-process only from a subshell. In the main
-process, finish the log and the fifo
-cleanup, then exit 1.
-
-18) Tell the model what a later turn is
-
-The intro says later turns are prior
-commands and their output. After the first
-turn, each user message is the output or
-the error from the last reply. The model
-already has that reply.
-
-Say that. Leave the first turn as the
-stdin context.
-
-The edit spec says the search block must
-match exactly once. The next sentence says
-the next line is # end. That sentence sits
-after the search block, so the model can
-end the reply there.
-
-Say the search block must not be empty and
-must match exactly once. Say the line after
-the replace marker is # end.
-
-The edit program sends a failure through
-cat on stderr. The caller already takes
-stderr with stdout. Print the message and
-drop the cat.
-
 19) Simplify README and keep it abstract
 
 AGENTS.md says the help stays short: how
