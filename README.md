@@ -10,7 +10,7 @@ succeeds.
 This file is the help. The program has no `-h` or `--help`.
 
 On `PATH`, `ssa` needs `awk`, `cat`, `date`, `grep`, `head`,
-`mkdir`, `mkfifo`, `rm`, `sed`, `sh`, `tr`, and `wc`, plus
+`mkdir`, `mkfifo`, `pwd`, `rm`, `sed`, `sh`, `tr`, and `wc`, plus
 `llama-cli` or `llama`. The build is the one on `PATH`. The
 flags `ssa` adds match current llama.cpp `llama-cli`. An
 older build may reject one of them.
@@ -63,11 +63,10 @@ run continues. The terminal bell rings when the ask,
 question, or message is ready, and whether a sound
 plays depends on the terminal.
 A body must not contain a line that is exactly
-`# end`. A search or replace block must not contain
-a line that is exactly `<<<<<<< SEARCH`, `=======`,
-or `>>>>>>> REPLACE`, or a line that starts with
-`# edit file:`. Non-blank text between
-`>>>>>>> REPLACE` and `# end` is rejected.
+`# end`. A search or replace line must not be
+exactly `=======` or `>>>>>>> REPLACE`. Non-blank
+text between `>>>>>>> REPLACE` and `# end` is
+rejected.
 `SSA_VERBOSE=1` shows progress on
 stdout: the log path, llama-cli load text and errors,
 each model line, script output, write and edit results,

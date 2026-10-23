@@ -268,9 +268,12 @@ check_posix_commands() {
     check_command date
     check_command grep
     check_command head
+    check_command mkdir
     check_command mkfifo
+    check_command pwd
     check_command rm
     check_command sed
+    check_command sh
     check_command tr
     check_command wc
 }

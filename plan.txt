@@ -47,41 +47,6 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-3) README edit markers do not match ssa
-
-README says a search or replace block must not
-contain a line that is exactly <<<<<<< SEARCH,
-=======, or >>>>>>> REPLACE, or a line that
-starts with # edit file:.
-
-The edit reply spec only forbids a search or
-replace line that is exactly ======= or
->>>>>>> REPLACE. The format check and the
-edit program allow <<<<<<< SEARCH and a line
-that starts with # edit file: inside the
-search block and the replace block.
-
-Make README and ssa agree. The reply spec
-already matches the checks.
-
-4) README lists mkdir and sh
-
-README says ssa needs awk, cat, date, grep,
-head, mkdir, mkfifo, rm, sed, sh, tr, and wc
-on PATH.
-
-check_posix_commands checks awk, cat, date,
-grep, head, mkfifo, rm, sed, tr, and wc. It
-does not check mkdir or sh.
-
-ssa calls mkdir for the fifo directory. A
-missing mkdir dies as cannot create fifo
-directory and does not name mkdir. sh runs
-the program, sh -n, and each script.
-
-Check mkdir and sh the same way as the other
-tools, or drop them from README.
-
 5) README says the log records the flags
 
 README says the log starts with the time and
