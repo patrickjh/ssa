@@ -173,15 +173,17 @@ function fail(message) {
     exit 1
 }
 
-function load_file(line, total) {
+function load_file(line, total, status) {
+    if (ENVIRON["FILE_SIZE"] == "") fail("cannot read file")
     file_lines_count = 0
-    while ((getline line < ENVIRON["FILE_TO_EDIT"]) > 0) {
+    while ((status = (getline line < ENVIRON["FILE_TO_EDIT"])) > 0) {
         file_lines_count++
         file_array[file_lines_count] = line
         if (file_lines_count > 1) total++
         total += length(line)
     }
     close(ENVIRON["FILE_TO_EDIT"])
+    if (status < 0) fail("cannot read file")
     if (file_lines_count == 0) return
     if (total + 1 == ENVIRON["FILE_SIZE"] + 0) file_has_final_newline = 1
     else if (total != ENVIRON["FILE_SIZE"] + 0) fail("cannot read file")

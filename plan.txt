@@ -36,16 +36,6 @@ SSA_LLAMA_CLI_ARGUMENTS so a reply is not cut off
 before "# end" when the user omits -n. The user's
 arguments still come later and can override it.
 
-6) Say when an edit cannot read the file
-
-If the edit path is missing, a directory, or not
-readable, wc -c fails and FILE_SIZE is empty. The
-edit awk then reports that the search matched 0
-times.
-
-In the edit awk, fail with "cannot read file" when
-FILE_SIZE is empty or when reading the file fails.
-
 7) Close llama-cli before the run status is logged
 
 finish_agent_loop, die, and the hangup, interrupt,
