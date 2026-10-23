@@ -47,20 +47,6 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-10) Send the user turn in the current shell
-
-call_llama pipes the log slice into
-send_user_message. A pipeline subshell resets
-the PIPE trap. If llama-cli is already gone,
-the write gets SIGPIPE and the subshell dies
-before die runs. The loop status is not
-checked, so the run continues into the read
-and dies there.
-
-Send that turn in the current shell. If the
-write fails because llama-cli has exited, die
-with the llama-cli message.
-
 11) Do not block forever on the stderr fifo
 
 The stderr reader opens the fifo for read and

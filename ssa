@@ -484,7 +484,8 @@ create_fifos() {
     FIFO_DIRECTORY="${TMPDIR:-/tmp}/ssa-$PID"
     mkdir -m 700 "$FIFO_DIRECTORY" || die "cannot create fifo directory"
     mkfifo "$FIFO_DIRECTORY/lifeline" "$FIFO_DIRECTORY/input" \
-        "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" ||
+        "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" \
+        "$FIFO_DIRECTORY/turn" ||
         die "cannot create fifo"
 }
 
@@ -565,7 +566,7 @@ log_stdin_context() {
 }
 
 call_llama() {
-    print_log_slice "$CHUNK_START" "$CHUNK_END" | send_user_message
+    send_user_message
     USER_REJECTION_REASON=""
     log_llama_output
     REPLY_START=$CHUNK_START
@@ -573,9 +574,11 @@ call_llama() {
 }
 
 send_user_message() {
+    print_log_slice "$CHUNK_START" "$CHUNK_END" >"$FIFO_DIRECTORY/turn" &
     while IFS= read -r LINE || [ -n "$LINE" ]; do
         printf '%s\\\n' "$LINE" >&3 || die "llama-cli exited; see README.md"
-    done || die "cannot read user message"
+    done <"$FIFO_DIRECTORY/turn" || die "cannot read user message"
+    wait "$!" || die "cannot read user message"
     printf '\n' >&3 || die "llama-cli exited; see README.md"
 }
 
