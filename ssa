@@ -20,7 +20,6 @@ SSA_VERBOSE="${SSA_VERBOSE:-0}"
 CHUNK_END=0
 CHUNK_START=0
 FIFO_DIRECTORY=""
-FILE_TO_EDIT=""
 LLAMA_REVERSE_PROMPT='
 # end
 '
@@ -219,7 +218,7 @@ function apply_edit(number, offset) {
         number += search_count - 1
     }
     if (file_has_final_newline && wrote_line)
-      printf("\n") > ENVIRON["FILE_TO_EDIT"]
+        printf("\n") > ENVIRON["FILE_TO_EDIT"]
     if (close(ENVIRON["FILE_TO_EDIT"]) != 0) fail("cannot write file")
 }
 
@@ -661,7 +660,6 @@ handle_edit_request() {
     elif EDIT_FORMAT_ERROR=$(edit_reply_format_error); then
         record_format_error "$EDIT_FORMAT_ERROR"
     elif ask_to_run_action; then
-        FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
         apply_edit_request
     fi
 }
@@ -681,6 +679,7 @@ first_action_line() {
 }
 
 apply_edit_request() {
+    FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
     if [ ! -f "$FILE_TO_EDIT" ]; then
         record_edit_failure "$FILE_TO_EDIT" "file not found"
     elif file_contains_nul "$FILE_TO_EDIT"; then
@@ -747,7 +746,7 @@ show_model_reply() {
 }
 
 handle_user_answers() {
-    while true; do
+    while :; do
         printf '\nApply this action? [Y]es / [N]o / [Q]uit ' >/dev/tty ||
             die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
         read_ask_answer_from_tty
@@ -837,7 +836,7 @@ log_user_rejection_reason() {
 }
 
 handle_question_request() {
-    if [ "$SSA_NO_QUESTIONS" != 0 ]; then
+    if ! [ "$SSA_NO_QUESTIONS" = 0 ]; then
         record_format_error "# question is not allowed"
     elif ! print_action_body '^# question$' | grep -q '[^[:space:]]'; then
         record_format_error "the question was empty"
@@ -858,7 +857,7 @@ ask_question() {
 }
 
 handle_message_request() {
-    if [ "$SSA_NO_MESSAGES" != 0 ]; then
+    if ! [ "$SSA_NO_MESSAGES" = 0 ]; then
         record_format_error "# message is not allowed"
     elif ! print_action_body '^# message$' | grep -q '[^[:space:]]'; then
         record_format_error "the message was empty"
@@ -927,6 +926,14 @@ log_line_count() {
     wc -l <"$LOG_FILE" | tr -d '[:space:]'
 }
 
+finish_agent_loop() {
+    log_run_end "completed"
+    exec 5>&- || :
+    printf 'log file: %s\n' "$LOG_FILE"
+    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
+    exit 0
+}
+
 die() {
     trap '' PIPE
     printf '%s\n' "$*" >&2
@@ -949,16 +956,6 @@ clean_up_fifos() {
     if [ -n "${FIFO_DIRECTORY:-}" ] && ! (true >&5) 2>/dev/null; then
         rm -rf "$FIFO_DIRECTORY" || :
     fi
-}
-
-finish_agent_loop() {
-    log_run_end "completed"
-    exec 5>&- || :
-    if [ "$SSA_VERBOSE" = 1 ]; then
-        printf 'log file: %s\n' "$LOG_FILE"
-    fi
-    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
-    exit 0
 }
 
 log_run_end() {

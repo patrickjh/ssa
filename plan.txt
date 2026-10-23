@@ -47,69 +47,6 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-7) FILE_TO_EDIT is set once and read once
-
-AGENTS.md says a value used in one place
-should be written there. Keep a top-level
-variable when the same fact is read again
-later.
-
-FILE_TO_EDIT is in the internal block. The
-edit handler sets it, and only the function
-that applies the edit reads it. The write
-path is set inside the function that writes
-the file, and it is not top-level.
-
-Set the edit path in the function that
-applies the edit. Drop FILE_TO_EDIT from
-the internal block.
-
-8) Function order and the call graph
-
-AGENTS.md says each function sits below its
-last caller. Callees of the same caller stay
-in call order. A callee's own callees sit
-under it before the parent's next call.
-main is already ordered that way.
-
-finish_agent_loop is called only from main,
-as the last call. It sits below die and
-clean_up_fifos. Those two do not call it.
-
-show_message calls print_action_body, then
-sanitize_output, then ring_terminal.
-print_model_reply and print_log_slice sit
-under print_action_body, before
-sanitize_output. That matches the rule.
-
-Move finish_agent_loop so it follows the
-rule. Leave the show_message block.
-
-9) Style in ssa is not one form
-
-One line in the edit awk program is indented
-two spaces. The other lines in that program
-use four.
-
-The write, edit, and script handlers test
-the flag with if ! [ "$SSA_NO_..." = 0 ].
-The question and message handlers test with
-if [ "$SSA_NO_..." != 0 ].
-
-Two loops use while :. The ask loop uses
-while true.
-
-finish_agent_loop prints the log path only
-when SSA_VERBOSE is 1. Stdout is already
-/dev/null when SSA_VERBOSE is 0, and the
-done line is printed with no such test.
-
-Use four spaces in the edit awk program.
-Use if ! [ "$SSA_NO_..." = 0 ] for questions
-and messages. Use while : in the ask loop.
-Print the log path the same way as the done
-line.
-
 10) Send the user turn in the current shell
 
 call_llama pipes the log slice into
