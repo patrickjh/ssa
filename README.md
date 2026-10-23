@@ -33,9 +33,9 @@ Each turn the model does one thing: run a script, write
 a file, edit a file, ask a question, or show a message.
 You approve a script, a write, and an edit unless
 `SSA_NO_ASK=1`. A question or a message is shown without
-that approval. The run ends when the model finishes the
-task, or when scripts, writes, edits, questions, and
-messages are all turned off.
+that approval. The run ends when the model completes
+the task or the user quits. At least one action must
+stay on.
 
 One log file is written per run, under `SSA_LOG_FOLDER`,
 and it stays after exit. `SSA_VERBOSE=1` shows progress

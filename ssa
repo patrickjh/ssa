@@ -24,7 +24,6 @@ LLAMA_REVERSE_PROMPT='
 # end
 '
 LOG_FILE=""
-OUTPUT_END=0
 OUTPUT_START=0
 PID=$$
 PROMPT_COUNTER=0
@@ -122,7 +121,7 @@ CHECK_EDIT_FORMAT_AWK='
 function reject(message) {
     print message
     rejected = 1
-    exit 0
+    exit 1
 }
 
 search_found && !middle_found && $0 != "=======" {
@@ -157,13 +156,13 @@ $0 == ">>>>>>> REPLACE" {
 }
 
 END {
-    if (rejected) exit 0
+    if (rejected) exit 1
     if (replace_found && search_count == 0) print "search block is empty"
-    else if (replace_found) exit 1
+    else if (replace_found) exit 0
     else if (!search_found) print "the search marker is missing"
     else if (!middle_found) print "the middle marker is missing"
     else print "the replace marker is missing"
-    exit 0
+    exit 1
 }
 '
 
@@ -265,20 +264,10 @@ main() {
 }
 
 check_posix_commands() {
-    check_command awk
-    check_command cat
-    check_command date
-    check_command grep
-    check_command head
-    check_command mkdir
-    check_command mkfifo
-    check_command pwd
-    check_command rm
-    check_command sed
-    check_command sh
-    check_command tail
-    check_command tr
-    check_command wc
+    for COMMAND in awk cat date grep head mkdir mkfifo pwd rm sed sh tail tr wc
+    do
+        check_command "$COMMAND"
+    done
 }
 
 check_command() {
@@ -296,13 +285,13 @@ check_llama() {
 
 check_can_run() {
     check_task
-    check_no_ask
-    check_no_edits
-    check_no_messages
-    check_no_questions
-    check_no_scripts
-    check_no_writes
-    check_verbose
+    check_zero_or_one "$SSA_NO_ASK" "SSA_NO_ASK"
+    check_zero_or_one "$SSA_NO_EDITS" "SSA_NO_EDITS"
+    check_zero_or_one "$SSA_NO_MESSAGES" "SSA_NO_MESSAGES"
+    check_zero_or_one "$SSA_NO_QUESTIONS" "SSA_NO_QUESTIONS"
+    check_zero_or_one "$SSA_NO_SCRIPTS" "SSA_NO_SCRIPTS"
+    check_zero_or_one "$SSA_NO_WRITES" "SSA_NO_WRITES"
+    check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
     check_log_folder
     check_llama_cli_arguments
     check_tty
@@ -313,45 +302,9 @@ check_task() {
     [ -n "$TASK" ] || die "task not found on CLI; see README.md"
 }
 
-check_no_ask() {
-    if [ "$SSA_NO_ASK" != 0 ] && [ "$SSA_NO_ASK" != 1 ]; then
-        die "SSA_NO_ASK must be 0 or 1; see README.md"
-    fi
-}
-
-check_no_edits() {
-    if [ "$SSA_NO_EDITS" != 0 ] && [ "$SSA_NO_EDITS" != 1 ]; then
-        die "SSA_NO_EDITS must be 0 or 1; see README.md"
-    fi
-}
-
-check_no_messages() {
-    if [ "$SSA_NO_MESSAGES" != 0 ] && [ "$SSA_NO_MESSAGES" != 1 ]; then
-        die "SSA_NO_MESSAGES must be 0 or 1; see README.md"
-    fi
-}
-
-check_no_questions() {
-    if [ "$SSA_NO_QUESTIONS" != 0 ] && [ "$SSA_NO_QUESTIONS" != 1 ]; then
-        die "SSA_NO_QUESTIONS must be 0 or 1; see README.md"
-    fi
-}
-
-check_no_scripts() {
-    if [ "$SSA_NO_SCRIPTS" != 0 ] && [ "$SSA_NO_SCRIPTS" != 1 ]; then
-        die "SSA_NO_SCRIPTS must be 0 or 1; see README.md"
-    fi
-}
-
-check_no_writes() {
-    if [ "$SSA_NO_WRITES" != 0 ] && [ "$SSA_NO_WRITES" != 1 ]; then
-        die "SSA_NO_WRITES must be 0 or 1; see README.md"
-    fi
-}
-
-check_verbose() {
-    if [ "$SSA_VERBOSE" != 0 ] && [ "$SSA_VERBOSE" != 1 ]; then
-        die "SSA_VERBOSE must be 0 or 1; see README.md"
+check_zero_or_one() {
+    if [ "$1" != 0 ] && [ "$1" != 1 ]; then
+        die "$2 must be 0 or 1; see README.md"
     fi
 }
 
@@ -594,7 +547,7 @@ log_llama_output() {
     FIRST_REPLY_LINE=1
     while :; do
         IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
-        LINE=$(printf '%s\n' "$LINE" | strip_trailing_carriage_return)
+        LINE=$(printf '%s\n' "$LINE" | sed "s/$(printf '\r')\$//")
         if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
             LINE=$(printf '%s\n' "$LINE" | sed 's/^> \{0,1\}//')
             if [ -z "$LINE" ]; then
@@ -603,16 +556,14 @@ log_llama_output() {
             FIRST_REPLY_LINE=0
         fi
         printf '%s\n' "$LINE" >>"$LOG_FILE" || die "cannot append log"
-        printf '%s\n' "$LINE" | sanitize_output || die "cannot show reply"
+        if [ "$SSA_VERBOSE" = 1 ]; then
+            printf '%s\n' "$LINE" | sanitize_output || die "cannot show reply"
+        fi
         if [ "$LINE" = '# end' ]; then
             break
         fi
     done
     end_log_chunk
-}
-
-strip_trailing_carriage_return() {
-    sed "s/$(printf '\r')\$//"
 }
 
 handle_model_response() {
@@ -673,8 +624,12 @@ handle_edit_request() {
     elif edit_body_has_repeated_marker_line '>>>>>>> REPLACE'; then
         record_format_error \
             "a search or replace line must not be exactly >>>>>>> REPLACE"
-    elif edit_format_is_ok && ask_to_run_action; then
-        apply_edit_request
+    elif EDIT_FORMAT_MESSAGE=$(edit_format_is_ok); then
+        if ask_to_run_action; then
+            apply_edit_request
+        fi
+    else
+        record_format_error "$EDIT_FORMAT_MESSAGE"
     fi
 }
 
@@ -683,10 +638,7 @@ edit_body_has_repeated_marker_line() {
 }
 
 edit_format_is_ok() {
-    EDIT_FORMAT_MESSAGE=$(print_model_reply |
-        LC_ALL=C awk "$CHECK_EDIT_FORMAT_AWK") || return 0
-    record_format_error "$EDIT_FORMAT_MESSAGE"
-    return 1
+    print_model_reply | LC_ALL=C awk "$CHECK_EDIT_FORMAT_AWK"
 }
 
 apply_edit_request() {
@@ -696,7 +648,7 @@ apply_edit_request() {
         FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" 2>/dev/null | tr -d '[:space:]')" \
         LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1)
     if [ $? -eq 0 ]; then
-        record_output_line "$(printf 'edited file: %s' "$FILE_TO_EDIT")" 0
+        record_output_line "edited file: $FILE_TO_EDIT" 0
     elif [ -n "$EDIT_AWK_MESSAGE" ]; then
         record_output_line "edit failed: $FILE_TO_EDIT: $EDIT_AWK_MESSAGE" 1
     else
@@ -796,7 +748,7 @@ ask_user_for_rejection_reason() {
 run_script() {
     begin_action_message
     # Close llama input, output, and the lifeline. The script must not
-    #hold them. Fd 4 carries the exit code. Fd 3 is the log.
+    # hold them. Fd 4 carries the exit code. Fd 3 is the log.
     ACTION_EXIT_CODE=$(
         exec 4>&1
         exec 3>>"$LOG_FILE"
@@ -828,8 +780,10 @@ script_payload() {
 
 finish_action_message() {
     OUTPUT_END=$(log_line_count)
-    print_log_slice "$OUTPUT_START" "$OUTPUT_END" ||
-         die "cannot show action output"
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        print_log_slice "$OUTPUT_START" "$OUTPUT_END" | sanitize_output ||
+            die "cannot show action output"
+    fi
     log_user_rejection_reason
     if [ "$OUTPUT_END" -lt "$OUTPUT_START" ]; then
         append_log 'Action exit code: %s\n' "$1"
