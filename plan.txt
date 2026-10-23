@@ -47,38 +47,6 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-5) README says the log records the flags
-
-README says the log starts with the time and
-directory, then the version, each SSA_* value,
-and the flags.
-
-The log writes the time, the directory, the
-llama-cli version, and each SSA_* value. The
-llama-cli flags are only the
-SSA_LLAMA_CLI_ARGUMENTS line. Nothing else
-records the flags. The next block is the
-system prompt.
-
-Update README so it describes that header.
-
-6) README says stderr follows the status
-
-README says # llama-cli stderr is appended
-when llama-cli exits, so that block follows
-the status line.
-
-On a completed run, the status is written,
-then the lifeline closes, then the stderr
-copy appends that block. When llama-cli
-exits early, the stderr copy and die both
-write the log. The stderr block can land
-before the status line.
-
-Make the stderr block follow the status
-line, or change README to say it can come
-first when llama-cli exits early.
-
 7) FILE_TO_EDIT is set once and read once
 
 AGENTS.md says a value used in one place
@@ -279,3 +247,23 @@ The edit program sends a failure through
 cat on stderr. The caller already takes
 stderr with stdout. Print the message and
 drop the cat.
+
+19) Simplify README and keep it abstract
+
+AGENTS.md says the help stays short: how
+to run, the environment, one loop
+paragraph, and the exit codes. Copy ssa
+only as far as a person needs to run it.
+
+README now names each tool on PATH, the
+reply markers, each log field in order,
+and the llama-cli flags ssa passes. Those
+lines follow the program. They have to
+change when ssa changes, and they are
+more than a person needs to start a run.
+
+Rewrite README in broader terms. Keep
+how to run, the settings, and the exit
+codes. Describe the loop and the log in
+a few sentences. Leave the marker rules,
+the log layout, and the flag list in ssa.

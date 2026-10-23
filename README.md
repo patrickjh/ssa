@@ -100,12 +100,16 @@ the second, then the PID, and `.ssalog`. It is under
 printed at the start and again before the done line.
 A failure prints the path on stderr after the error.
 If llama-cli exits, the die message says so.
-The log starts with the time and directory, then the
-version, each `SSA_*` value, and the flags. The main
+The log starts with the time and the directory, then
+the llama-cli version and each `SSA_*` value. The
+flags are only the `SSA_LLAMA_CLI_ARGUMENTS` line.
+The next block is the system prompt. The main
 process writes the end time and the status, and
 exits without waiting on llama-cli.
 `# llama-cli stderr` is appended when llama-cli
-exits, so that block follows the status line.
+exits. On a completed run that block follows
+the status line. When llama-cli exits early,
+the block can come first.
 NUL bytes in stdin and in script output are removed
 before they are logged. An edit fails when the file
 contains a NUL.
