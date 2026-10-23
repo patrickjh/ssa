@@ -47,21 +47,6 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-4) Strip the prompt mark before the end line
-
-The first reply line can start with "> ".
-The carriage return on "# end" is stripped
-before that mark is removed. A first line
-"> # end" with a carriage return is logged
-with the mark and the return still on it.
-Later reads of that line are not exactly
-"# end".
-
-Remove the prompt mark first, then strip the
-carriage return, and log that line. A first
-line that is the end marker must be stored
-as "# end".
-
 5) Check an edit before the ask
 
 An empty search block passes the format

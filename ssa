@@ -594,13 +594,12 @@ log_llama_output() {
     FIRST_REPLY_LINE=1
     while :; do
         IFS= read -r LLAMA_LINE <&4 || die "llama-cli exited; see README.md"
-        LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sanitize_end_line)
-        printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" || die "cannot append log"
         if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
-            LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" |
-                sed 's/^> \{0,1\}//' | sanitize_end_line)
+            LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sed 's/^> \{0,1\}//')
             FIRST_REPLY_LINE=0
         fi
+        LLAMA_LINE=$(printf '%s\n' "$LLAMA_LINE" | sanitize_end_line)
+        printf '%s\n' "$LLAMA_LINE" >>"$LOG_FILE" || die "cannot append log"
         printf '%s\n' "$LLAMA_LINE" | sanitize_output || die "cannot show reply"
         if [ "$LLAMA_LINE" = '# end' ]; then
             break
@@ -804,9 +803,8 @@ ask_user_for_rejection_reason() {
 
 run_script() {
     begin_action_message
-    # Close llama input, output, and the lifeline.
-    # The script must not hold them.
-    # Fd 4 carries the exit code. Fd 3 is the log.
+    # Close llama input, output, and the lifeline. The script must not
+    #hold them. Fd 4 carries the exit code. Fd 3 is the log.
     ACTION_EXIT_CODE=$(
         exec 4>&1
         exec 3>>"$LOG_FILE"
