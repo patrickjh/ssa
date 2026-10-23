@@ -496,6 +496,10 @@ watch_llama() {
     set -f
     umask 077
     copy_llama_stderr &
+    # A writer that is not llama-cli, so the reader's
+    # open cannot wait on llama-cli. Closed after kill
+    # so the reader finishes and wait can return.
+    exec 6>"$FIFO_DIRECTORY/stderr" || exit 1
     # shellcheck disable=SC2086
     exec_llama \
         -sys "$SYSTEM_PROMPT" \
@@ -509,6 +513,7 @@ watch_llama() {
         --keep -1 \
         $SSA_LLAMA_CLI_ARGUMENTS \
         --reverse-prompt "$LLAMA_REVERSE_PROMPT" \
+        6>&- \
         2>"$FIFO_DIRECTORY/stderr" \
         >"$FIFO_DIRECTORY/output" \
         <"$FIFO_DIRECTORY/input" &
@@ -516,6 +521,7 @@ watch_llama() {
     cat <&5 >/dev/null
     exec 5<&-
     kill -KILL "$LLAMA_PID" 2>/dev/null || :
+    exec 6>&-
     # Reap llama-cli and the stderr reader.
     wait
     clean_up_fifos
