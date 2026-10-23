@@ -117,16 +117,6 @@ print the action slice at all. Build the
 sanitize_output sed program once at startup so it
 does not fork a printf per line.
 
-11) Say where a # comment may go
-
-The system prompt says to put reasoning in #
-comments. A # line after the action header is
-rejected in an edit, and in a write, question, or
-message it becomes part of the body.
-
-Change that sentence so # comments go before the
-action line.
-
 12) Make ssa, AGENTS.md, and README.md agree
 
 edit_format_is_ok is used as a predicate and also

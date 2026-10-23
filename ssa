@@ -40,7 +40,8 @@ task for this run is at the end of this system prompt. After the first
 turn, each user message is the output or the error from your last
 reply. You already have that reply. Continue from there with exactly
 one of the reply formats below.
-No markdown fences, no thinking tags. Put reasoning in # comments.
+No markdown fences, no thinking tags. Put reasoning in # comments
+before the action line.
 End every reply with a line that is exactly # end.
 Put nothing after that line.'
 
