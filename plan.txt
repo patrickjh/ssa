@@ -36,18 +36,6 @@ SSA_LLAMA_CLI_ARGUMENTS so a reply is not cut off
 before "# end" when the user omits -n. The user's
 arguments still come later and can override it.
 
-5) Finish a script line that has no newline
-
-log_line_count uses wc -l, which counts newlines.
-If script output has no final newline, the last
-line is left out of the slice shown to the user,
-and "Action exit code:" is glued onto that line.
-
-After the script runs, if the log does not end with
-a newline, append one before finish_action_message
-measures the slice. Add tail to the tools checked
-at startup if the check uses tail.
-
 6) Say when an edit cannot read the file
 
 If the edit path is missing, a directory, or not

@@ -273,6 +273,7 @@ check_posix_commands() {
     check_command rm
     check_command sed
     check_command sh
+    check_command tail
     check_command tr
     check_command wc
 }
@@ -805,6 +806,9 @@ run_script() {
     )
     if [ $? -ne 0 ]; then
         die "cannot append log"
+    fi
+    if [ -n "$(tail -c 1 "$LOG_FILE")" ]; then
+        printf '\n' >>"$LOG_FILE" || die "cannot append log"
     fi
     finish_action_message "$ACTION_EXIT_CODE"
 }
