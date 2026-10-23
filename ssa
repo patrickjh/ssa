@@ -629,7 +629,8 @@ handle_model_response() {
 }
 
 action_path_is_missing() {
-    first_action_line | grep -q -E '^# (write|edit) file:[[:space:]]*$'
+    first_action_line | grep -q -E \
+        '^# (write|edit) file:([[:space:]]*$|[^ ]| [[:space:]])'
 }
 
 handle_write_request() {

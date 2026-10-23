@@ -75,21 +75,6 @@ carriage return, and log that line. A first
 line that is the end marker must be stored
 as "# end".
 
-13) A write or edit path needs a space
-
-The first action line matches "# write file:"
-and "# edit file:" with no space after the
-colon. The missing-path check only matches a
-blank path. "# write file:foo" or a tab
-before the path is not a missing path, and
-it does not match the write or edit handler.
-The reply is reported as having no action
-line.
-
-A path must come after one space, as in the
-reply spec. Any other shape means the path
-is missing. Say that.
-
 14) Check an edit before the ask
 
 An empty search block passes the format
