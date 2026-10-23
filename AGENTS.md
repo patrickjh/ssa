@@ -10,6 +10,10 @@ Open work is plan.txt. Change this file in place when a
 decision about editing, style, or scope changes. Behavior
 changes go in `ssa`. Cite no line numbers.
 
+When a task is done, delete it from plan.txt. Leave the
+numbers on the tasks that remain. Renumber only when
+asked.
+
 ## Layout
 
 One executable, `ssa`, POSIX `sh`, at or under 1000 lines,
