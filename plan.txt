@@ -48,16 +48,6 @@ sed to add the trailing backslash and write it to
 llama-cli, then print the blank line that ends the
 message. Drop the turn fifo from create_fifos.
 
-9) Do not set the fifo path until mkdir works
-
-create_fifos sets FIFO_DIRECTORY before mkdir. If
-mkdir fails because that path exists, die removes
-it with rm -rf.
-
-Set FIFO_DIRECTORY only after mkdir succeeds, or
-clear it when mkdir fails, the same way setup_log
-clears LOG_FILE.
-
 10) Sanitize action output, and skip it when quiet
 
 finish_action_message prints the script output with

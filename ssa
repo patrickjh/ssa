@@ -484,8 +484,9 @@ start_llama() {
 }
 
 create_fifos() {
+    mkdir -m 700 "${TMPDIR:-/tmp}/ssa-$PID" ||
+        die "cannot create fifo directory"
     FIFO_DIRECTORY="${TMPDIR:-/tmp}/ssa-$PID"
-    mkdir -m 700 "$FIFO_DIRECTORY" || die "cannot create fifo directory"
     mkfifo "$FIFO_DIRECTORY/lifeline" "$FIFO_DIRECTORY/input" \
         "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" \
         "$FIFO_DIRECTORY/turn" ||
