@@ -8,18 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-4) Say how to fix a missing tool
-
-AGENTS.md says a missing tool on PATH should
-tell the user to install it or put it on PATH.
-The checks die with "not found on PATH" and
-"llama-cli or llama not found on PATH". Neither
-says that.
-
-Name the tool. Say to install it or put it on
-PATH. One short clause. Do not add a "set ENV"
-hint. A missing tool is not a setting.
-
 5) Spell out short names
 
 AGENTS.md forbids abbreviations. argument, not

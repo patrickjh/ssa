@@ -286,8 +286,7 @@ check_llama() {
     fi
     command -v llama >/dev/null 2>&1 ||
         die "llama-cli or llama not found on PATH"
-    llama cli --version >/dev/null 2>&1 ||
-        die "llama cli --version failed"
+    llama cli --version >/dev/null 2>&1 || die "llama cli --version failed"
 }
 
 check_can_run() {

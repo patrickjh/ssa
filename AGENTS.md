@@ -152,8 +152,8 @@ Keep hints one short clause after a semicolon. Prefer
 Skip a "set ENV" hint when it would mislead:
 
 - Internal harness failures (transcript I/O, temp folder setup).
-- Missing OS tools on `PATH` (`llama-cli`, `head`, …). Say to
-  install the tool or put it on `PATH`.
+- Missing OS tools on `PATH` (`llama-cli`, `head`, …). Name
+  the tool and say it was not found on `PATH`.
 - Failures outside the harness (missing model file, `llama-cli`
   exits).
 
