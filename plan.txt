@@ -7,3 +7,157 @@ compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
+
+2) Strip the llama-cli prompt prefix
+
+llama-cli prints a blank line, then "> ", before the
+reply. log_llama_output only strips "> " from the
+first line it reads, so that blank line uses up the
+strip and the next line still starts with "> ".
+first_action_line then misses "# script",
+"# complete", and the other action lines.
+
+In log_llama_output, while the first real line has
+not been seen, strip a leading "> " and skip blank
+lines. Then drop the same strip from
+print_model_reply.
+
+3) Strip a trailing carriage return from every line
+
+sanitize_end_line only strips a trailing carriage
+return from "# end". If llama-cli emits CRLF, every
+other line keeps it. Action lines, edit markers, and
+file paths then fail to match.
+
+Strip a trailing carriage return from every line
+read in log_llama_output.
+
+4) Start llama-cli in conversation mode
+
+stdin is a fifo, so llama-cli does not see a
+terminal. Without conversation mode it reads stdin
+until EOF before the first turn, and that read
+never ends because ssa keeps the input fifo open.
+
+In watch_llama, pass --conversation (or
+--interactive-first) so llama-cli takes one turn at
+a time. Also pass -n -1 before
+SSA_LLAMA_CLI_ARGUMENTS so a reply is not cut off
+before "# end" when the user omits -n. The user's
+arguments still come later and can override it.
+
+5) Finish a script line that has no newline
+
+log_line_count uses wc -l, which counts newlines.
+If script output has no final newline, the last
+line is left out of the slice shown to the user,
+and "Action exit code:" is glued onto that line.
+
+After the script runs, if the log does not end with
+a newline, append one before finish_action_message
+measures the slice. Add tail to the tools checked
+at startup if the check uses tail.
+
+6) Say when an edit cannot read the file
+
+If the edit path is missing, a directory, or not
+readable, wc -c fails and FILE_SIZE is empty. The
+edit awk then reports that the search matched 0
+times.
+
+In the edit awk, fail with "cannot read file" when
+FILE_SIZE is empty or when reading the file fails.
+
+7) Close llama-cli before the run status is logged
+
+finish_agent_loop, die, and the hangup, interrupt,
+and terminate traps write the final time and status
+before watch_llama exits. llama-cli stderr can land
+in the log after that status, and die does not
+close the lifeline, so the fifo directory is left
+for the watcher to remove after ssa has exited.
+
+Close the llama input, output, and lifeline, then
+wait for watch_llama, before log_run_end. The
+stderr record then sits above the final time and
+status, and the fifos are gone before exit.
+
+8) Send the user message without a turn fifo
+
+send_user_message copies the log slice through the
+turn fifo in a background job. If llama-cli exits
+mid-message, die runs while that job still holds
+the lifeline.
+
+The log is already a file. Pipe the slice through
+sed to add the trailing backslash and write it to
+llama-cli, then print the blank line that ends the
+message. Drop the turn fifo from create_fifos.
+
+9) Do not set the fifo path until mkdir works
+
+create_fifos sets FIFO_DIRECTORY before mkdir. If
+mkdir fails because that path exists, die removes
+it with rm -rf.
+
+Set FIFO_DIRECTORY only after mkdir succeeds, or
+clear it when mkdir fails, the same way setup_log
+clears LOG_FILE.
+
+10) Sanitize action output, and skip it when quiet
+
+finish_action_message prints the script output with
+no sanitize_output pass. Every other path to the
+terminal does sanitize.
+
+When SSA_VERBOSE is 1, sanitize that slice. When
+SSA_VERBOSE is 0, stdout is already /dev/null, so
+do not run sanitize_output on each reply line or
+print the action slice at all. Build the
+sanitize_output sed program once at startup so it
+does not fork a printf per line.
+
+11) Say where a # comment may go
+
+The system prompt says to put reasoning in #
+comments. A # line after the action header is
+rejected in an edit, and in a write, question, or
+message it becomes part of the body.
+
+Change that sentence so # comments go before the
+action line.
+
+12) Make ssa, AGENTS.md, and README.md agree
+
+edit_format_is_ok is used as a predicate and also
+logs. A predicate stays pure: record the format
+error in handle_edit_request, and write the status
+at each return. check_llama and check_tty should
+follow that too.
+
+AGENTS.md says callees of one caller stay in call
+order. die calls log_run_end and then
+clean_up_fifos, but clean_up_fifos is above
+log_run_end. Task 7, which runs cleanup before the
+status line, also fixes that order.
+
+OUTPUT_END is set at the top and only used inside
+finish_action_message. Drop the top-level copy, or
+keep top-level and local state consistent. In
+apply_edit_request, the edited-file line does not
+need a printf subshell.
+
+watch_llama passes both --reasoning off and
+--reasoning-budget 0. Pass a flag only when its
+default does not already do the job, or note the
+exception in AGENTS.md.
+
+In run_script, the comment "#hold them." needs a
+space after #.
+
+README.md says the run ends when scripts, writes,
+edits, questions, and messages are all turned off.
+check_some_action_left rejects that at startup
+with status 1. Say the run ends when the model
+completes the task or the user quits, and that at
+least one action must stay on.
