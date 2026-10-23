@@ -47,20 +47,6 @@ SSA_NO_ASK=1, and still turns questions
 and messages off. No action left still
 stops the run.
 
-5) Check an edit before the ask
-
-An empty search block passes the format
-check. The file check, the NUL check, and
-the match count run only after the user
-approves. The ask runs for an edit that
-will fail as soon as it is applied.
-
-Reject an empty search block as a format
-error. Before the ask, check that the file
-exists, has no NUL, and the search matches
-once. Send that failure back without
-asking. Apply the edit only after a yes.
-
 6) Simplify README and keep it abstract
 
 AGENTS.md says the help stays short: how

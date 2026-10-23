@@ -123,45 +123,43 @@ function reject(message) {
     exit 0
 }
 
-replace_found {
-    if ($0 == "# end" || $0 ~ /^[[:space:]]*$/) next
+search_found && !middle_found && $0 != "=======" {
+    search_count++
+}
+
+replace_found && $0 != "# end" && $0 !~ /^[[:space:]]*$/ {
     reject("text after the replace marker")
 }
 
 !search_found && /^# edit file: ./ {
     if (edit_at) reject("the edit line is misplaced")
     edit_at = NR
-    next
 }
 
 !search_found && /^<<<<<<< SEARCH$/ {
     if (!edit_at || NR != edit_at + 1)
         reject("the search marker is misplaced")
     search_found = 1
-    next
 }
 
 $0 == "=======" {
     if (!edit_at || !search_found || middle_found)
         reject("the middle marker is misplaced")
     middle_found = 1
-    next
 }
 
 $0 == ">>>>>>> REPLACE" {
     if (!edit_at || !search_found || !middle_found)
         reject("the replace marker is misplaced")
     replace_found = 1
-    next
 }
 
 END {
     if (rejected) exit 0
-    if (replace_found) exit 1
-    if (!search_found)
-        print "the search marker is missing"
-    else if (!middle_found)
-        print "the middle marker is missing"
+    if (replace_found && search_count == 0) print "search block is empty"
+    else if (replace_found) exit 1
+    else if (!search_found) print "the search marker is missing"
+    else if (!middle_found) print "the middle marker is missing"
     else print "the replace marker is missing"
     exit 0
 }
@@ -670,9 +668,7 @@ handle_edit_request() {
     elif edit_body_has_repeated_marker_line '>>>>>>> REPLACE'; then
         record_format_error \
             "a search or replace line must not be exactly >>>>>>> REPLACE"
-    elif EDIT_FORMAT_ERROR=$(edit_reply_format_error); then
-        record_format_error "$EDIT_FORMAT_ERROR"
-    elif ask_to_run_action; then
+    elif edit_format_is_ok && ask_to_run_action; then
         apply_edit_request
     fi
 }
@@ -681,8 +677,26 @@ edit_body_has_repeated_marker_line() {
     [ "$(print_action_body '^# edit file: .' | grep -cxF -e "$1")" -gt 1 ]
 }
 
-edit_reply_format_error() {
-    print_model_reply | LC_ALL=C awk "$CHECK_EDIT_FORMAT_AWK"
+edit_format_is_ok() {
+    EDIT_FORMAT_MESSAGE=$(print_model_reply |
+        LC_ALL=C awk "$CHECK_EDIT_FORMAT_AWK") || return 0
+    record_format_error "$EDIT_FORMAT_MESSAGE"
+    return 1
+}
+
+apply_edit_request() {
+    FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
+    EDIT_AWK_MESSAGE=$(print_model_reply |
+        FILE_TO_EDIT="$FILE_TO_EDIT" \
+        FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" 2>/dev/null | tr -d '[:space:]')" \
+        LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1)
+    if [ $? -eq 0 ]; then
+        record_output_line "$(printf 'edited file: %s' "$FILE_TO_EDIT")" 0
+    elif [ -n "$EDIT_AWK_MESSAGE" ]; then
+        record_output_line "edit failed: $FILE_TO_EDIT: $EDIT_AWK_MESSAGE" 1
+    else
+        die "edit failed with no error text"
+    fi
 }
 
 first_action_line() {
@@ -691,37 +705,10 @@ first_action_line() {
         head -n 1
 }
 
-apply_edit_request() {
-    FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
-    if [ ! -f "$FILE_TO_EDIT" ]; then
-        record_edit_failure "$FILE_TO_EDIT" "file not found"
-    elif file_contains_nul "$FILE_TO_EDIT"; then
-        record_edit_failure "$FILE_TO_EDIT" "file contains a NUL"
-    elif ! ERROR=$(print_model_reply |
-            FILE_TO_EDIT="$FILE_TO_EDIT" \
-            FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" | tr -d '[:space:]')" \
-            LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1
-    ); then
-        [ -n "$ERROR" ] || die "edit failed with no error text"
-        record_edit_failure "$FILE_TO_EDIT" "$ERROR"
-    else
-        record_output_line "$(printf 'edited file: %s' "$FILE_TO_EDIT")" 0
-    fi
-}
-
-record_edit_failure() {
-    record_output_line "$(printf 'edit failed: %s: %s' "$1" "$2")" 1
-}
-
 record_output_line() {
     begin_action_message
     append_log '%s\n' "$1"
     finish_action_message "$2"
-}
-
-file_contains_nul() {
-    [ "$(wc -c <"$1" | tr -d '[:space:]')" -ne \
-        "$(tr -d '\000' <"$1" | wc -c | tr -d '[:space:]')" ]
 }
 
 handle_script_request() {
