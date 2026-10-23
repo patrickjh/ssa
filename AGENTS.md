@@ -56,6 +56,9 @@ snapshots to recover from it.
 One goal is a full log of each run. A person or an AI
 should be able to read it, debug any problems, and find
 better ways to use ssa. Keep every record that review needs.
+A run creates one log file. Do not create any other
+file as part of running. Fifos are not files, and
+those pipes are fine.
 
 Another goal is low token use. Some devices generate
 tokens slowly, and a run should stay usable there. Keep
