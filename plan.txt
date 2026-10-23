@@ -8,24 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-6) Use if for an early return
-
-AGENTS.md says prefer if over a test and a
-command when the branch chooses an action. A
-guard that returns is an if, with the return
-inside.
-
-The tty check returns with && return when
-/dev/tty opens. The write handler returns with
-|| return when the user says no. The edit and
-the script handlers already use elif for that
-ask.
-
-Write both as if blocks. The tty check returns
-from inside the if. The write handler returns
-from inside the if when the ask fails. Same
-behavior.
-
 7) Do not keep the write path as run state
 
 AGENTS.md says a value used in one place is

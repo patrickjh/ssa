@@ -363,8 +363,9 @@ check_llama_cli_arguments() {
 }
 
 check_tty() {
-    ( exec <>/dev/tty ) 2>/dev/null && return
-    if [ "$SSA_NO_ASK" = 0 ]; then
+    if ( exec <>/dev/tty ) 2>/dev/null; then
+        return
+    elif [ "$SSA_NO_ASK" = 0 ]; then
         die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
     fi
     SSA_NO_QUESTIONS=1
@@ -629,11 +630,10 @@ action_path_is_missing() {
 handle_write_request() {
     if ! [ "$SSA_NO_WRITES" = 0 ]; then
         record_format_error "# write file: is not allowed"
-        return
+    elif ask_to_run_action; then
+        FILE_TO_WRITE=$(first_action_line | sed 's/^# write file: //')
+        apply_write_request
     fi
-    ask_to_run_action || return
-    FILE_TO_WRITE=$(first_action_line | sed 's/^# write file: //')
-    apply_write_request
 }
 
 apply_write_request() {
