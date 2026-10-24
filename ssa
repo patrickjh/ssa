@@ -625,9 +625,7 @@ handle_edit_request() {
         record_format_error \
             "a search or replace line must not be exactly >>>>>>> REPLACE"
     elif EDIT_FORMAT_MESSAGE=$(edit_format_is_ok); then
-        if ask_to_run_action; then
-            apply_edit_request
-        fi
+        apply_edit_request
     else
         record_format_error "$EDIT_FORMAT_MESSAGE"
     fi
@@ -643,9 +641,17 @@ edit_format_is_ok() {
 
 apply_edit_request() {
     FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
+    if [ ! -f "$FILE_TO_EDIT" ]; then
+        record_output_line "edit failed: $FILE_TO_EDIT: cannot read file" 1
+    elif ask_to_run_action; then
+        run_edit_awk
+    fi
+}
+
+run_edit_awk() {
     EDIT_AWK_MESSAGE=$(print_model_reply |
         FILE_TO_EDIT="$FILE_TO_EDIT" \
-        FILE_SIZE="$(wc -c <"$FILE_TO_EDIT" 2>/dev/null | tr -d '[:space:]')" \
+        FILE_SIZE="$(wc -c 2>/dev/null <"$FILE_TO_EDIT" | tr -d '[:space:]')" \
         LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1)
     if [ $? -eq 0 ]; then
         record_output_line "edited file: $FILE_TO_EDIT" 0
