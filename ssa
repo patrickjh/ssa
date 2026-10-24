@@ -25,6 +25,7 @@ LLAMA_REVERSE_PROMPT='
 '
 LOG_FILE=""
 OUTPUT_START=0
+PENDING_LINE=""
 PID=$$
 PROMPT_COUNTER=0
 REPLY=""
@@ -526,6 +527,9 @@ log_stdin_context() {
 call_llama() {
     send_user_message
     USER_REJECTION_REASON=""
+    if [ "$PROMPT_COUNTER" -eq 1 ]; then
+        log_llama_header
+    fi
     log_llama_output
     REPLY_START=$CHUNK_START
     REPLY_END=$CHUNK_END
@@ -537,12 +541,34 @@ send_user_message() {
     printf '\n' >&3 || die "llama-cli exited; see README.md"
 }
 
+log_llama_header() {
+    begin_log_chunk "# llama-cli header"
+    while :; do
+        IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
+        LINE=$(printf '%s\n' "$LINE" | sed "s/$(printf '\r')\$//")
+        case $LINE in
+            '>'*) PENDING_LINE="$LINE"; break ;;
+        esac
+        printf '%s\n' "$LINE" >>"$LOG_FILE" || die "cannot append log"
+        if [ "$SSA_VERBOSE" = 1 ]; then
+            printf '%s\n' "$LINE" | sanitize_output ||
+                die "cannot show header"
+        fi
+    done
+    end_log_chunk
+}
+
 log_llama_output() {
     begin_log_chunk "# llama-cli output"
     FIRST_REPLY_LINE=1
     while :; do
-        IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
-        LINE=$(printf '%s\n' "$LINE" | sed "s/$(printf '\r')\$//")
+        if [ -n "$PENDING_LINE" ]; then
+            LINE="$PENDING_LINE"
+            PENDING_LINE=""
+        else
+            IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
+            LINE=$(printf '%s\n' "$LINE" | sed "s/$(printf '\r')\$//")
+        fi
         if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
             LINE=$(printf '%s\n' "$LINE" | sed 's/^> \{0,1\}//')
             if [ -z "$LINE" ]; then
