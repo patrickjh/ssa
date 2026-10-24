@@ -39,11 +39,9 @@ SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. The
 task for this run is at the end of this system prompt. After the first
 turn, each user message is the output or the error from your last
 reply. You already have that reply. Continue from there with exactly
-one of the reply formats below.
-No markdown fences, no thinking tags. Put reasoning in # comments
-before the action line.
-End every reply with a line that is exactly # end.
-Put nothing after that line.'
+one of the reply formats below. No markdown fences, no thinking tags.
+Put reasoning in # comments before the action line. End every reply with
+a line that is exactly # end. Put nothing after that line.'
 
 REPLY_SPEC_HEAD='These are the valid reply formats:'
 
@@ -266,12 +264,9 @@ main() {
 check_posix_commands() {
     for COMMAND in awk cat date grep head mkdir mkfifo pwd rm sed sh tail tr wc
     do
-        check_command "$COMMAND"
+        command -v "$COMMAND" >/dev/null 2>&1 ||
+            die "$COMMAND not found on PATH"
     done
-}
-
-check_command() {
-    command -v "$1" >/dev/null 2>&1 || die "$1 not found on PATH"
 }
 
 check_llama() {
