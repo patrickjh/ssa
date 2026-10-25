@@ -35,7 +35,7 @@ to edit files as part of a shell script response.
 new bytes to write to that file. These are also designed to avoid
 issues that arise when models try to write files using heredocs as
 part of a shell script
-4. questions -> the model can ask for a question and wait for a response
+4. questions -> the model can ask a question and wait for a response
 from the user.
 5. response -> the model can just send some text to show the user. Can
 be useful if you ask the model to figure something out and tell you the
