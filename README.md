@@ -79,7 +79,7 @@ run.
 | --- | --- |
 | `SSA_EXTRA_SYSTEM_TEXT` | empty, added to the instructions |
 | `SSA_LLAMA_CLI_ARGUMENTS` | required; llama-cli flags, including the model |
-| `SSA_LOG_FOLDER` | temp directory (`TMPDIR`, or `/tmp`) |
+| `SSA_LOG_FOLDER` | log directory (default `TMPDIR`, or `/tmp`) |
 | `SSA_NO_ASK` | `0` (ask before a script, write, or edit) |
 | `SSA_NO_EDITS` | `0` (allow file edits) |
 | `SSA_NO_MESSAGES` | `0` (allow messages) |
