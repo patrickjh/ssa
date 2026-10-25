@@ -837,7 +837,11 @@ handle_question_request() {
 }
 
 ask_question() {
+    printf 'question from model: ' >/dev/tty ||
+        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     print_action_body '^# question$' | sanitize_output >/dev/tty ||
+        die "cannot show question"
+    printf 'your answer: ' >/dev/tty ||
         die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     ring_terminal
     IFS= read -r REPLY </dev/tty ||
