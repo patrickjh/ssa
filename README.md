@@ -1,79 +1,108 @@
 # ssa
 
-`ssa` is an AI agent harness written as a single POSIX `sh` script.
-`ssa` depends only on llama-cli, a few posix shell utils and
-a gguf model file on disk, and is hard capped at 1,000 loc.
-Inspired by mini-swe agent.
+This repo has two AI agent harnesses. Each one is a single POSIX
+`sh` script. Both take the task as arguments and extra context on
+stdin. Inspired by mini-swe-agent.
 
-## Run
+| File | How it reaches a model |
+| --- | --- |
+| `ssa` | `curl` and `jq`, to a chat-completions URL |
+| `ssa-local` | `llama-cli`, with a GGUF file on disk |
 
-To run ssa, you must first set the SSA_LLAMA_CLI_ARGUMENTS variable
-with at least an -m variable pointing to a gguf model
-file somewhere on disk. You can also set any other llama-cli
-variables there which will be passed straight to llama-cli.
+## ssa
 
-Put the task for ssa on the command line as args.
-Text piped in to stdin is treated as extra context for that task.
-Internally, the task gets added as part of the system prompt,
-while the text on stdin gets added to the user turn.
+Needs `curl` and `jq` on `PATH`. `SSA_URL` and `SSA_MODEL` are
+required. Set `SSA_KEY` when the provider needs a bearer token.
+`ssa -h` prints the full help.
 
 ```sh
-export SSA_LLAMA_CLI_ARGUMENTS="-m /models/gemma.gguf"
+export SSA_URL="https://api.openai.com/v1/chat/completions"
+export SSA_MODEL=gpt-4o-mini
+export SSA_KEY="sk-..."
 cat notes.txt | ssa summarize this file
 ```
 
-ssa will then work for a while on the task and return when complete.
+The model returns one script, one write, or one edit. ssa runs
+that and sends the result back. This repeats until the model
+returns `# complete`, or until `SSA_MAX_MODEL_PROMPTS` is hit.
+Then one more model call prints feedback on stderr.
 
-## response types
+ssa asks before a script, write, or edit. `SSA_NO_ASK=1` skips
+the question.
 
-Internally, ssa lets the model choose from 5 response types.
-1. scripts -> the model returns a shell script that gets run.
-2. edits -> the model returns an Aider style edit. These are used to
-avoid varioius quoting issues models run into when writing heredocs
-to edit files as part of a shell script response.
-3. file writes -> the model specifies a file name and returns the raw
-new bytes to write to that file. These are also designed to avoid
-issues that arise when models try to write files using heredocs as
-part of a shell script
-4. questions -> the model can ask a question and wait for a response
-from the user.
-5. response -> the model can just send some text to show the user. Can
-be useful if you ask the model to figure something out and tell you the
-answer.
+Each run writes a temp folder under `SSA_LOG_FOLDER` (default
+`TMPDIR`, or `/tmp`). The folder is removed at the end unless
+`SSA_KEEP_TEMP=1`.
 
-So when writing a task for the model to do with ssa, you may want to consider
-which of these you are asking for. You can also turn any of these off using
-settings covered below.
+### Settings
 
-## Run unattended
+Set these in the environment. `VAR=value ssa …` covers one run.
 
-By default, ssa will confirm with you step by step before
-running a script or editing a file. You can set
-`SSA_NO_ASK=1` to run scripts, write files, and edit
-files without being asked. You can use this to run ssa for
-background or unattended tasks.
+| Setting | Default |
+| --- | --- |
+| `SSA_EXTRA_SYSTEM_TEXT` | empty, added to the instructions |
+| `SSA_KEEP_TEMP` | `0` (remove the temp folder) |
+| `SSA_KEY` | empty; bearer token when the provider needs one |
+| `SSA_LOG_FOLDER` | parent of the temp folder (`TMPDIR`, or `/tmp`) |
+| `SSA_MAX_CONTEXT_BYTES` | `0` (send every turn) |
+| `SSA_MAX_MODEL_PROMPTS` | `20` (`0` means no limit) |
+| `SSA_MODEL` | required; model name |
+| `SSA_NO_ASK` | `0` (ask before a script, write, or edit) |
+| `SSA_NO_EDITS` | `0` (allow file edits) |
+| `SSA_NO_WRITES` | `0` (allow file writes) |
+| `SSA_REQUEST_JSON` | empty; extra JSON object merged into the body |
+| `SSA_URL` | required; URL curl POSTs to |
 
-## logging
+`SSA_REQUEST_JSON` is where `think`, `max_tokens`, and sampling
+go. On a key conflict, `model` and `messages` from ssa win.
 
-By default, ssa logs what happens in each run to a file.
-That file is written inside `SSA_LOG_FOLDER`, which 
-defaults to TMPDIR or /tmp. The goal of this logging
-is that you or another AI can review what happened in various
-runs in order to debug or improve how you are using ssa.
-The log file is part of how ssa works, so cannot be disabled.
+### Exit status
 
-## output
+| Code | Meaning |
+| --- | --- |
+| 0 | The task completed, or the user asked for help |
+| 1 | Bad arguments, harness failure, or the prompt limit |
+| 129 | Hangup |
+| 130 | Interrupt |
+| 143 | Terminate |
 
-By default, ssa works like a unix util. This means ssa
-works silently and shows nothing on success except output the
-model chooses to show you. If you want to see what is going on
-in more detail, you can set `SSA_VERBOSE=1`. This will create
-a lot of output
+Hangup, interrupt, and terminate print no status line.
 
-## Settings
+## ssa-local
 
-Set these in the environment. `VAR=value ssa …` covers one
-run.
+Needs `llama-cli` or `llama` on `PATH`, and a GGUF file on disk.
+Set `SSA_LLAMA_CLI_ARGUMENTS` with at least `-m` or `--model`
+pointing at that file. Other llama-cli flags in that variable
+are passed through. This program has no `-h`. This file is the
+help.
+
+The task is part of the system prompt. Text on stdin is added
+to the user turn.
+
+```sh
+export SSA_LLAMA_CLI_ARGUMENTS="-m /models/gemma.gguf"
+cat notes.txt | ssa-local summarize this file
+```
+
+The model returns one script, write, edit, question, or
+message. A script is run. A write or an edit changes a file.
+A question waits for an answer. A message is text for the
+user. Any of these can be turned off with the settings below.
+
+ssa-local asks before a script, write, or edit.
+`SSA_NO_ASK=1` skips the question, for a background run.
+
+Each run writes one log file in `SSA_LOG_FOLDER` (default
+`TMPDIR`, or `/tmp`). The log stays. It cannot be turned off.
+
+With `SSA_VERBOSE=0` (the default), a run is quiet aside from
+output the model chooses to show. `SSA_VERBOSE=1` prints
+progress.
+
+### Settings
+
+Set these in the environment. `VAR=value ssa-local …` covers
+one run.
 
 | Setting | Default |
 | --- | --- |
@@ -88,7 +117,7 @@ run.
 | `SSA_NO_WRITES` | `0` (allow file writes) |
 | `SSA_VERBOSE` | `0` (hide progress) |
 
-## Exit status
+### Exit status
 
 | Code | Meaning |
 | --- | --- |

@@ -1,14 +1,14 @@
 # AGENTS.md
 
 Instructions for coding agents in this repo. Behavior is
-in `ssa`. This file is how to work, what stays out, and
-the style rules for the shell program.
+in `ssa` and `ssa-local`. This file is how to work, what stays
+out, and the style rules for both shell programs.
 
 ## This stage
 
 Open work is plan.txt. Change this file in place when a
 decision about editing, style, or scope changes. Behavior
-changes go in `ssa`. Cite no line numbers.
+changes go in the program they belong to. Cite no line numbers.
 
 When a task is done, delete it from plan.txt. Leave the
 numbers on the tasks that remain. Renumber only when
@@ -16,27 +16,50 @@ asked.
 
 ## Layout
 
-One executable, `ssa`, POSIX `sh`, at or under 1000 lines,
-80 columns. Edit `ssa` in place.
+Two executables, each POSIX `sh`, at or under 1000 lines,
+80 columns. Edit each file in place.
 
 ```
 ssa
 ├── AGENTS.md
-├── README.md           # help, outside the program
-├── plan.txt            # open work
-└── ssa                 # the only source file
+├── README.md     # help, outside the programs
+├── plan.txt      # open work
+├── ssa           # curl and jq; chat-completions URL
+└── ssa-local     # llama-cli; model file on disk
 ```
 
-`README.md` is the help. Keep it short: how to run,
-environment, one loop paragraph, exit codes. Do not copy
-`ssa` into `README.md` beyond what a person needs to run
-the program. Update `README.md` when a setting's meaning
-would otherwise be unclear.
+`README.md` is the help for both. Keep it short: how to run,
+environment, one loop paragraph, exit codes. Do not copy either
+program into `README.md` beyond what a person needs to run it.
+Update `README.md` when a setting's meaning would otherwise be
+unclear.
+
+`ssa` also prints help with `-h` or `--help`. `ssa-local` has
+no flags. Its help is `README.md` only.
+
+## The two programs
+
+`ssa` POSTs an OpenAI-style chat body to `SSA_URL` with `curl`
+and reads the reply with `jq`. It needs `curl` and `jq` on
+`PATH`. Required settings are `SSA_URL` and `SSA_MODEL`.
+`SSA_KEY` is the bearer token when the provider needs one.
+
+A turn is a script, a write, or an edit. The loop stops on
+`# complete` or `SSA_MAX_MODEL_PROMPTS`. After the run, one
+more model call prints feedback on stderr. A run writes a temp
+folder of logs. That folder is removed unless `SSA_KEEP_TEMP=1`.
+
+`ssa-local` talks to `llama-cli` and a GGUF file named in
+`SSA_LLAMA_CLI_ARGUMENTS`. It needs `llama-cli` or `llama` on
+`PATH`. The network can stay off. A turn is a script, a write,
+an edit, a question, or a message. There is no end-of-run
+review. A run creates one log file. That log cannot be turned
+off. Fifos are not files, and those pipes are fine.
 
 ## Boundaries
 
-Keep the product surface small: one executable. Help is
-`README.md`, outside the program. This repo has no tests.
+Keep the product surface to these two executables. Help is
+`README.md`, outside the programs. This repo has no tests.
 Do not add `bin/` or `libexec/`. Do not invent flags or env vars
 for things the caller's shell can do (`cd`, `export`, redirects).
 
@@ -55,54 +78,55 @@ snapshots to recover from it.
 
 One goal is a full log of each run. A person or an AI
 should be able to read it, debug any problems, and find
-better ways to use ssa. Keep every record that review needs.
-A run creates one log file. Do not create any other
-file as part of running. Fifos are not files, and
-those pipes are fine.
+better ways to use the program. Keep every record that
+review needs.
 
 Another goal is low token use. Some devices generate
 tokens slowly, and a run should stay usable there. Keep
 prompts and replies short, and do not add a turn or a
 thinking trace the device must generate.
 
-Another goal is to be able to run with no network. The
-files and the log stay on the machine. A local model
-works with the network off. If the user points llama-cli
-at a model over the network, that is fine too.
-
-Another goal is a computer that stays responsive while a
+`ssa-local` also has these goals. It can run with no
+network. The files and the log stay on the machine. A
+local model works with the network off. If the user
+points llama-cli at a model over the network, that is
+fine too. The computer should stay responsive while a
 run is going. The caller sets llama-cli priority and
-polling in SSA_LLAMA_CLI_ARGUMENTS. ssa does not add those
-flags.
-
-Another goal is llama-cli options that work when the
-model weights are bigger than memory. The weights stream
-off a drive. A run should keep going in that case.
-
-Pass a llama-cli flag only when its default does
+polling in `SSA_LLAMA_CLI_ARGUMENTS`. `ssa-local` does
+not add those flags. llama-cli options should work when
+the model weights are bigger than memory. The weights
+stream off a drive. A run should keep going in that
+case. Pass a llama-cli flag only when its default does
 not already do the job.
 
 ## Kept out
 
-JSON tool calls. A tools array on the request. A second
-edit shape (unified diff). Fence unwrapping. A chunk-file
-compare protocol. Thinking left on, with the trace stripped
-from history. The end-of-run review generation. Splitting
-the file into lib or bin. A native Windows harness. An HTTP
-client for a model server.
-A fresh llama-cli process on every turn.
-Capping action output. Script output is appended in full.
-A long command can fill the context.
+Kept out of both files: JSON tool calls. A tools array on
+the request. A second edit shape (unified diff). Fence
+unwrapping. A chunk-file compare protocol. Thinking left
+on, with the trace stripped from history. Splitting either
+file into lib or bin. A native Windows harness. Capping
+action output. Script output is appended in full. A long
+command can fill the context.
+
+Kept out of `ssa-local`: the end-of-run review. An HTTP
+client for a model server. A fresh llama-cli process on
+every turn.
+
+`ssa` uses `curl` for the model call, and it prints an
+end-of-run review. Leave those in `ssa`. Do not add them
+to `ssa-local`.
 
 ## Style
 
-Style rules only. Behavior is in `ssa`. `README.md` is the
+Style rules apply to both files unless this section names
+one file. Behavior is in the program. `README.md` is the
 short help.
 
 ### Unix conventions
 
-`ssa` is a Unix-style CLI. When a rule here conflicts with a
-well-established Unix or GNU convention, follow the Unix
+Both programs are Unix-style CLIs. When a rule here conflicts
+with a well-established Unix or GNU convention, follow the Unix
 convention unless this file documents a deliberate exception.
 
 ### Simple words
@@ -114,8 +138,8 @@ words (`check_can_run`, `setup_work_folder`).
 
 Prefer long, explicit function names when they describe the full
 job. No abbreviations (`argument` not `arg`, `command` not
-`cmd`). External tool names stay as-is (`llama-cli`, `head`,
-`sed`).
+`cmd`). External tool names stay as-is (`llama-cli`, `curl`,
+`jq`, `head`, `sed`).
 
 ### Naming
 
@@ -140,29 +164,44 @@ the same fact is read again later (`CHUNK_START`,
 ### Settings and CLI
 
 Every user-facing setting is an environment variable (`SSA_*`).
-The program has no flags. The words on the command line are
-the task. Document settings in `README.md`.
-Internal run state is not a setting.
+Document settings in `README.md`. Internal run state is not a
+setting.
+
+`ssa-local` has no flags. The words on the command line are
+the task.
+
+`ssa` has two flags, `-h` and `--help`, and they only print
+help. The other words on the command line are the task. Do not
+add more flags.
 
 ### Error messages
 
 When the user can fix a failure by changing a user-facing
-setting, name the env var. Pattern:
+setting, name the env var.
+
+`ssa-local` points at the README:
 
 ```sh
 die "SSA_LOG_FOLDER is not a directory; see README.md"
 ```
 
+`ssa` points at its own help:
+
+```sh
+die "SSA_MODEL not set; see ssa -h for help"
+```
+
 Keep hints one short clause after a semicolon. Prefer
-`; see README.md` at the end of usage errors when useful.
+`; see README.md` on `ssa-local`, and `; see ssa -h for help`
+on `ssa`, at the end of usage errors when useful.
 
 Skip a "set ENV" hint when it would mislead:
 
 - Internal harness failures (transcript I/O, temp folder setup).
-- Missing OS tools on `PATH` (`llama-cli`, `head`, …). Name
-  the tool and say it was not found on `PATH`.
+- Missing OS tools on `PATH` (`llama-cli`, `curl`, `jq`, `head`,
+  …). Name the tool and say it was not found on `PATH`.
 - Failures outside the harness (missing model file, `llama-cli`
-  exits).
+  exits, `curl` fails).
 
 The task has no env var. Say it was not found on the CLI.
 
@@ -196,9 +235,9 @@ Split fixed text from substitution. Keep functions thin.
 
 ### Line length
 
-Maximum 80 characters per line in `ssa` (code, comments, static
-strings). Wrap with `\`, split quoted strings, or multiple
-`printf`s. Do not shorten names just to fit.
+Maximum 80 characters per line in `ssa` and `ssa-local`
+(code, comments, static strings). Wrap with `\`, split quoted
+strings, or multiple `printf`s. Do not shorten names just to fit.
 
 ### Quoting
 
@@ -230,15 +269,18 @@ handle in one line at the call site.
 
 | Need                    | Shell, not the agent              |
 |-------------------------|-----------------------------------|
-| Working directory       | `cd` before `ssa`                 |
+| Working directory       | `cd` before the program           |
 | Environment             | `export VAR=value` or `VAR=value ssa …` |
 | Diagnostic log file     | `ssa … 2>run.log`                 |
-| Hung script / open pipe | wrap `ssa` with `timeout`         |
+| Hung script / open pipe | wrap the program with `timeout`   |
 | Repeated format errors  | Ctrl-C, `timeout`, or `ulimit -t` |
 | Repeat for many tasks   | `for task in …; do …; done`       |
 
+The same calls work with `ssa-local` in place of `ssa`.
+
 A format error is sent back and the loop continues. Do not
-add a count that stops the run.
+add a count that stops `ssa-local`. `ssa` already stops at
+`SSA_MAX_MODEL_PROMPTS`.
 
 Ask: could the user do this with `cd`, `export`, or a redirect?
 If yes, leave it out of the agent.
