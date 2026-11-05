@@ -1,82 +1,140 @@
 #!/bin/sh
-# ssa — Simple Shell Agent. One POSIX sh file.
-# Help is README.md. This program has no -h or --help.
+# ssa — Simple Shell Agent. An AI agent in a single file shell script.
+# For help see HELP_TEXT in this file or AGENTS.md in this folder.
+# Help on the CLI: ssa -h
 
 set -u
 
 # Users can set
 SSA_EXTRA_SYSTEM_TEXT="${SSA_EXTRA_SYSTEM_TEXT:-}"
-SSA_LLAMA_CLI_ARGUMENTS="${SSA_LLAMA_CLI_ARGUMENTS:-}"
-SSA_LOG_FOLDER="${SSA_LOG_FOLDER:-${TMPDIR:-/tmp}}"
+SSA_KEEP_TEMP="${SSA_KEEP_TEMP:-0}"
+SSA_KEY="${SSA_KEY:-}"
+SSA_LOG_FOLDER="${SSA_LOG_FOLDER:-}"
+SSA_MAX_CONTEXT_BYTES="${SSA_MAX_CONTEXT_BYTES:-0}"
+SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
+SSA_MODEL="${SSA_MODEL:-}"
 SSA_NO_ASK="${SSA_NO_ASK:-0}"
-SSA_NO_EDITS="${SSA_NO_EDITS:-0}"
-SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-0}"
-SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-0}"
-SSA_NO_SCRIPTS="${SSA_NO_SCRIPTS:-0}"
-SSA_NO_WRITES="${SSA_NO_WRITES:-0}"
-SSA_VERBOSE="${SSA_VERBOSE:-0}"
+SSA_NO_EDITS="${SSA_NO_EDITS-0}"
+SSA_NO_WRITES="${SSA_NO_WRITES-0}"
+SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
+SSA_URL="${SSA_URL:-}"
 
 # Internal
-CHUNK_END=0
-CHUNK_START=0
-FIFO_DIRECTORY=""
-LLAMA_REVERSE_PROMPT='
-# end
-'
-LOG_FILE=""
-OUTPUT_START=0
-PENDING_LINE=""
+unset PID PROMPT_COUNTER TEMP_FOLDER
+ASK_NO=1
+ASK_YES=0
+AUTH_HEADER_FILE=""
+CONTEXT_FILE=""
+CURL_RESPONSE_FILE=""
+EDITED_BYTES_FILE=""
+EDIT_PAYLOAD_FILE=""
+EXIT_CODE_FILE=""
+HIT_MAX=2
+IS_FALSE=1
+IS_TRUE=0
+JQ_BINARY_FLAG=""
+JSON_BODY_FILE=""
+LOOP_AGAIN=0
+LOOP_STATUS="stopped"
+MESSAGES_FILE=""
+MESSAGES_NEXT_FILE=""
+MODEL_RESPONSE_FILE=""
+PER_PROMPT_LOG_FOLDER=""
 PID=$$
 PROMPT_COUNTER=0
 REPLY=""
-REPLY_END=0
-REPLY_START=0
-SYSTEM_PROMPT=""
+REQUEST_EXTRA_FILE=""
+SCRIPT_OUTPUT_FILE=""
+SYSTEM_PROMPT_FILE=""
 TASK=""
-USER_REJECTION_REASON=""
-WATCH_PID=""
+TASK_DONE=1
+TEMP_FOLDER=""
+USER_ANSWER_FILE=""
+USER_TURN_FILE=""
 
-SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. The
-task for this run is at the end of this system prompt. After the first
-turn, each user message is the output or the error from your last
-reply. You already have that reply. Continue from there with exactly
-one of the reply formats below. No markdown fences, no thinking tags.
-Put reasoning in # comments before the action line. End every reply with
-a line that is exactly # end. Put nothing after that line.'
+HELP_TEXT='ssa — Simple Shell Agent.
+A simple AI agent that feels like a unix util. Inspired by mini-swe-agent.
+
+Usage: ssa with the task as args and context on stdin
+
+Example:
+  apt-get update 2>&1 | ssa why is apt not updating?
+
+Requires POSIX sh, curl, and jq.
+SSA_MODEL and SSA_URL are required.
+SSA_KEY is required if the provider needs auth.
+
+Options:
+  -h, --help
+          Show this help and exit.
+
+Environment:
+  SSA_EXTRA_SYSTEM_TEXT   appended to the system prompt; does not
+                          change which replies are accepted.
+  SSA_KEEP_TEMP           Keep per-run temp folder (0 = discard,
+                          1 = keep, default = 0).
+  SSA_KEY                 Bearer token (optional for local servers).
+  SSA_LOG_FOLDER          Parent of the run folder. Empty uses
+                          ${TMPDIR:-/tmp}. Set SSA_KEEP_TEMP=1
+                          to keep the folder.
+  SSA_MAX_CONTEXT_BYTES   Max bytes of message content in each POST
+                          (0 = send every turn, default = 0).
+  SSA_MAX_MODEL_PROMPTS   Stop after N model prompts (0 = no limit,
+                          default = 20).
+  SSA_MODEL               OpenAI-style model name (required).
+  SSA_NO_ASK              0 = ask before running scripts (default);
+                          1 = do not ask.
+  SSA_NO_EDITS            0 = allow # edit file: (default); 1 = treat
+                          that reply as a format error.
+  SSA_NO_WRITES           0 = allow # write file: (default); 1 = treat
+                          that reply as a format error.
+  SSA_REQUEST_JSON        JSON object merged into the request body
+                          (think, max_tokens, temperature). Model and
+                          messages from ssa win on key conflicts.
+  SSA_URL                 URL curl POSTs chat-completions to (required).
+
+ssa asks the model for a script, a write, or an edit; runs it; and
+appends the result. Repeat until model returns # complete
+or SSA_MAX_MODEL_PROMPTS is hit. Empty or invalid replies are not run.
+After the run, one more model call prints feedback on stderr.
+
+Exit status:
+  0       Complete or requested help.
+  1       Failure (bad arguments, ssa failure, or max model prompts).
+  129     Hangup (SIGHUP).
+  130     Interrupted (SIGINT).
+  143     Terminated (SIGTERM).
+'
+
+SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. Each
+turn you get a task, prior commands and their output. Continue from
+there with exactly one of the reply formats below.
+No markdown fences, no thinking tags. Put reasoning in # comments.'
 
 REPLY_SPEC_HEAD='These are the valid reply formats:'
 
 REPLY_SPEC_SCRIPT=\
-'A script request is "# script" then a POSIX sh program. Each script
-is a new process. The program ends before the # end line. Do not
-prefix script lines with #. A body line must not be exactly # end.
-Example:
+'A script request is "# script" then a POSIX sh program. Do not prefix
+script lines with #. Example:
 
 # reasoning: look at the files in the folder
 # script
-ls -la
-# end'
+ls -la'
 
 REPLY_SPEC_WRITE=\
 'A write request is "# write file: PATH" then raw file contents.
-The contents end before the # end line. A body line must not be
-exactly # end. A write does not create parent directories. Prefer
-this over POSIX tools for writing files because this has no quoting
-issues. Example:
+Prefer this over POSIX tools for writing files because this has no
+quoting issues. Example:
 
 # reasoning: write a hello.txt file
 # write file: hello.txt
 hello
-world
-# end'
+world'
 
 REPLY_SPEC_EDIT=\
 'An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The search
-block must not be empty and must match exactly once. The line after
-the replace marker is # end. A body line must not be exactly # end.
-A search or replace line must not be exactly ======= or
->>>>>>> REPLACE. Prefer this for edits over sed and other POSIX
-tools because this has no quoting issues. Example:
+block must match exactly once. Prefer this for edits over sed and other
+POSIX tools because this has no quoting issues. Example:
 
 # reasoning: edit the hello.txt file
 # edit file: hello.txt
@@ -85,659 +143,662 @@ hello
 =======
 hello
 world
->>>>>>> REPLACE
-# end'
-
-REPLY_SPEC_QUESTION=\
-'A question request is "# question" then the question.
-The question ends before the # end line. A body line
-must not be exactly # end. Example:
-
-# reasoning: the path was not in the task
-# question
-Which file should I edit?
-# end'
-
-REPLY_SPEC_MESSAGE=\
-'A message is "# message" then text for the user.
-The text ends before the # end line. A body line
-must not be exactly # end. The run continues.
-Example:
-
-# reasoning: the test failure is in this file
-# message
-The test failure is in ssa.
-# end'
+>>>>>>> REPLACE'
 
 REPLY_SPEC_COMPLETE=\
 'The task complete marker is "# complete" in its own turn.
 Do not append it to other turns. Example:
 
-# complete
-# end'
+# complete'
 
-CHECK_EDIT_FORMAT_AWK='
-function reject(message) {
-    print message
-    rejected = 1
-    exit 1
-}
+REPLY_SPEC=""
 
-search_found && !middle_found && $0 != "=======" {
-    search_count++
-}
+REVIEW_ASK='Reply with plain text: what would have made this run go better?'
 
-replace_found && $0 != "# end" && $0 !~ /^[[:space:]]*$/ {
-    reject("text after the replace marker")
-}
+OUTPUT_OMITTED_NOT_UTF8='Output omitted: not valid UTF-8 (NUL or binary '\
+'bytes).'
 
-!search_found && /^# edit file: ./ {
-    if (edit_at) reject("the edit line is misplaced")
-    edit_at = NR
-}
-
-!search_found && /^<<<<<<< SEARCH$/ {
-    if (!edit_at || NR != edit_at + 1)
-        reject("the search marker is misplaced")
-    search_found = 1
-}
-
-$0 == "=======" {
-    if (!edit_at || !search_found || middle_found)
-        reject("the middle marker is misplaced")
-    middle_found = 1
-}
-
-$0 == ">>>>>>> REPLACE" {
-    if (!edit_at || !search_found || !middle_found)
-        reject("the replace marker is misplaced")
-    replace_found = 1
-}
-
-END {
-    if (rejected) exit 1
-    if (replace_found && search_count == 0) print "search block is empty"
-    else if (replace_found) exit 0
-    else if (!search_found) print "the search marker is missing"
-    else if (!middle_found) print "the middle marker is missing"
-    else print "the replace marker is missing"
-    exit 1
-}
+EDIT_APPLY_JQ='
+def fail($m): $m | halt_error(1);
+($payload | split("<<<<<<< SEARCH\n")) as $a
+| if ($a | length) != 2 or $a[0] != "" then
+    fail("missing SEARCH/REPLACE markers")
+  else
+    ($a[1] | split("\n=======\n")) as $b
+    | if ($b | length) != 2 then
+        fail("missing SEARCH/REPLACE markers")
+      else
+        ($b[1] |
+          if startswith(">>>>>>> REPLACE") then
+            ["", ltrimstr(">>>>>>> REPLACE")]
+          else split("\n>>>>>>> REPLACE")
+          end
+        ) as $c
+        | if ($c | length) != 2 then
+            fail("missing SEARCH/REPLACE markers")
+          elif $c[1] != "" and $c[1] != "\n" then
+            fail("missing SEARCH/REPLACE markers")
+          elif $b[0] == "" then
+            fail("old string is empty")
+          else
+            ($file | split($b[0])) as $p
+            | if ($p | length) != 2 then
+                fail("old string matched "
+                  + (($p | length) - 1 | tostring)
+                  + " times (need 1)")
+              else
+                $p[0] + $c[0] + $p[1]
+              end
+          end
+      end
+  end
 '
 
-EDIT_FILE_AWK='
-function fail(message) {
-    print message
-    fail_called = 1
-    exit 1
-}
-
-function load_file(line, total, status) {
-    if (ENVIRON["FILE_SIZE"] == "") fail("cannot read file")
-    file_lines_count = 0
-    while ((status = (getline line < ENVIRON["FILE_TO_EDIT"])) > 0) {
-        file_lines_count++
-        file_array[file_lines_count] = line
-        if (file_lines_count > 1) total++
-        total += length(line)
-    }
-    close(ENVIRON["FILE_TO_EDIT"])
-    if (status < 0) fail("cannot read file")
-    if (file_lines_count == 0) return
-    if (total + 1 == ENVIRON["FILE_SIZE"] + 0) file_has_final_newline = 1
-    else if (total != ENVIRON["FILE_SIZE"] + 0) fail("cannot read file")
-}
-
-function require_one_match(count, start, offset) {
-    count = 0
-    for (start = 1; start <= file_lines_count - search_count + 1; start++) {
-        for (offset = 1; offset <= search_count; offset++)
-            if (file_array[start + offset - 1] != search_array[offset]) break
-        if (offset > search_count) {
-            count++
-            match_at = start
-        }
-    }
-    if (count != 1) fail("search block matched " count " times (need 1)")
-}
-
-function write_line(text) {
-    if (wrote_line) printf("\n") > ENVIRON["FILE_TO_EDIT"]
-    printf("%s", text) > ENVIRON["FILE_TO_EDIT"]
-    wrote_line = 1
-}
-
-function apply_edit(number, offset) {
-    printf("") > ENVIRON["FILE_TO_EDIT"]
-    for (number = 1; number <= file_lines_count; number++) {
-        if (number != match_at) {
-            write_line(file_array[number])
-            continue
-        }
-        for (offset = 1; offset <= replace_count; offset++)
-            write_line(replace_array[offset])
-        number += search_count - 1
-    }
-    if (file_has_final_newline && wrote_line)
-        printf("\n") > ENVIRON["FILE_TO_EDIT"]
-    if (close(ENVIRON["FILE_TO_EDIT"]) != 0) fail("cannot write file")
-}
-
-edit_at && NR != edit_at + 1 && !middle_found && $0 != "=======" {
-    search_count++
-    search_array[search_count] = $0
-}
-middle_found && !replace_found && $0 != ">>>>>>> REPLACE" {
-    replace_count++
-    replace_array[replace_count] = $0
-}
-!edit_at && /^# edit file: ./ { edit_at = NR }
-edit_at && !middle_found && $0 == "=======" { middle_found = 1 }
-middle_found && !replace_found && $0 == ">>>>>>> REPLACE" {
-    replace_found = 1
-}
-
-END {
-    if (fail_called) exit 1
-    if (!replace_found) fail("missing replace marker")
-    if (search_count == 0) fail("search block is empty")
-    load_file()
-    require_one_match()
-    apply_edit()
-}
+# Pin messages 0 and 1 (system, first user). Drop the oldest
+# assistant/user pair while content length is over budget and a
+# pair remains after the newest one. Budget 0 sends every turn.
+CONTEXT_WINDOW_JQ='
+def nbytes: map(.content | length) | add // 0;
+def drop_pair: .[0:2] + .[4:];
+def over: nbytes > $budget;
+def droppable:
+  length > 4 and .[1].role != .[4].role;
+($messages[0]
+  | if $budget == 0 then .
+    else until((over | not) or (droppable | not); drop_pair)
+    end) as $kept
+| $extra[0] + {model: $model, messages: $kept}
 '
 
 main() {
-    trap 'exit 1' USR1
-    trap 'die "llama-cli exited; see README.md"' PIPE
-    trap 'stop_llama; log_run_end "hangup"; clean_up_fifos; exit 129' HUP
-    trap 'stop_llama; log_run_end "interrupt"; clean_up_fifos; exit 130' INT
-    trap 'stop_llama; log_run_end "terminate"; clean_up_fifos; exit 143' TERM
-    TASK="$*"
-    check_posix_commands
-    check_llama
+    trap handle_die_signal USR1
+    parse_arguments "$@"
+    check_required_commands
     check_can_run
     setup_agent_loop
     run_agent_loop
+    review_work
     finish_agent_loop
 }
 
-check_posix_commands() {
-    for COMMAND in awk cat date grep head mkdir mkfifo pwd rm sed sh tail tr wc
-    do
-        command -v "$COMMAND" >/dev/null 2>&1 ||
-            die "$COMMAND not found on PATH"
+handle_die_signal() {
+    cleanup_on_exit
+    exit 1
+}
+
+parse_arguments() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -h|--help) printf '%s\n' "$HELP_TEXT"; exit 0 ;;
+            --) shift; TASK=$*; return ;;
+            -*) die "bad option: $1; see ssa -h for help" ;;
+            *) TASK=$*; return ;;
+        esac
     done
 }
 
-check_llama() {
-    if command -v llama-cli >/dev/null 2>&1; then
-        return
-    fi
-    command -v llama >/dev/null 2>&1 ||
-        die "llama-cli or llama not found on PATH"
-    llama cli --version >/dev/null 2>&1 || die "llama cli --version failed"
+check_required_commands() {
+    check_command cat
+    check_command cp
+    check_command curl
+    check_command date
+    check_command grep
+    check_command head
+    check_command jq
+    check_command mkdir
+    check_command mv
+    check_command rm
+    check_command sed
+    check_command tee
+}
+
+check_command() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 not found on PATH"
 }
 
 check_can_run() {
-    check_task
-    check_zero_or_one "$SSA_NO_ASK" "SSA_NO_ASK"
-    check_zero_or_one "$SSA_NO_EDITS" "SSA_NO_EDITS"
-    check_zero_or_one "$SSA_NO_MESSAGES" "SSA_NO_MESSAGES"
-    check_zero_or_one "$SSA_NO_QUESTIONS" "SSA_NO_QUESTIONS"
-    check_zero_or_one "$SSA_NO_SCRIPTS" "SSA_NO_SCRIPTS"
-    check_zero_or_one "$SSA_NO_WRITES" "SSA_NO_WRITES"
-    check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
+    check_task_is_set
+    check_max_context_bytes
+    check_max_model_prompts
+    check_no_ask
+    check_no_edits
+    check_no_writes
+    check_keep_temp
     check_log_folder
-    check_llama_cli_arguments
-    check_tty
-    check_some_action_left
+    check_model_is_set
+    check_url_is_set
+    check_request_json
+    if [ "$SSA_NO_ASK" = 0 ]; then check_prompt_device; fi
 }
 
-check_task() {
-    [ -n "$TASK" ] || die "task not found on CLI; see README.md"
+check_task_is_set() {
+    [ -n "$TASK" ] || die "task not found on CLI; see ssa -h for help"
 }
 
-check_zero_or_one() {
-    if [ "$1" != 0 ] && [ "$1" != 1 ]; then
-        die "$2 must be 0 or 1; see README.md"
+check_max_context_bytes() {
+    case $SSA_MAX_CONTEXT_BYTES in
+        *[!0-9]*) die "invalid SSA_MAX_CONTEXT_BYTES; see ssa -h for help" ;;
+    esac
+}
+
+check_max_model_prompts() {
+    case $SSA_MAX_MODEL_PROMPTS in
+        *[!0-9]*) die "invalid SSA_MAX_MODEL_PROMPTS; see ssa -h for help" ;;
+    esac
+}
+
+check_no_ask() {
+    if [ "$SSA_NO_ASK" != 0 ] && [ "$SSA_NO_ASK" != 1 ]; then
+        die "SSA_NO_ASK must be 0 or 1; see ssa -h for help"
+    fi
+}
+
+check_no_edits() {
+    if [ "$SSA_NO_EDITS" != 0 ] && [ "$SSA_NO_EDITS" != 1 ]; then
+        die "SSA_NO_EDITS must be 0 or 1; see ssa -h for help"
+    fi
+}
+
+check_no_writes() {
+    if [ "$SSA_NO_WRITES" != 0 ] && [ "$SSA_NO_WRITES" != 1 ]; then
+        die "SSA_NO_WRITES must be 0 or 1; see ssa -h for help"
+    fi
+}
+
+check_keep_temp() {
+    if [ "$SSA_KEEP_TEMP" != 0 ] && [ "$SSA_KEEP_TEMP" != 1 ]; then
+        die "SSA_KEEP_TEMP must be 0 or 1; see ssa -h for help"
     fi
 }
 
 check_log_folder() {
+    if [ -z "$SSA_LOG_FOLDER" ]; then return; fi
     if [ ! -d "$SSA_LOG_FOLDER" ] || [ ! -w "$SSA_LOG_FOLDER" ]; then
-        die "SSA_LOG_FOLDER must be a writable directory; see README.md"
+        die "SSA_LOG_FOLDER must be a writable directory;" \
+            "see ssa -h for help"
     fi
 }
 
-check_llama_cli_arguments() {
-    printf '%s\n' "$SSA_LLAMA_CLI_ARGUMENTS" |
-        grep -q -E '(^|[[:space:]])(-m|--model)[[:space:]]+[^[:space:]]' ||
-        die "SSA_LLAMA_CLI_ARGUMENTS needs -m or --model; see README.md"
+check_model_is_set() {
+    [ -n "$SSA_MODEL" ] || die "SSA_MODEL not set; see ssa -h for help"
 }
 
-check_tty() {
-    if ( exec <>/dev/tty ) 2>/dev/null; then
-        return
-    elif [ "$SSA_NO_ASK" = 0 ]; then
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    fi
-    SSA_NO_QUESTIONS=1
-    SSA_NO_MESSAGES=1
+check_url_is_set() {
+    [ -n "$SSA_URL" ] || die "SSA_URL not set; see ssa -h for help"
 }
 
-check_some_action_left() {
-    if [ "$SSA_NO_SCRIPTS" = 1 ] && [ "$SSA_NO_WRITES" = 1 ] &&
-        [ "$SSA_NO_EDITS" = 1 ] && [ "$SSA_NO_QUESTIONS" = 1 ] &&
-        [ "$SSA_NO_MESSAGES" = 1 ]
-    then
-        die "SSA_NO_SCRIPTS, SSA_NO_WRITES, SSA_NO_EDITS," \
-            "SSA_NO_QUESTIONS, and SSA_NO_MESSAGES" \
-            "are all 1; see README.md"
-    fi
+check_request_json() {
+    if [ -z "$SSA_REQUEST_JSON" ]; then return; fi
+    printf '%s' "$SSA_REQUEST_JSON" |
+        jq -e 'type == "object"' >/dev/null 2>&1 ||
+        die "SSA_REQUEST_JSON must be a JSON object; see ssa -h for help"
+}
+
+check_prompt_device() {
+    ( exec </dev/tty ) 2>/dev/null ||
+        die "need /dev/tty or set SSA_NO_ASK=1; see ssa -h for help"
 }
 
 setup_agent_loop() {
-    setup_log
-    setup_system_prompt
-    start_llama
+    setup_jq_binary_flag
+    setup_temp_folder
+    setup_temp_files
+    setup_auth_header_file
+    log_url
+    log_task
+    log_context
+    setup_temp_cleanup
+    setup_messages_file
+    run_fake_first_turn
+    LOOP_STATUS="stopped"
 }
 
-setup_log() {
-    START_TIME=$(date '+%Y-%m-%d_%H.%M.%S')
-    LOG_FILE="${SSA_LOG_FOLDER}/${START_TIME}.${PID}.ssalog"
-    ( umask 077; set -C; : >"$LOG_FILE" ) || {
-        LOG_FILE=""
-        die "cannot create log file"
-    }
-    printf 'time: %s\n' "$START_TIME" >>"$LOG_FILE" || die "cannot append log"
-    printf 'directory: %s\n' "$(pwd)" >>"$LOG_FILE" || die "cannot append log"
-    log_llama_version
-    log_environment
-    if [ "$SSA_VERBOSE" = 1 ]; then
-        printf 'log file: %s\n' "$LOG_FILE"
+setup_jq_binary_flag() {
+    # Some jq builds write CRLF unless -b (binary stdout) is set.
+    # jq 1.6 and older lack -b, so only use it when it works.
+    JQ_BINARY_FLAG=""
+    if jq -b -n '""' >/dev/null 2>&1; then JQ_BINARY_FLAG="-b"; fi
+}
+
+setup_temp_folder() {
+    TEMP_FOLDER="${SSA_LOG_FOLDER:-${TMPDIR:-/tmp}}/ssa-${LOGNAME:-user}-$(date\
+        +%Y-%m-%d_%H.%M.%S)-$PID"
+    ( umask 077; mkdir "$TEMP_FOLDER" ) || die "cannot create temp folder"
+}
+
+setup_temp_files() {
+    MODEL_RESPONSE_FILE="${TEMP_FOLDER}/latestModelResponse.txt"
+    EDITED_BYTES_FILE="${TEMP_FOLDER}/latestEditedBytes.txt"
+    EDIT_PAYLOAD_FILE="${TEMP_FOLDER}/latestEditPayload.txt"
+    EXIT_CODE_FILE="${TEMP_FOLDER}/latestScriptExitCode.txt"
+    SCRIPT_OUTPUT_FILE="${TEMP_FOLDER}/latestScriptOutput.txt"
+    MESSAGES_FILE="${TEMP_FOLDER}/messages.json"
+    MESSAGES_NEXT_FILE="${TEMP_FOLDER}/messagesNext.json"
+    USER_TURN_FILE="${TEMP_FOLDER}/latestUserTurn.txt"
+    CONTEXT_FILE="${TEMP_FOLDER}/context.txt"
+    create_file_no_overwrite "$MODEL_RESPONSE_FILE"
+    create_file_no_overwrite "$EDITED_BYTES_FILE"
+    create_file_no_overwrite "$EDIT_PAYLOAD_FILE"
+    create_file_no_overwrite "$EXIT_CODE_FILE"
+    create_file_no_overwrite "$SCRIPT_OUTPUT_FILE"
+    create_file_no_overwrite "$MESSAGES_FILE"
+    create_file_no_overwrite "$USER_TURN_FILE"
+    create_file_no_overwrite "$CONTEXT_FILE"
+}
+
+setup_auth_header_file() {
+    if [ -n "$SSA_KEY" ]; then
+        AUTH_HEADER_FILE="${TEMP_FOLDER}/authHeader.txt"
+        create_file_no_overwrite "$AUTH_HEADER_FILE"
+        printf 'Authorization: Bearer %s\n' "$SSA_KEY" \
+            >"$AUTH_HEADER_FILE" || die "cannot write auth header file"
+    fi
+    unset SSA_KEY
+}
+
+log_url() {
+    create_file_no_overwrite "${TEMP_FOLDER}/url.txt"
+    printf '%s' "$SSA_URL" >"${TEMP_FOLDER}/url.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/url.txt"
+}
+
+log_task() {
+    create_file_no_overwrite "${TEMP_FOLDER}/task.txt"
+    printf '%s\n' "$TASK" >"${TEMP_FOLDER}/task.txt" ||
+        die "cannot write to temp file: ${TEMP_FOLDER}/task.txt"
+}
+
+log_context() {
+    if [ -t 0 ]; then return; fi
+    cat >"$CONTEXT_FILE" || die "cannot write file: $CONTEXT_FILE"
+    check_context_is_json_safe
+}
+
+check_context_is_json_safe() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -e -n \
+        --rawfile content "$CONTEXT_FILE" \
+        '$content | contains("\u0000") | not' >/dev/null 2>&1 ||
+        die "context file is not valid UTF-8; see ssa -h for help"
+}
+
+setup_temp_cleanup() {
+    trap cleanup_on_exit EXIT
+    trap 'cleanup_on_exit; exit 129' HUP
+    trap 'cleanup_on_exit; exit 130' INT
+    trap 'cleanup_on_exit; exit 143' TERM
+}
+
+cleanup_on_exit() {
+    cleanup_auth_header_file
+    if [ "$SSA_KEEP_TEMP" = 0 ] && [ -n "$TEMP_FOLDER" ]; then
+        rm -rf "$TEMP_FOLDER"
     fi
 }
 
-log_llama_version() {
-    if command -v llama-cli >/dev/null 2>&1; then
-        printf 'llama-cli --version\n' >>"$LOG_FILE" || die "cannot append log"
-        llama-cli --version >>"$LOG_FILE" 2>&1 || :
-    else
-        printf 'llama cli --version\n' >>"$LOG_FILE" || die "cannot append log"
-        llama cli --version >>"$LOG_FILE" 2>&1 || :
+cleanup_auth_header_file() {
+    if [ -z "$AUTH_HEADER_FILE" ]; then return; fi
+    if [ -f "$AUTH_HEADER_FILE" ]; then
+        : >"$AUTH_HEADER_FILE" || :
+        rm -f "$AUTH_HEADER_FILE" || :
     fi
+    AUTH_HEADER_FILE=""
 }
 
-log_environment() {
-    printf '%s\n' \
-        "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
-        "SSA_LLAMA_CLI_ARGUMENTS=$SSA_LLAMA_CLI_ARGUMENTS" \
-        "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" \
-        "SSA_NO_ASK=$SSA_NO_ASK" \
-        "SSA_NO_EDITS=$SSA_NO_EDITS" \
-        "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
-        "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
-        "SSA_NO_SCRIPTS=$SSA_NO_SCRIPTS" \
-        "SSA_NO_WRITES=$SSA_NO_WRITES" \
-        "SSA_VERBOSE=$SSA_VERBOSE" >>"$LOG_FILE" || die "cannot append log"
-}
-
-setup_system_prompt() {
-    SYSTEM_PROMPT=$(
-        printf '%s\n\n' "$SYSTEM_PROMPT_INTRO"
-        print_reply_specs
-        if [ -n "$SSA_EXTRA_SYSTEM_TEXT" ]; then
-            printf '\n%s\n' "$SSA_EXTRA_SYSTEM_TEXT"
-        fi
-        printf '\n%s\n%s\n' 'The task for this run:' "$TASK"
-    )
-    begin_log_chunk "# system"
-    printf '%s\n' "$SYSTEM_PROMPT" >>"$LOG_FILE" || die "cannot append log"
-    end_log_chunk
-}
-
-print_reply_specs() {
-    printf '%s' "$REPLY_SPEC_HEAD"
-    if [ "$SSA_NO_SCRIPTS" = 0 ]; then
-        printf '\n\n%s' "$REPLY_SPEC_SCRIPT"
+setup_messages_file() {
+    SYSTEM_PROMPT_FILE="${TEMP_FOLDER}/systemPrompt.txt"
+    create_file_no_overwrite "$SYSTEM_PROMPT_FILE"
+    REPLY_SPEC=$(reply_spec_text)
+    printf '%s\n\n%s\n' "$SYSTEM_PROMPT_INTRO" "$REPLY_SPEC" \
+        >"$SYSTEM_PROMPT_FILE" || die "cannot write system prompt"
+    if [ -n "$SSA_EXTRA_SYSTEM_TEXT" ]; then
+        printf '\n%s\n' "$SSA_EXTRA_SYSTEM_TEXT" \
+            >>"$SYSTEM_PROMPT_FILE" ||
+            die "cannot write system prompt"
     fi
-    if [ "$SSA_NO_WRITES" = 0 ]; then
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -n \
+        --rawfile system "$SYSTEM_PROMPT_FILE" \
+        --rawfile task "${TEMP_FOLDER}/task.txt" \
+        --rawfile context "$CONTEXT_FILE" \
+        '[{role: "system", content: $system},
+          {role: "user",
+           content: (if $context == "" then $task
+                     else $task + "\nContext:\n" + $context
+                     end)}]' \
+        >"$MESSAGES_FILE" || die "cannot write chat messages"
+}
+
+reply_spec_text() {
+    printf '%s\n\n%s' "$REPLY_SPEC_HEAD" "$REPLY_SPEC_SCRIPT"
+    if writes_are_enabled; then
         printf '\n\n%s' "$REPLY_SPEC_WRITE"
     fi
-    if [ "$SSA_NO_EDITS" = 0 ]; then
+    if edits_are_enabled; then
         printf '\n\n%s' "$REPLY_SPEC_EDIT"
     fi
-    if [ "$SSA_NO_QUESTIONS" = 0 ]; then
-        printf '\n\n%s' "$REPLY_SPEC_QUESTION"
-    fi
-    if [ "$SSA_NO_MESSAGES" = 0 ]; then
-        printf '\n\n%s' "$REPLY_SPEC_MESSAGE"
-    fi
-    printf '\n\n%s\n' "$REPLY_SPEC_COMPLETE"
+    printf '\n\n%s' "$REPLY_SPEC_COMPLETE"
 }
 
-start_llama() {
-    # Progress uses stdout. At 0, drop it before
-    # llama-cli starts so load text goes there too.
-    if [ "$SSA_VERBOSE" = 0 ]; then
-        exec >/dev/null || die "cannot open /dev/null"
-    fi
-    create_fifos
-    watch_llama &
-    WATCH_PID=$!
-    # Close this to stop llama-cli. The watcher kills it and removes the fifos.
-    exec 5>"$FIFO_DIRECTORY/lifeline" || die "cannot open llama lifeline"
-    # Stdout, then stdin. Each open unblocks the matching llama-cli redirect.
-    exec 4<"$FIFO_DIRECTORY/output" || die "cannot open llama-cli output"
-    exec 3>"$FIFO_DIRECTORY/input" || die "cannot open llama-cli input"
-}
-
-create_fifos() {
-    mkdir -m 700 "${TMPDIR:-/tmp}/ssa-$PID" ||
-        die "cannot create fifo directory"
-    FIFO_DIRECTORY="${TMPDIR:-/tmp}/ssa-$PID"
-    mkfifo "$FIFO_DIRECTORY/lifeline" "$FIFO_DIRECTORY/input" \
-        "$FIFO_DIRECTORY/output" "$FIFO_DIRECTORY/stderr" ||
-        die "cannot create fifo"
-}
-
-watch_llama() {
-    trap '' HUP INT TERM PIPE
-    exec 5<"$FIFO_DIRECTORY/lifeline" || exit 1
-    set -f
-    umask 077
-    copy_llama_stderr &
-    # A writer that is not llama-cli, so the reader's
-    # open cannot wait on llama-cli. Closed after kill
-    # so the reader finishes and wait can return.
-    exec 6>"$FIFO_DIRECTORY/stderr" || exit 1
-    # shellcheck disable=SC2086
-    exec_llama \
-        -sys "$SYSTEM_PROMPT" \
-        --reasoning off \
-        --reasoning-budget 0 \
-        --simple-io \
-        --no-display-prompt \
-        --no-show-timings \
-        --color off \
-        --context-shift \
-        --keep -1 \
-        $SSA_LLAMA_CLI_ARGUMENTS \
-        --reverse-prompt "$LLAMA_REVERSE_PROMPT" \
-        6>&- \
-        2>"$FIFO_DIRECTORY/stderr" \
-        >"$FIFO_DIRECTORY/output" \
-        <"$FIFO_DIRECTORY/input" &
-    LLAMA_PID=$!
-    cat <&5 >/dev/null
-    exec 5<&-
-    kill -KILL "$LLAMA_PID" 2>/dev/null || :
-    exec 6>&-
-    # Reap llama-cli and the stderr reader.
-    wait
-    clean_up_fifos
-}
-
-copy_llama_stderr() {
-    exec 3>&1
-    STDERR=$(
-        while IFS= read -r LINE || [ -n "$LINE" ]; do
-            printf '%s\n' "$LINE" >&3
-            printf '%s\n' "$LINE"
-        done <"$FIFO_DIRECTORY/stderr"
-    )
-    if [ -n "$STDERR" ]; then
-        printf '# llama-cli stderr\n%s\n' "$STDERR" >>"$LOG_FILE" || exit 1
-    fi
-}
-
-exec_llama() {
-    if command -v llama-cli >/dev/null 2>&1; then
-        exec llama-cli "$@"
-    else
-        exec llama cli "$@"
-    fi
+run_fake_first_turn() {
+    setup_per_prompt_log_folder
+    printf '# reasoning: show cwd and kernel\n# script\npwd\nuname -a\n' \
+        >"$MODEL_RESPONSE_FILE" || die "cannot write fake first turn response"
+    append_assistant_turn
+    handle_script_request
 }
 
 run_agent_loop() {
-    log_stdin_context
     while :; do
         PROMPT_COUNTER=$((PROMPT_COUNTER + 1))
-        call_llama
-        handle_model_response
+        prompt_model_then_run_script
         case $? in
-            2) break ;;
-            0) continue ;;
+            $TASK_DONE) LOOP_STATUS="done"; break ;;
+            $HIT_MAX) LOOP_STATUS="hit max"; break ;;
+            $LOOP_AGAIN) continue ;;
             *) die "unknown loop status $?" ;;
         esac
     done
 }
 
-log_stdin_context() {
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' 'Context from stdin (may be blank):'
-    if [ ! -t 0 ]; then
-        tr -d '\000' >>"$LOG_FILE" || die "cannot append log"
-        printf '\n' >>"$LOG_FILE" || die "cannot append log"
+prompt_model_then_run_script() {
+    if over_model_prompt_limit; then return $HIT_MAX; fi
+    setup_per_prompt_log_folder
+    log_messages
+    call_curl
+    handle_model_response
+}
+
+over_model_prompt_limit() {
+    [ "$SSA_MAX_MODEL_PROMPTS" -gt 0 ] &&
+        [ "$PROMPT_COUNTER" -gt "$SSA_MAX_MODEL_PROMPTS" ]
+}
+
+setup_per_prompt_log_folder() {
+    PER_PROMPT_LOG_FOLDER="${TEMP_FOLDER}/prompt${PROMPT_COUNTER}"
+    create_dir_no_overwrite "$PER_PROMPT_LOG_FOLDER"
+}
+
+log_messages() {
+    cp "$MESSAGES_FILE" "${PER_PROMPT_LOG_FOLDER}/messages.json" ||
+        die "cannot copy messages to ${PER_PROMPT_LOG_FOLDER}/messages.json"
+}
+
+call_curl() {
+    build_curl_json_request
+    send_curl_json_request
+    save_model_reply_to_file
+}
+
+build_curl_json_request() {
+    JSON_BODY_FILE="${PER_PROMPT_LOG_FOLDER}/body.json"
+    create_file_no_overwrite "$JSON_BODY_FILE"
+    REQUEST_EXTRA_FILE="${PER_PROMPT_LOG_FOLDER}/requestExtra.json"
+    create_file_no_overwrite "$REQUEST_EXTRA_FILE"
+    if [ -n "$SSA_REQUEST_JSON" ]; then
+        printf '%s\n' "$SSA_REQUEST_JSON" >"$REQUEST_EXTRA_FILE" ||
+            die "cannot write request JSON extra"
+    else
+        printf '%s\n' '{}' >"$REQUEST_EXTRA_FILE" ||
+            die "cannot write request JSON extra"
     fi
-    end_log_chunk
+    write_windowed_request_body
 }
 
-call_llama() {
-    send_user_message
-    USER_REJECTION_REASON=""
-    if [ "$PROMPT_COUNTER" -eq 1 ]; then
-        log_llama_header
-    fi
-    log_llama_output
-    REPLY_START=$CHUNK_START
-    REPLY_END=$CHUNK_END
+write_windowed_request_body() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -n \
+        --arg model "$SSA_MODEL" \
+        --argjson budget "$SSA_MAX_CONTEXT_BYTES" \
+        --slurpfile messages "$MESSAGES_FILE" \
+        --slurpfile extra "$REQUEST_EXTRA_FILE" \
+        "$CONTEXT_WINDOW_JQ" \
+        >"$JSON_BODY_FILE" || die 'cannot build curl request JSON'
 }
 
-send_user_message() {
-    print_log_slice "$CHUNK_START" "$CHUNK_END" | sed 's/$/\\/' >&3 ||
-        die "llama-cli exited; see README.md"
-    printf '\n' >&3 || die "llama-cli exited; see README.md"
+send_curl_json_request() {
+    CURL_RESPONSE_FILE="${PER_PROMPT_LOG_FOLDER}/response.txt"
+    create_file_no_overwrite "$CURL_RESPONSE_FILE"
+    # shellcheck disable=SC2086
+    curl -sS --fail \
+        --retry 4 --retry-connrefused --retry-max-time 120 \
+        --connect-timeout 30 --max-time 900 \
+        -H "Content-Type: application/json" \
+        ${AUTH_HEADER_FILE:+-H @"$AUTH_HEADER_FILE"} \
+        --data-binary @"$JSON_BODY_FILE" \
+        -o "$CURL_RESPONSE_FILE" \
+        "$SSA_URL" || die "curl failed; see ssa -h for help"
 }
 
-log_llama_header() {
-    begin_log_chunk "# llama-cli header"
-    while :; do
-        IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
-        LINE=$(printf '%s\n' "$LINE" | sed "s/$(printf '\r')\$//")
-        case $LINE in
-            '>'*) PENDING_LINE="$LINE"; break ;;
-        esac
-        printf '%s\n' "$LINE" >>"$LOG_FILE" || die "cannot append log"
-        if [ "$SSA_VERBOSE" = 1 ]; then
-            printf '%s\n' "$LINE" | sanitize_output ||
-                die "cannot show header"
-        fi
-    done
-    end_log_chunk
+save_model_reply_to_file() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -e \
+        '.choices[0].message.content | type == "string"' \
+        "$CURL_RESPONSE_FILE" >/dev/null 2>&1 ||
+        die "invalid chat response; see ssa -h for help"
+    jq $JQ_BINARY_FLAG -j '.choices[0].message.content' \
+        "$CURL_RESPONSE_FILE" >"$MODEL_RESPONSE_FILE" ||
+        die "cannot write to temp file: $MODEL_RESPONSE_FILE"
 }
 
-log_llama_output() {
-    begin_log_chunk "# llama-cli output"
-    FIRST_REPLY_LINE=1
-    while :; do
-        if [ -n "$PENDING_LINE" ]; then
-            LINE="$PENDING_LINE"
-            PENDING_LINE=""
-        else
-            IFS= read -r LINE <&4 || die "llama-cli exited; see README.md"
-            LINE=$(printf '%s\n' "$LINE" | sed "s/$(printf '\r')\$//")
-        fi
-        if [ "$FIRST_REPLY_LINE" -eq 1 ]; then
-            LINE=$(printf '%s\n' "$LINE" | sed 's/^> \{0,1\}//')
-            if [ -z "$LINE" ]; then
-                continue
-            fi
-            FIRST_REPLY_LINE=0
-        fi
-        printf '%s\n' "$LINE" >>"$LOG_FILE" || die "cannot append log"
-        if [ "$SSA_VERBOSE" = 1 ]; then
-            printf '%s\n' "$LINE" | sanitize_output || die "cannot show reply"
-        fi
-        if [ "$LINE" = '# end' ]; then
-            break
-        fi
-    done
-    end_log_chunk
+create_dir_no_overwrite() {
+    ( umask 077; mkdir "$1" ) || die "could not create directory: $1"
+}
+
+create_file_no_overwrite() {
+    ( umask 077; set -C; : >"$1" ) || die "could not create file: $1"
 }
 
 handle_model_response() {
-    if [ "$(first_action_line)" = '# complete' ]; then
-        return 2
-    elif action_path_is_missing; then
-        record_format_error "the path is missing"
-    elif first_action_line | grep -q '^# write file: .'; then
-        handle_write_request
-    elif first_action_line | grep -q '^# edit file: .'; then
-        handle_edit_request
-    elif first_action_line | grep -q '^# script$'; then
-        handle_script_request
-    elif first_action_line | grep -q '^# question$'; then
-        handle_question_request
-    elif first_action_line | grep -q '^# message$'; then
-        handle_message_request
-    else
-        record_format_error "the reply had no action line"
+    append_assistant_turn
+    if agent_is_done; then return $TASK_DONE; fi
+    if reply_is_blank; then record_format_error
+    elif reply_is_write_request; then handle_write_request
+    elif reply_is_edit_request; then handle_edit_request
+    elif reply_is_script_request; then handle_script_request
+    else record_format_error
     fi
-    return 0
-}
-
-action_path_is_missing() {
-    first_action_line | grep -q -E \
-        '^# (write|edit) file:([[:space:]]*$|[^ ]| [[:space:]])'
+    return $LOOP_AGAIN
 }
 
 handle_write_request() {
-    if ! [ "$SSA_NO_WRITES" = 0 ]; then
-        record_format_error "# write file: is not allowed"
-    elif ask_to_run_action; then
-        apply_write_request
+    if ! writes_are_enabled; then
+        record_format_error
+        return
     fi
-}
-
-apply_write_request() {
-    FILE_TO_WRITE=$(first_action_line | sed 's/^# write file: //')
-    begin_action_message
-    {
-        ACTION_EXIT_CODE=$(
-            print_action_body '^# write file: .' >"$FILE_TO_WRITE"
-            printf '%s\n' "$?"
-        ) || ACTION_EXIT_CODE=1
-        if [ "$ACTION_EXIT_CODE" -eq 0 ]; then
-            printf 'wrote file: %s\n' "$FILE_TO_WRITE"
-        fi
-    } >>"$LOG_FILE" 2>&1 || die "cannot append log"
-    finish_action_message "$ACTION_EXIT_CODE"
+    ask_to_run || return
+    apply_write_request \
+        "$(first_action_line | sed 's/^# write file: //')"
 }
 
 handle_edit_request() {
-    if ! [ "$SSA_NO_EDITS" = 0 ]; then
-        record_format_error "# edit file: is not allowed"
-    elif edit_body_has_repeated_marker_line '======='; then
-        record_format_error \
-            "a search or replace line must not be exactly ======="
-    elif edit_body_has_repeated_marker_line '>>>>>>> REPLACE'; then
-        record_format_error \
-            "a search or replace line must not be exactly >>>>>>> REPLACE"
-    elif EDIT_FORMAT_MESSAGE=$(edit_format_is_ok); then
-        apply_edit_request
-    else
-        record_format_error "$EDIT_FORMAT_MESSAGE"
+    if ! edits_are_enabled; then
+        record_format_error
+        return
     fi
-}
-
-edit_body_has_repeated_marker_line() {
-    [ "$(print_action_body '^# edit file: .' | grep -cxF -e "$1")" -gt 1 ]
-}
-
-edit_format_is_ok() {
-    print_model_reply | LC_ALL=C awk "$CHECK_EDIT_FORMAT_AWK"
-}
-
-apply_edit_request() {
-    FILE_TO_EDIT=$(first_action_line | sed 's/^# edit file: //')
-    if [ ! -f "$FILE_TO_EDIT" ]; then
-        record_output_line "edit failed: $FILE_TO_EDIT: cannot read file" 1
-    elif ask_to_run_action; then
-        run_edit_awk
-    fi
-}
-
-run_edit_awk() {
-    EDIT_AWK_MESSAGE=$(print_model_reply |
-        FILE_TO_EDIT="$FILE_TO_EDIT" \
-        FILE_SIZE="$(wc -c 2>/dev/null <"$FILE_TO_EDIT" | tr -d '[:space:]')" \
-        LC_ALL=C awk "$EDIT_FILE_AWK" 2>&1)
-    if [ $? -eq 0 ]; then
-        record_output_line "edited file: $FILE_TO_EDIT" 0
-    elif [ -n "$EDIT_AWK_MESSAGE" ]; then
-        record_output_line "edit failed: $FILE_TO_EDIT: $EDIT_AWK_MESSAGE" 1
-    else
-        die "edit failed with no error text"
-    fi
-}
-
-first_action_line() {
-    print_model_reply | grep -E \
-    '^# (complete$|write file:|edit file:|script$|question$|message$)' |
-        head -n 1
-}
-
-record_output_line() {
-    begin_action_message
-    append_log '%s\n' "$1"
-    finish_action_message "$2"
+    ask_to_run || return
+    apply_edit_request \
+        "$(first_action_line | sed 's/^# edit file: //')"
 }
 
 handle_script_request() {
-    if ! [ "$SSA_NO_SCRIPTS" = 0 ]; then
-        record_format_error "# script is not allowed"
-    elif ! script_payload | grep -q '[^[:space:]]'; then
-        record_format_error "the script was empty"
-    elif ! script_payload | sh -n >/dev/null 2>&1; then
-        record_format_error "sh -n failed"
-    elif ask_to_run_action; then
-        run_script
+    if ! script_payload | grep -q '[^[:space:]]'; then record_format_error
+    elif reply_has_fence_line; then record_format_error
+    elif reply_has_thinking_tags; then record_format_error
+    elif ! reply_is_valid_shell; then record_format_error
+    elif ask_to_run; then run_script
     fi
 }
 
-ask_to_run_action() {
+append_assistant_turn() {
+    append_json_message assistant "$MODEL_RESPONSE_FILE"
+}
+
+agent_is_done() {
+    [ "$(first_action_line)" = '# complete' ]
+}
+
+reply_is_blank() {
+    ! grep -q '[^[:space:]]' "$MODEL_RESPONSE_FILE"
+}
+
+reply_has_fence_line() {
+    grep -q '^```' "$MODEL_RESPONSE_FILE"
+}
+
+reply_has_thinking_tags() {
+    grep -qF -- '<think>' "$MODEL_RESPONSE_FILE" ||
+        grep -qF -- '</think>' "$MODEL_RESPONSE_FILE" ||
+        grep -qF -- '<|channel>thought' "$MODEL_RESPONSE_FILE"
+}
+
+record_format_error() {
+    printf '%s%s\n' 'Format error: ' "$REPLY_SPEC" |
+        tee "$SCRIPT_OUTPUT_FILE" "$USER_TURN_FILE" ||
+        die "cannot write format error"
+    echo 1 >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    append_json_message user "$USER_TURN_FILE"
+}
+
+reply_is_valid_shell() {
+    script_payload | sh -n >/dev/null 2>&1
+}
+
+ask_to_run() {
     if [ "$SSA_NO_ASK" = 0 ]; then
-        ask_user_to_approve_action || {
-            record_action_rejection
-            return 1
+        ask_user_to_approve_script || {
+            record_script_rejection
+            return $IS_FALSE
         }
     fi
-    return 0
+    return $IS_TRUE
 }
 
-ask_user_to_approve_action() {
-    show_model_reply
-    ring_terminal
+apply_write_request() {
+    (
+        sed -n '/^# write file: ./,$p' "$MODEL_RESPONSE_FILE" |
+            sed 1d >"$1" &&
+            printf 'wrote file: %s\n' "$1"
+        echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    ) 2>&1 | tee "$SCRIPT_OUTPUT_FILE"
+    append_script_result
+}
+
+apply_edit_request() {
+    if [ ! -f "$1" ]; then
+        record_edit_failure "$1" "file not found"
+        return
+    fi
+    extract_edit_payload
+    jq_apply_edit "$1" || return
+    (
+        cat "$EDITED_BYTES_FILE" >"$1" &&
+            printf 'edited file: %s\n' "$1"
+        echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    ) 2>&1 | tee "$SCRIPT_OUTPUT_FILE"
+    append_script_result
+}
+
+extract_edit_payload() {
+    sed -n '/^# edit file: ./,$p' "$MODEL_RESPONSE_FILE" |
+        sed 1d >"$EDIT_PAYLOAD_FILE" || die "cannot write edit payload file"
+}
+
+jq_apply_edit() {
+    # shellcheck disable=SC2086
+    if ! ERR=$(jq $JQ_BINARY_FLAG -j -n \
+        --rawfile file "$1" \
+        --rawfile payload "$EDIT_PAYLOAD_FILE" \
+        "$EDIT_APPLY_JQ" 2>&1 >"$EDITED_BYTES_FILE")
+    then
+        [ -n "$ERR" ] || die "cannot apply edit"
+        record_edit_failure "$1" "$ERR"
+        return $IS_FALSE
+    fi
+    return $IS_TRUE
+}
+
+record_edit_failure() {
+    printf 'edit failed: %s: %s\n' "$1" "$2" | tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    append_script_result
+}
+
+reply_is_write_request() {
+    first_action_line | grep -q '^# write file: .'
+}
+
+reply_is_edit_request() {
+    first_action_line | grep -q '^# edit file: .'
+}
+
+reply_is_script_request() {
+    first_action_line | grep -q '^# script$'
+}
+
+writes_are_enabled() {
+    [ "$SSA_NO_WRITES" = 0 ]
+}
+
+edits_are_enabled() {
+    [ "$SSA_NO_EDITS" = 0 ]
+}
+
+first_action_line() {
+    grep -E '^# complete$|^# write file:|^# edit file:|^# script$' \
+        "$MODEL_RESPONSE_FILE" |
+        head -n 1 |
+        grep .  # head succeeds on empty input; this fails then
+}
+
+record_script_rejection() {
+    printf 'User chose not to run script. Try something else.\n' |
+        tee "$SCRIPT_OUTPUT_FILE"
+    echo 1 >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    ask_user_for_rejection_reason
+    append_script_result
+}
+
+ask_user_for_rejection_reason() {
+    printf 'reason: ' >&2
+    IFS= read -r REPLY </dev/tty ||
+        die "need /dev/tty or set SSA_NO_ASK=1; see ssa -h for help"
+    printf '%s\n' "$REPLY" >"${PER_PROMPT_LOG_FOLDER}/userFeedback.txt" ||
+        die "cannot write ${PER_PROMPT_LOG_FOLDER}/userFeedback.txt"
+}
+
+run_script() {
+    (
+        script_payload | sh 2>&1
+        echo $? >"$EXIT_CODE_FILE" || die "cannot write script exit code"
+    ) | tee "$SCRIPT_OUTPUT_FILE"
+    append_script_result
+}
+
+script_payload() {
+    sed -n '/^# script$/,$p' "$MODEL_RESPONSE_FILE" | sed 1d
+}
+
+ask_user_to_approve_script() {
+    USER_ANSWER_FILE="${PER_PROMPT_LOG_FOLDER}/userAnswer.txt"
+    print_model_script
     handle_user_answers
 }
 
-show_model_reply() {
-    printf 'ssa action:\n' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    print_model_reply | sanitize_output >/dev/tty || die "cannot show reply"
+print_model_script() {
+    printf 'Script from model:\n' >&2
+    # Show the script safely for ask review (file on disk unchanged).
+    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 || die "cannot show model script"
 }
 
 handle_user_answers() {
-    while :; do
-        printf '\nApply this action? [Y]es / [N]o / [Q]uit ' >/dev/tty ||
-            die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    while true; do
+        printf '\nRun this script? [Y]es / [N]o / [Q]uit ' >&2
         read_ask_answer_from_tty
-        case $(printf '%s\n' "$REPLY" | tr '[:upper:]' '[:lower:]') in
-            y|yes) return 0 ;;
-            n|no) return 1 ;;
-            q|quit) die "User chose to quit." ;;
+        case $(cat "$USER_ANSWER_FILE") in
+            y|Y|yes|YES) return $ASK_YES ;;
+            n|N|no|NO) return $ASK_NO ;;
+            q|Q|quit|QUIT) die 'User chose to quit.' ;;
             *) print_invalid_input ;;
         esac
     done
@@ -745,241 +806,107 @@ handle_user_answers() {
 
 read_ask_answer_from_tty() {
     IFS= read -r REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    begin_log_chunk "# apply this action? user answer"
-    printf '%s\n' "$REPLY" >>"$LOG_FILE" || die "cannot append log"
-    end_log_chunk
+        die "need /dev/tty or set SSA_NO_ASK=1; see ssa -h for help"
+    printf '%s\n' "$REPLY" >"$USER_ANSWER_FILE" ||
+        die "cannot write to temp file: $USER_ANSWER_FILE"
 }
 
 print_invalid_input() {
-    printf 'invalid input: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    printf '%s\n' "$REPLY" | sanitize_output >/dev/tty ||
-        die "cannot show invalid input"
+    printf 'invalid input: ' >&2
+    sanitize_output <"$USER_ANSWER_FILE" >&2 || die "cannot show invalid input"
 }
 
-record_action_rejection() {
-    begin_action_message
-    append_log '%s\n' "User rejected the action. Try something else."
-    ask_user_for_rejection_reason
-    finish_action_message 1
-}
-
-ask_user_for_rejection_reason() {
-    printf 'reason: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    IFS= read -r USER_REJECTION_REASON </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-}
-
-run_script() {
-    begin_action_message
-    # Close llama input, output, and the lifeline. The script must not
-    # hold them. Fd 4 carries the exit code. Fd 3 is the log.
-    ACTION_EXIT_CODE=$(
-        exec 4>&1
-        exec 3>>"$LOG_FILE"
-        {
-            sh -c "$(script_payload)" </dev/null 2>&1 3>&- 4>&- 5>&-
-            printf '%s\n' "$?" >&4
-        } 3>&1 | tr -d '\000' >&3
-        COPY_STATUS=$?
-        exit "$COPY_STATUS"
-    )
-    if [ $? -ne 0 ]; then
-        die "cannot append log"
+append_script_result() {
+    {
+        printf 'Output from running the script:\n\n'
+        cat "$SCRIPT_OUTPUT_FILE"
+        print_user_rejection_reason
+        printf '\n\nScript exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
+    } >"$USER_TURN_FILE" || die "cannot write user turn"
+    if ! user_turn_is_json_safe; then
+        write_omitted_script_output
     fi
-    if [ -n "$(tail -c 1 "$LOG_FILE")" ]; then
-        printf '\n' >>"$LOG_FILE" || die "cannot append log"
-    fi
-    finish_action_message "$ACTION_EXIT_CODE"
+    append_json_message user "$USER_TURN_FILE"
 }
 
-begin_action_message() {
-    begin_log_chunk "# sent to model"
-    append_log 'Output from the action:\n\n'
-    OUTPUT_START=$(($(log_line_count) + 1))
-}
-
-script_payload() {
-    print_action_body '^# script$'
-}
-
-finish_action_message() {
-    OUTPUT_END=$(log_line_count)
-    if [ "$SSA_VERBOSE" = 1 ]; then
-        print_log_slice "$OUTPUT_START" "$OUTPUT_END" | sanitize_output ||
-            die "cannot show action output"
-    fi
-    log_user_rejection_reason
-    if [ "$OUTPUT_END" -lt "$OUTPUT_START" ]; then
-        append_log 'Action exit code: %s\n' "$1"
-    else
-        append_log '\nAction exit code: %s\n' "$1"
-    fi
-    end_log_chunk
-}
-
-log_user_rejection_reason() {
-    if printf '%s\n' "$USER_REJECTION_REASON" | grep -q '[^[:space:]]'; then
-        append_log '\nReason: %s\n' "$USER_REJECTION_REASON"
+print_user_rejection_reason() {
+    if [ -f "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt" ] &&
+        grep -q '[^[:space:]]' \
+            "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt"
+    then
+        printf '\nReason: %s\n' \
+            "$(cat "${PER_PROMPT_LOG_FOLDER}/userFeedback.txt")"
     fi
 }
 
-handle_question_request() {
-    if ! [ "$SSA_NO_QUESTIONS" = 0 ]; then
-        record_format_error "# question is not allowed"
-    elif ! print_action_body '^# question$' | grep -q '[^[:space:]]'; then
-        record_format_error "the question was empty"
-    else
-        ask_question
-    fi
+user_turn_is_json_safe() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -e -n \
+        --rawfile content "$USER_TURN_FILE" \
+        '$content | contains("\u0000") | not' >/dev/null 2>&1
 }
 
-ask_question() {
-    printf 'question from model: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
-    print_action_body '^# question$' | sanitize_output >/dev/tty ||
-        die "cannot show question"
-    printf 'your answer: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
-    ring_terminal
-    IFS= read -r REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' "$REPLY"
-    end_log_chunk
+write_omitted_script_output() {
+    {
+        printf '%s\n\n' "$OUTPUT_OMITTED_NOT_UTF8"
+        printf 'Script exit code: %s\n' "$(cat "$EXIT_CODE_FILE")"
+    } >"$USER_TURN_FILE" || die "cannot write user turn"
 }
 
-handle_message_request() {
-    if ! [ "$SSA_NO_MESSAGES" = 0 ]; then
-        record_format_error "# message is not allowed"
-    elif ! print_action_body '^# message$' | grep -q '[^[:space:]]'; then
-        record_format_error "the message was empty"
-    else
-        show_message
-    fi
+append_json_message() {
+    # $1 = role, $2 = content file
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG \
+        --arg role "$1" \
+        --rawfile content "$2" \
+        '. + [{role: $role, content: $content}]' \
+        "$MESSAGES_FILE" >"$MESSAGES_NEXT_FILE" || die "cannot append message"
+    mv "$MESSAGES_NEXT_FILE" "$MESSAGES_FILE" || die "cannot update messages"
 }
 
-record_format_error() {
-    printf '%s\n' "$*"
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' "$*"
-    end_log_chunk
-}
-
-show_message() {
-    print_action_body '^# message$' | sanitize_output >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_MESSAGES=1; see README.md"
-    ring_terminal
-    begin_log_chunk "# sent to model"
-    append_log '%s\n' "The user was shown the message."
-    end_log_chunk
-}
-
-print_action_body() {
-    print_model_reply | sed -n "/$1/,/^# end\$/p" | sed '1d;$d'
-}
-
-print_model_reply() {
-    print_log_slice "$REPLY_START" "$REPLY_END"
-}
-
-print_log_slice() {
-    if [ "$1" -le 0 ] || [ "$2" -lt "$1" ]; then
-        return 0
-    fi
-    sed -n "$1,$2p" "$LOG_FILE"
+review_work() {
+    PROMPT_COUNTER=$((PROMPT_COUNTER + 1))
+    setup_per_prompt_log_folder
+    printf '%s\n' "$REVIEW_ASK" >"$USER_TURN_FILE" || die "cannot write file"
+    append_json_message user "$USER_TURN_FILE"
+    log_messages
+    call_curl
+    printf 'Feedback from model: ' >&2
+    sanitize_output <"$MODEL_RESPONSE_FILE" >&2 || die "cannot show feedback"
+    printf '\n' >&2
+    PROMPT_COUNTER=$((PROMPT_COUNTER - 1))
 }
 
 sanitize_output() {
-    LC_ALL=C sed -e "s/$(printf '\r')/\\\\r/g" \
-        -e "s/$(printf '\033')/\\\\e/g" \
-        -e "s/$(printf '[\001-\010\013\014\016-\037\177]')/?/g"
-}
-
-ring_terminal() {
-    printf '\a' >/dev/tty || die "need /dev/tty; see README.md"
-}
-
-begin_log_chunk() {
-    printf '%s\n' "$1" >>"$LOG_FILE" || die "cannot append log"
-    CHUNK_START=$(($(log_line_count) + 1))
-}
-
-append_log() {
-    printf "$@" >>"$LOG_FILE" || die "cannot append log"
-}
-
-end_log_chunk() {
-    # The blank line after the body is outside the chunk.
-    CHUNK_END=$(log_line_count)
-    printf '\n' >>"$LOG_FILE" || die "cannot append log"
-}
-
-log_line_count() {
-    wc -l <"$LOG_FILE" | tr -d '[:space:]'
+    # Carriage return can overwrite the line; show as \r.
+    CR_AS_SLASH_R="s/$(printf '\r')/\\\\r/g"
+    # ESC starts ANSI/CSI sequences; show as \e.
+    ESC_AS_SLASH_E="s/$(printf '\033')/\\\\e/g"
+    # Other non-print bytes (keep tab); show as ?.
+    NONPRINT_AS_QUESTION="s/[^[:print:]$(printf '\t')]/?/g"
+    sed -e "$CR_AS_SLASH_R" |
+        sed -e "$ESC_AS_SLASH_E" |
+        sed -e "$NONPRINT_AS_QUESTION"
 }
 
 finish_agent_loop() {
-    stop_llama
-    log_run_end "completed"
-    clean_up_fifos
-    printf 'log file: %s\n' "$LOG_FILE"
-    printf 'done: after %s model prompts\n' "$PROMPT_COUNTER"
-    exit 0
+    case $LOOP_STATUS in
+        done) printf 'done: after %s model prompts\n' \
+            "$PROMPT_COUNTER" >&2; exit 0 ;;
+        hit\ max) printf 'hit max: stopped after SSA_MAX_MODEL_PROMPTS (%s)\n' \
+            "$SSA_MAX_MODEL_PROMPTS" >&2; exit 1 ;;
+        *) die "unknown loop status $LOOP_STATUS" ;;
+    esac
 }
 
 die() {
-    trap '' PIPE USR1
     printf '%s\n' "$*" >&2
-    if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
-        printf 'log file: %s\n' "$LOG_FILE" >&2
-    fi
-    stop_llama
-    log_run_end "die: $*"
-    clean_up_fifos
-    if [ "$(exec sh -c 'echo "$PPID"')" != "$$" ] && [ -n "${PID:-}" ]; then
-        kill -USR1 "$PID" 2>/dev/null || :
+    if [ -n "${PID:-}" ]; then
+        kill -USR1 "$PID" 2>/dev/null
+    else
+        printf 'PID not set; cannot signal parent process\n' >&2
     fi
     exit 1
-}
-
-stop_llama() {
-    if [ -z "$WATCH_PID" ]; then
-        return
-    fi
-    # The watcher blocks in open until this write end
-    # exists. Kill it there so the wait can return.
-    if (true >&5) 2>/dev/null; then
-        if (true >&3) 2>/dev/null; then
-            exec 3>&-
-        fi
-        if (true <&4) 2>/dev/null; then
-            exec 4<&-
-        fi
-        exec 5>&-
-    else
-        kill -KILL "$WATCH_PID" 2>/dev/null || :
-    fi
-    wait "$WATCH_PID" || :
-    WATCH_PID=""
-}
-
-log_run_end() {
-    if [ -z "${LOG_FILE:-}" ] || [ ! -f "$LOG_FILE" ]; then
-        return 0
-    fi
-    printf '\ntime: %s\n' "$(date '+%Y-%m-%d_%H.%M.%S')" >>"$LOG_FILE" || :
-    printf 'status: %s\n' "$1" >>"$LOG_FILE" || :
-}
-
-clean_up_fifos() {
-    # The write end stays open in this process.
-    # The watcher closes its read end, then removes the pipes.
-    if [ -n "${FIFO_DIRECTORY:-}" ] && ! (true >&5) 2>/dev/null; then
-        rm -rf "$FIFO_DIRECTORY" || :
-    fi
 }
 
 main "$@"
