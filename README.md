@@ -33,7 +33,7 @@ and sends the answer back, or shows a message and keeps going.
 This repeats until the model returns `# complete`, or until
 `SSA_MAX_MODEL_PROMPTS` is hit.
 
-ssa asks before a script, write, or edit. `SSA_NO_ASK=1` skips
+ssa asks before a script, write, or edit. `SSA_ASSUME_YES=1` skips
 the question.
 
 Each run writes one JSON log in `SSA_LOG_FOLDER` (default
@@ -45,13 +45,13 @@ Set these in the environment. `VAR=value ssa …` covers one run.
 
 | Setting | Default |
 | --- | --- |
+| `SSA_ASSUME_YES` | `0` (ask before a script, write, or edit) |
 | `SSA_EXTRA_SYSTEM_TEXT` | empty, added to the instructions |
 | `SSA_KEY` | empty; bearer token when the provider needs one |
 | `SSA_LOG_FOLDER` | log directory (default `TMPDIR`, or `/tmp`) |
 | `SSA_MAX_CONTEXT_BYTES` | `0` (send every turn) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` (`0` means no limit) |
 | `SSA_MODEL` | required; model name |
-| `SSA_NO_ASK` | `0` (ask before a script, write, or edit) |
 | `SSA_NO_EDITS` | `0` (allow file edits) |
 | `SSA_NO_MESSAGES` | `0` (allow messages) |
 | `SSA_NO_QUESTIONS` | `0` (allow questions) |
@@ -97,7 +97,7 @@ A question waits for an answer. A message is text for the
 user. Any of these can be turned off with the settings below.
 
 ssa-local asks before a script, write, or edit.
-`SSA_NO_ASK=1` skips the question, for a background run.
+`SSA_ASSUME_YES=1` skips the question, for a background run.
 
 Each run writes one log file in `SSA_LOG_FOLDER` (default
 `TMPDIR`, or `/tmp`). The log stays. It cannot be turned off.
@@ -113,10 +113,10 @@ one run.
 
 | Setting | Default |
 | --- | --- |
+| `SSA_ASSUME_YES` | `0` (ask before a script, write, or edit) |
 | `SSA_EXTRA_SYSTEM_TEXT` | empty, added to the instructions |
 | `SSA_LLAMA_CLI_ARGUMENTS` | required; llama-cli flags, including the model |
 | `SSA_LOG_FOLDER` | log directory (default `TMPDIR`, or `/tmp`) |
-| `SSA_NO_ASK` | `0` (ask before a script, write, or edit) |
 | `SSA_NO_EDITS` | `0` (allow file edits) |
 | `SSA_NO_MESSAGES` | `0` (allow messages) |
 | `SSA_NO_QUESTIONS` | `0` (allow questions) |
@@ -138,18 +138,18 @@ Hangup, interrupt, and terminate print no status line.
 
 ## ssa-simple
 
-Same setup as ssa-local: `llama-cli` or `llama` on `PATH`, and
-a GGUF file named with `-m` or `--model` in
-`SSA_LLAMA_CLI_ARGUMENTS`. Other llama-cli flags in that
-variable are passed through. This program has no `-h`. This
-file is the help.
+Needs `llama-cli` or `llama` on `PATH`. `SSA_MODEL_FILE` is
+the path to a GGUF file. `-m` sets the path for one run.
+`-y` sets `SSA_ASSUME_YES=1`. `-v` sets `SSA_VERBOSE=1`. Options
+come before the task. `--` ends them. A flag wins over the
+environment. This program has no `-h`. This file is the
+help.
 
 The task is part of the system prompt. Text on stdin is added
 to the user turn.
 
 ```sh
-export SSA_LLAMA_CLI_ARGUMENTS="-m /models/gemma.gguf"
-cat notes.txt | ssa-simple summarize this file
+cat notes.txt | ssa-simple -y -v -m /models/gemma.gguf summarize this file
 ```
 
 The model returns one script. The script is the whole reply.
@@ -164,7 +164,7 @@ Lines between `<think>` and `</think>`, and between
 comments. A `# complete` line there does not end the run.
 A `# end` line there ends the reply.
 
-ssa-simple asks before a script. `SSA_NO_ASK=1` skips the
+ssa-simple asks before a script. `SSA_ASSUME_YES=1` skips the
 question, for a background run.
 
 A run does not write a log file.
@@ -180,9 +180,9 @@ one run.
 
 | Setting | Default |
 | --- | --- |
-| `SSA_LLAMA_CLI_ARGUMENTS` | required; llama-cli flags, including the model |
-| `SSA_NO_ASK` | `0` (ask before a script) |
-| `SSA_VERBOSE` | `0` (hide progress) |
+| `SSA_ASSUME_YES` | `0` (ask before a script). `-y` sets `1` |
+| `SSA_MODEL_FILE` | required; GGUF path. `-m` sets it |
+| `SSA_VERBOSE` | `0` (hide progress). `-v` sets `1` |
 
 ### Exit status
 

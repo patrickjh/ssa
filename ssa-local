@@ -5,10 +5,10 @@
 set -u
 
 # Users can set
+SSA_ASSUME_YES="${SSA_ASSUME_YES:-0}"
 SSA_EXTRA_SYSTEM_TEXT="${SSA_EXTRA_SYSTEM_TEXT:-}"
 SSA_LLAMA_CLI_ARGUMENTS="${SSA_LLAMA_CLI_ARGUMENTS:-}"
 SSA_LOG_FOLDER="${SSA_LOG_FOLDER:-${TMPDIR:-/tmp}}"
-SSA_NO_ASK="${SSA_NO_ASK:-0}"
 SSA_NO_EDITS="${SSA_NO_EDITS:-0}"
 SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-0}"
 SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-0}"
@@ -28,12 +28,12 @@ OUTPUT_START=0
 PENDING_LINE=""
 PID=$$
 PROMPT_COUNTER=0
-REPLY=""
 REPLY_END=0
 REPLY_START=0
 SYSTEM_PROMPT=""
 TASK=""
 USER_REJECTION_REASON=""
+USER_REPLY=""
 WATCH_PID=""
 
 SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. The
@@ -281,7 +281,7 @@ check_llama() {
 
 check_can_run() {
     check_task
-    check_zero_or_one "$SSA_NO_ASK" "SSA_NO_ASK"
+    check_zero_or_one "$SSA_ASSUME_YES" "SSA_ASSUME_YES"
     check_zero_or_one "$SSA_NO_EDITS" "SSA_NO_EDITS"
     check_zero_or_one "$SSA_NO_MESSAGES" "SSA_NO_MESSAGES"
     check_zero_or_one "$SSA_NO_QUESTIONS" "SSA_NO_QUESTIONS"
@@ -319,8 +319,8 @@ check_llama_cli_arguments() {
 check_tty() {
     if ( exec <>/dev/tty ) 2>/dev/null; then
         return
-    elif [ "$SSA_NO_ASK" = 0 ]; then
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    elif [ "$SSA_ASSUME_YES" = 0 ]; then
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     fi
     SSA_NO_QUESTIONS=1
     SSA_NO_MESSAGES=1
@@ -374,7 +374,7 @@ log_environment() {
         "SSA_EXTRA_SYSTEM_TEXT=$SSA_EXTRA_SYSTEM_TEXT" \
         "SSA_LLAMA_CLI_ARGUMENTS=$SSA_LLAMA_CLI_ARGUMENTS" \
         "SSA_LOG_FOLDER=$SSA_LOG_FOLDER" \
-        "SSA_NO_ASK=$SSA_NO_ASK" \
+        "SSA_ASSUME_YES=$SSA_ASSUME_YES" \
         "SSA_NO_EDITS=$SSA_NO_EDITS" \
         "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
         "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
@@ -708,7 +708,7 @@ handle_script_request() {
 }
 
 ask_to_run_action() {
-    if [ "$SSA_NO_ASK" = 0 ]; then
+    if [ "$SSA_ASSUME_YES" = 0 ]; then
         ask_user_to_approve_action || {
             record_action_rejection
             return 1
@@ -725,16 +725,16 @@ ask_user_to_approve_action() {
 
 show_model_reply() {
     printf 'ssa action:\n' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     print_model_reply | sanitize_output >/dev/tty || die "cannot show reply"
 }
 
 handle_user_answers() {
     while :; do
         printf '\nApply this action? [Y]es / [N]o / [Q]uit ' >/dev/tty ||
-            die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+            die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
         read_ask_answer_from_tty
-        case $(printf '%s\n' "$REPLY" | tr '[:upper:]' '[:lower:]') in
+        case $(printf '%s\n' "$USER_REPLY" | tr '[:upper:]' '[:lower:]') in
             y|yes) return 0 ;;
             n|no) return 1 ;;
             q|quit) die "User chose to quit." ;;
@@ -744,17 +744,17 @@ handle_user_answers() {
 }
 
 read_ask_answer_from_tty() {
-    IFS= read -r REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    IFS= read -r USER_REPLY </dev/tty ||
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     begin_log_chunk "# apply this action? user answer"
-    printf '%s\n' "$REPLY" >>"$LOG_FILE" || die "cannot append log"
+    printf '%s\n' "$USER_REPLY" >>"$LOG_FILE" || die "cannot append log"
     end_log_chunk
 }
 
 print_invalid_input() {
     printf 'invalid input: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    printf '%s\n' "$REPLY" | sanitize_output >/dev/tty ||
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
+    printf '%s\n' "$USER_REPLY" | sanitize_output >/dev/tty ||
         die "cannot show invalid input"
 }
 
@@ -767,9 +767,9 @@ record_action_rejection() {
 
 ask_user_for_rejection_reason() {
     printf 'reason: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     IFS= read -r USER_REJECTION_REASON </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
 }
 
 run_script() {
@@ -844,10 +844,10 @@ ask_question() {
     printf 'your answer: ' >/dev/tty ||
         die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     ring_terminal
-    IFS= read -r REPLY </dev/tty ||
+    IFS= read -r USER_REPLY </dev/tty ||
         die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
     begin_log_chunk "# sent to model"
-    append_log '%s\n' "$REPLY"
+    append_log '%s\n' "$USER_REPLY"
     end_log_chunk
 }
 

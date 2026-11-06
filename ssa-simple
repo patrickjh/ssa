@@ -1,12 +1,13 @@
 #!/bin/sh
 # ssa-simple — Simple Shell Agent for a small model.
 # Help is README.md. This program has no -h or --help.
+# Flags are -y, -v, and -m. The rest of the line is the task.
 
 set -u
 
 # Users can set
-SSA_LLAMA_CLI_ARGUMENTS="${SSA_LLAMA_CLI_ARGUMENTS:-}"
-SSA_NO_ASK="${SSA_NO_ASK:-0}"
+SSA_ASSUME_YES="${SSA_ASSUME_YES:-0}"
+SSA_MODEL_FILE="${SSA_MODEL_FILE:-}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
 # Internal
@@ -14,12 +15,12 @@ MODEL_REPLY=""
 PENDING_LINE=""
 PID=$$
 PROMPT_COUNTER=0
-REPLY=""
 SCRIPT_OUTPUT=""
 TASK=""
 TMPDIR="${TMPDIR:-/tmp}"
 USER_MESSAGE=""
 USER_REJECTION_REASON=""
+USER_REPLY=""
 WATCH_PID=""
 
 SYSTEM_PROMPT='You are helping a user solve a task with POSIX sh scripts.
@@ -45,6 +46,9 @@ Example reply when the task is done:
 # complete
 # end'
 
+REPLY_NEEDS_END_LINE='The reply ended without # end. Send the
+script again, and end it with a line that is exactly # end.'
+
 REPLY_NEEDS_SCRIPT_OR_COMPLETE=\
 'Reply with a script or # complete, followed by a line that is # end.'
 
@@ -54,13 +58,27 @@ main() {
     trap 'stop_llama; clean_up_fifos; exit 129' HUP
     trap 'stop_llama; clean_up_fifos; exit 130' INT
     trap 'stop_llama; clean_up_fifos; exit 143' TERM
-    TASK="$*"
+    read_command_line "$@"
     check_posix_commands
     check_llama
     check_can_run
     setup_agent_loop
     run_agent_loop
     finish_agent_loop
+}
+
+read_command_line() {
+    while getopts ":yvm:" OPTION; do
+        case "$OPTION" in
+            y) SSA_ASSUME_YES=1 ;;
+            v) SSA_VERBOSE=1 ;;
+            m) SSA_MODEL_FILE="$OPTARG" ;;
+            :) die "SSA_MODEL_FILE not set; see README.md" ;;
+            \?) die "unknown option; see README.md" ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    TASK="$*"
 }
 
 check_posix_commands() {
@@ -82,9 +100,9 @@ check_llama() {
 
 check_can_run() {
     check_task
-    check_zero_or_one "$SSA_NO_ASK" "SSA_NO_ASK"
+    check_zero_or_one "$SSA_ASSUME_YES" "SSA_ASSUME_YES"
     check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
-    check_llama_cli_arguments
+    check_model_file
     check_tty
 }
 
@@ -98,17 +116,15 @@ check_zero_or_one() {
     fi
 }
 
-check_llama_cli_arguments() {
-    printf '%s\n' "$SSA_LLAMA_CLI_ARGUMENTS" |
-        grep -q -E '(^|[[:space:]])(-m|--model)[[:space:]]+[^[:space:]]' ||
-        die "SSA_LLAMA_CLI_ARGUMENTS needs -m or --model; see README.md"
+check_model_file() {
+    [ -n "$SSA_MODEL_FILE" ] || die "SSA_MODEL_FILE not set; see README.md"
 }
 
 check_tty() {
     if ( exec <>/dev/tty ) 2>/dev/null; then
         return
-    elif [ "$SSA_NO_ASK" = 0 ]; then
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    elif [ "$SSA_ASSUME_YES" = 0 ]; then
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     fi
 }
 
@@ -125,17 +141,13 @@ setup_system_prompt() {
 }
 
 start_llama() {
-    # Progress uses stdout. At 0, drop it before
-    # llama-cli starts so load text goes there too.
     if [ "$SSA_VERBOSE" = 0 ]; then
         exec >/dev/null || die "cannot open /dev/null"
     fi
     create_fifos
     watch_llama &
     WATCH_PID=$!
-    # Close this to stop llama-cli. The watcher kills it and removes the fifos.
     exec 5>"$TMPDIR/ssa-$PID-lifeline" || die "cannot open llama lifeline"
-    # Stdout, then stdin. Each open unblocks the matching llama-cli redirect.
     exec 4<"$TMPDIR/ssa-$PID-output" || die "cannot open llama-cli output"
     exec 3>"$TMPDIR/ssa-$PID-input" || die "cannot open llama-cli input"
 }
@@ -156,16 +168,12 @@ watch_llama() {
     set -f
     umask 077
     copy_llama_stderr &
-    # A writer that is not llama-cli, so the reader's
-    # open cannot wait on llama-cli. Closed after kill
-    # so the reader finishes and wait can return.
     exec 6>"$TMPDIR/ssa-$PID-stderr" || exit 1
     launch_llama
     cat <&5 >/dev/null
     exec 5<&-
     kill -KILL "$LLAMA_PID" 2>/dev/null || :
     exec 6>&-
-    # Reap llama-cli and the stderr reader.
     wait
     clean_up_fifos
 }
@@ -177,7 +185,6 @@ copy_llama_stderr() {
 }
 
 launch_llama() {
-    # shellcheck disable=SC2086
     exec_llama \
         -sys "$SYSTEM_PROMPT" \
         --simple-io \
@@ -186,10 +193,9 @@ launch_llama() {
         --color off \
         --context-shift \
         --keep -1 \
-        $SSA_LLAMA_CLI_ARGUMENTS \
+        -m "$SSA_MODEL_FILE" \
         --reverse-prompt '
-# end
-' \
+# end' \
         6>&- \
         2>"$TMPDIR/ssa-$PID-stderr" \
         >"$TMPDIR/ssa-$PID-output" \
@@ -265,6 +271,7 @@ read_model_reply() {
     PROMPT_SEEN=0
     IN_THINK_SECTION=0
     SEEN_COMPLETE=0
+    SEEN_END=0
     while :; do
         read_reply_line
         take_reply_line
@@ -293,6 +300,7 @@ take_reply_line() {
             PROMPT_SEEN=1
             return 1
         fi
+        return 2
     fi
     if [ "$PROMPT_SEEN" -eq 0 ]; then
         LINE=$(printf '%s\n' "$LINE" | sed 's/^> \{0,1\}//')
@@ -301,8 +309,8 @@ take_reply_line() {
         fi
         PROMPT_SEEN=1
     fi
-    # The reverse prompt ends the reply.
     if [ "$LINE" = '# end' ]; then
+        SEEN_END=1
         return 2
     fi
     if [ "$SEEN_COMPLETE" -eq 1 ]; then
@@ -312,7 +320,7 @@ take_reply_line() {
 }
 
 reply_line_is_prompt() {
-    if [ "$1" = '>' ] || [ "$1" = '> ' ]; then
+    if [ "$1" = '> ' ]; then
         return 0
     fi
     return 1
@@ -346,7 +354,9 @@ store_reply_line() {
 }
 
 handle_model_response() {
-    if reply_has_command; then
+    if [ "$SEEN_END" = 0 ]; then
+        record_format_error "$REPLY_NEEDS_END_LINE"
+    elif reply_has_command; then
         if handle_script_request && reply_has_complete_line; then
             return 2
         fi
@@ -394,7 +404,7 @@ reply_has_fence_line() {
 }
 
 ask_to_run_script() {
-    if [ "$SSA_NO_ASK" = 0 ]; then
+    if [ "$SSA_ASSUME_YES" = 0 ]; then
         ask_user_to_approve_script || {
             record_script_rejection
             return 1
@@ -411,7 +421,7 @@ ask_user_to_approve_script() {
 
 show_model_reply() {
     printf 'ssa-simple script:\n' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     printf '%s' "$MODEL_REPLY" | sanitize_output >/dev/tty ||
         die "cannot show reply"
 }
@@ -419,9 +429,9 @@ show_model_reply() {
 handle_user_answers() {
     while :; do
         printf '\nRun this script? [Y]es / [N]o / [Q]uit ' >/dev/tty ||
-            die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+            die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
         read_ask_answer_from_tty
-        case $(printf '%s\n' "$REPLY" | tr '[:upper:]' '[:lower:]') in
+        case $(printf '%s\n' "$USER_REPLY" | tr '[:upper:]' '[:lower:]') in
             y|yes) return 0 ;;
             n|no) return 1 ;;
             q|quit) die "User chose to quit." ;;
@@ -431,14 +441,14 @@ handle_user_answers() {
 }
 
 read_ask_answer_from_tty() {
-    IFS= read -r REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+    IFS= read -r USER_REPLY </dev/tty ||
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
 }
 
 print_invalid_input() {
     printf 'invalid input: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
-    printf '%s\n' "$REPLY" | sanitize_output >/dev/tty ||
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
+    printf '%s\n' "$USER_REPLY" | sanitize_output >/dev/tty ||
         die "cannot show invalid input"
 }
 
@@ -450,32 +460,28 @@ record_script_rejection() {
 
 Reason: ${USER_REJECTION_REASON}"
     fi
-    set_script_user_message 1
+    set_script_user_message
 }
 
 ask_user_for_rejection_reason() {
     printf 'reason: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     IFS= read -r USER_REJECTION_REASON </dev/tty ||
-        die "need /dev/tty or set SSA_NO_ASK=1; see README.md"
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
 }
 
 run_script() {
-    (
-        umask 077
-        mkfifo "$TMPDIR/ssa-$PID-action"
-    ) || die "cannot create fifo"
-    sh -c "$(script_payload)" </dev/null \
-        >"$TMPDIR/ssa-$PID-action" 2>&1 3>&- 4>&- 5>&- &
-    SCRIPT_PID=$!
     SCRIPT_OUTPUT=$(
-        tr -d '\000' <"$TMPDIR/ssa-$PID-action"
-        printf x
+        {
+            sh -c "$(script_payload)" </dev/null 2>&1 3>&- 4>&- 5>&-
+            printf '\nScript exit code: %s\n' "$?"
+        } | {
+            tr -d '\000'
+            printf x
+        }
     ) || die "cannot read script output"
     SCRIPT_OUTPUT=${SCRIPT_OUTPUT%x}
-    wait "$SCRIPT_PID"
-    set_script_user_message $?
-    rm -f "$TMPDIR/ssa-$PID-action" || :
+    set_script_user_message
 }
 
 script_payload() {
@@ -483,22 +489,9 @@ script_payload() {
 }
 
 set_script_user_message() {
-    USER_MESSAGE=$(printf '%s\n\n%sx' \
+    USER_MESSAGE=$(printf '%s\n\n%s\n' \
         'Output from the last script:' "$SCRIPT_OUTPUT") ||
         die "cannot store script output"
-    USER_MESSAGE=${USER_MESSAGE%x}
-    case $USER_MESSAGE in
-        *'
-') ;;
-        *) USER_MESSAGE="${USER_MESSAGE}
-" ;;
-    esac
-    if [ -n "$SCRIPT_OUTPUT" ]; then
-        USER_MESSAGE="${USER_MESSAGE}
-"
-    fi
-    USER_MESSAGE="${USER_MESSAGE}Script exit code: $1
-"
     if [ "$SSA_VERBOSE" = 1 ] && [ -n "$SCRIPT_OUTPUT" ]; then
         printf '%s\n' "$SCRIPT_OUTPUT" | sanitize_output ||
             die "cannot show script output"
@@ -543,8 +536,6 @@ stop_llama() {
     if [ -z "$WATCH_PID" ]; then
         return
     fi
-    # The watcher blocks in open until this write end
-    # exists. Kill it there so the wait can return.
     if (true >&5) 2>/dev/null; then
         if (true >&3) 2>/dev/null; then
             exec 3>&-
@@ -561,11 +552,8 @@ stop_llama() {
 }
 
 clean_up_fifos() {
-    # The write end stays open in this process.
-    # The watcher closes its read end, then removes the pipes.
     if ! (true >&5) 2>/dev/null; then
-        rm -f "$TMPDIR/ssa-$PID-action" \
-            "$TMPDIR/ssa-$PID-input" \
+        rm -f "$TMPDIR/ssa-$PID-input" \
             "$TMPDIR/ssa-$PID-lifeline" \
             "$TMPDIR/ssa-$PID-output" \
             "$TMPDIR/ssa-$PID-stderr" || :

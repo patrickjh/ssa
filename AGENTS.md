@@ -36,8 +36,9 @@ a program into `README.md` beyond what a person needs to run
 it. Update `README.md` when a setting's meaning would otherwise
 be unclear.
 
-The programs have no flags. The words on the command line are
-the task.
+`ssa` and `ssa-local` have no flags. The words on the command
+line are the task. `ssa-simple` takes `-y`, `-v`, and `-m`,
+then the task.
 
 ## The programs
 
@@ -58,8 +59,9 @@ an edit, a question, or a message. A run creates one log file.
 That log cannot be turned off. Fifos are not files, and those
 pipes are fine.
 
-`ssa-simple` talks to `llama-cli` the same way. It does not
-turn reasoning off. A turn is a script. Lines between
+`ssa-simple` talks to `llama-cli` and a GGUF file named in
+`SSA_MODEL_FILE`. It passes that path to llama-cli as `-m`. It
+does not turn reasoning off. A turn is a script. Lines between
 `<think>` and `</think>`, and between `[Start thinking]`
 and `[End thinking]`, are stored as `#` comments.
 `# complete` ends the run when that line is outside those
@@ -75,6 +77,7 @@ Keep the product surface to these three executables. Help is
 `README.md`, outside the programs. This repo has no tests.
 Do not add `bin/` or `libexec/`. Do not invent flags or env vars
 for things the caller's shell can do (`cd`, `export`, redirects).
+`ssa-simple` takes `-y`, `-v`, and `-m`. Do not add other flags.
 
 `PID` is set once at startup. Do not replace it with `$$`
 inside a pipeline subshell.
@@ -105,10 +108,11 @@ files stay on the machine. `ssa-local` keeps its log there
 too. A local model works with the network off.
 If the user points llama-cli at a model over the
 network, that is fine too. The computer should stay
-responsive while a run is going. The caller sets
-llama-cli priority and polling in
-`SSA_LLAMA_CLI_ARGUMENTS`. These programs do not add
-those flags. llama-cli options should work when the
+responsive while a run is going. For `ssa-local`, the
+caller sets llama-cli priority and polling in
+`SSA_LLAMA_CLI_ARGUMENTS`. That program does not add
+those flags. `ssa-simple` passes `-m` and the path in
+`SSA_MODEL_FILE`. llama-cli options should work when the
 model weights are bigger than memory. The weights
 stream off a drive. A run should keep going in that
 case. Pass a llama-cli flag only when its default does
@@ -182,8 +186,13 @@ Every user-facing setting is an environment variable (`SSA_*`).
 Document settings in `README.md`. Internal run state is not a
 setting.
 
-The programs have no flags. The words on the command line are
-the task. Do not add flags.
+`ssa` and `ssa-local` have no flags. The words on the command
+line are the task. Do not add flags to them. `ssa-simple`
+takes `-y`, `-v`, and `-m` before the task. `-y` sets
+`SSA_ASSUME_YES=1`. `-v` sets `SSA_VERBOSE=1`. `-m` sets
+`SSA_MODEL_FILE` to the GGUF path for that run. A flag wins over
+the environment. `--` ends the options. Do not add other
+flags.
 
 ### Error messages
 
@@ -270,7 +279,8 @@ same caller, keep call order.
 ### Shell use
 
 Do not add flags or env vars for behavior the caller's shell can
-handle in one line at the call site.
+handle in one line at the call site. The exception is
+`ssa-simple`'s `-y`, `-v`, and `-m`.
 
 | Need                    | Shell, not the agent              |
 |-------------------------|-----------------------------------|
