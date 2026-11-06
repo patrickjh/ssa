@@ -195,7 +195,8 @@ launch_llama() {
         --keep -1 \
         -m "$SSA_MODEL_FILE" \
         --reverse-prompt '
-# end' \
+# end
+' \
         6>&- \
         2>"$TMPDIR/ssa-$PID-stderr" \
         >"$TMPDIR/ssa-$PID-output" \
