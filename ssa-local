@@ -8,7 +8,6 @@ set -u
 SSA_MODEL_FILE="${SSA_MODEL_FILE:-}"
 SSA_SERVER_PORT="${SSA_SERVER_PORT:-8080}"
 SSA_SERVER_WAIT="${SSA_SERVER_WAIT:-120}"
-SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
 # Internal
 COUNT=0
@@ -35,7 +34,6 @@ check_can_run() {
     check_model_file
     check_server_port
     check_server_wait
-    check_verbose
     check_port_is_free
 }
 
@@ -75,12 +73,6 @@ check_server_wait() {
     esac
 }
 
-check_verbose() {
-    if [ "$SSA_VERBOSE" != 0 ] && [ "$SSA_VERBOSE" != 1 ]; then
-        die "SSA_VERBOSE must be 0 or 1; see README.md"
-    fi
-}
-
 check_port_is_free() {
     if server_answers; then
         die "SSA_SERVER_PORT is in use; see README.md"
@@ -98,10 +90,6 @@ start_server() {
         --port "$SSA_SERVER_PORT" \
         >&2 &
     SERVER_PID=$!
-    if [ "$SSA_VERBOSE" = 1 ]; then
-        printf 'llama-server pid %s on port %s\n' \
-            "$SERVER_PID" "$SSA_SERVER_PORT"
-    fi
     wait_for_server
 }
 
@@ -112,9 +100,6 @@ wait_for_server() {
             die "llama-server exited"
         fi
         if server_answers; then
-            if [ "$SSA_VERBOSE" = 1 ]; then
-                printf 'llama-server is ready\n'
-            fi
             return 0
         fi
         if [ "$COUNT" -ge "$SSA_SERVER_WAIT" ]; then
@@ -130,7 +115,14 @@ server_answers() {
 }
 
 run_ssa() {
-    SSA_MODEL=local SSA_URL="${SERVER_URL}/v1/chat/completions" \
+    # A small local model does best with one reply shape. These
+    # four are off by default; set one to 0 to turn it back on.
+    SSA_NO_EDITS="${SSA_NO_EDITS:-1}" \
+    SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-1}" \
+    SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-1}" \
+    SSA_NO_WRITES="${SSA_NO_WRITES:-1}" \
+    SSA_MODEL=local \
+    SSA_URL="${SERVER_URL}/v1/chat/completions" \
         ssa "$TASK"
 }
 

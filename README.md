@@ -100,8 +100,8 @@ yourself and use `ssa`.
 The alias `local` goes to `ssa` as `SSA_MODEL`. If the port
 already answers, the run stops instead of using that server.
 
-`llama-server` prints its load messages to stderr, even when
-`SSA_VERBOSE` is `0`. Redirect stderr to hide them:
+`llama-server` prints its load messages to stderr. Redirect stderr
+to hide them:
 
 ```sh
 ssa-local summarize this file 2>/dev/null
@@ -111,8 +111,9 @@ The run writes one log: the JSON log from `ssa`, in
 `SSA_LOG_FOLDER` (default `TMPDIR`, or `/tmp`). It stays. It
 cannot be turned off. ssa-local writes no log of its own.
 
-With `SSA_VERBOSE=0` (the default), a run is quiet aside from
-output the model chooses to show. `SSA_VERBOSE=1` prints progress.
+ssa-local prints nothing of its own. A model load can take a
+while with stderr silenced, so keep stderr open if you want to
+watch it start.
 
 ### Settings
 
@@ -125,7 +126,6 @@ runs `ssa`, and text on stdin reaches `ssa` too.
 | `SSA_MODEL_FILE` | required; path to the GGUF file |
 | `SSA_SERVER_PORT` | `8080`; port for the local server |
 | `SSA_SERVER_WAIT` | `120`; seconds to wait for `/health` |
-| `SSA_VERBOSE` | `0` (hide progress) |
 
 ### Exit status
 

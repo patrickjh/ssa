@@ -7,3 +7,12 @@ compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
+
+2) Combine the question and message reply types
+
+The two reply types differ only in that a question reads
+an answer back and a message does not. Consider one chat
+type, or one setting in place of SSA_NO_QUESTIONS and
+SSA_NO_MESSAGES, to save lines in ssa and shorten the
+system prompt. Check that one type still serves both uses
+and that the prompt stays easy for a small model to follow.
