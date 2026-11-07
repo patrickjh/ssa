@@ -52,11 +52,10 @@ one of the reply formats below.
 No markdown fences, no thinking tags. Put reasoning in # comments.'
 REPLY_SPEC_HEAD='These are the valid reply formats:'
 REPLY_SPEC_SCRIPT=\
-'A script request is "# script" then a POSIX sh program. Each script
-is a new process. Do not prefix script lines with #. Example:
+'A script reply is a POSIX sh program and nothing else. Each program
+is a new process. Example:
 
 # reasoning: look at the files in the folder
-# script
 ls -la'
 REPLY_SPEC_WRITE=\
 'A write request is "# write file: PATH" then raw file contents.
@@ -97,8 +96,9 @@ Example:
 # message
 The test failure is in ssa.'
 REPLY_SPEC_COMPLETE=\
-'The task complete marker is "# complete" in its own turn.
-Do not append it to other turns. Example:
+'The task complete marker is "# complete" as the last line of the
+reply. Alone it stops the run. As the last line of a script, the
+script runs and then the run stops. Example:
 
 # complete'
 REPLY_SPEC=""
@@ -542,9 +542,11 @@ handle_model_response() {
         record_format_error "the path is missing"
     elif reply_is_write_request; then handle_write_request
     elif reply_is_edit_request; then handle_edit_request
-    elif reply_is_script_request; then handle_script_request
     elif reply_is_question_request; then handle_question_request
     elif reply_is_message_request; then handle_message_request
+    elif scripts_are_enabled; then
+        handle_script_request
+        if [ $? -eq $TASK_DONE ]; then return $TASK_DONE; fi
     else record_format_error
     fi
     return $LOOP_AGAIN
@@ -554,24 +556,22 @@ append_assistant_turn() {
         '.messages += [{role:"assistant", content:.turns[-1].reply}]'
 }
 agent_is_done() {
-    [ "$(first_action_line)" = '# complete' ]
+    [ "$(print_model_reply)" = '# complete' ]
 }
 reply_is_blank() {
     print_model_reply | grep -q '[^[:space:]]' && return 1
     return 0
 }
 action_path_is_missing() {
+    if ! writes_are_enabled && ! edits_are_enabled; then return 1; fi
     first_action_line | grep -q -E \
         '^# (write|edit) file:([[:space:]]*$|[^ ]| [[:space:]])'
 }
 reply_is_write_request() {
+    if ! writes_are_enabled; then return 1; fi
     first_action_line | grep -q '^# write file: .'
 }
 handle_write_request() {
-    if ! writes_are_enabled; then
-        record_format_error "# write file: is not allowed"
-        return
-    fi
     ask_to_run || return
     apply_write_request
 }
@@ -593,13 +593,10 @@ apply_write_request() {
     append_script_result
 }
 reply_is_edit_request() {
+    if ! edits_are_enabled; then return 1; fi
     first_action_line | grep -q '^# edit file: .'
 }
 handle_edit_request() {
-    if ! edits_are_enabled; then
-        record_format_error "# edit file: is not allowed"
-        return
-    fi
     if edit_body_has_repeated_marker_line '======='; then
         record_format_error \
             "a search or replace line must not be exactly ======="
@@ -663,19 +660,19 @@ record_edit_failure() {
     show_action_output
     append_script_result
 }
-reply_is_script_request() {
-    first_action_line | grep -q '^# script$'
-}
 handle_script_request() {
-    if ! scripts_are_enabled; then
-        record_format_error "# script is not allowed"
-    elif ! script_payload | grep -q '[^[:space:]]'; then
-        record_format_error "the script was empty"
-    elif reply_has_fence_line; then record_format_error
+    if reply_has_fence_line; then record_format_error
     elif reply_has_thinking_tags; then record_format_error
     elif ! reply_is_valid_shell; then record_format_error
-    elif ask_to_run; then run_script
+    elif ask_to_run; then
+        run_script
+        if [ "$ACTION_EXIT" = 0 ] && reply_ends_with_complete; then
+            return $TASK_DONE
+        fi
     fi
+}
+reply_ends_with_complete() {
+    [ "$(print_model_reply | grep . | sed -n '$p')" = '# complete' ]
 }
 scripts_are_enabled() {
     [ "$SSA_NO_SCRIPTS" = 0 ]
@@ -690,7 +687,7 @@ reply_has_thinking_tags() {
         -e '<|channel>thought'
 }
 reply_is_valid_shell() {
-    script_payload | sh -n >/dev/null 2>&1
+    print_model_reply | sh -n >/dev/null 2>&1
 }
 ask_to_run() {
     if [ "$SSA_ASSUME_YES" = 0 ]; then
@@ -752,7 +749,7 @@ ask_user_for_rejection_reason() {
 }
 run_script() {
     ACTION_RAW=$(
-        sh -c "$(script_payload)" </dev/null 2>&1
+        sh -c "$(print_model_reply)" </dev/null 2>&1
         status=$?
         printf '\n.'
         exit $status
@@ -760,9 +757,6 @@ run_script() {
     store_action_result $?
     show_action_output
     append_script_result
-}
-script_payload() {
-    action_body '^# script$'
 }
 store_action_result() {
     ACTION_EXIT=$1
@@ -819,12 +813,11 @@ save_log() {
     try_save_log "$@" || die "cannot update log"
 }
 reply_is_question_request() {
+    if ! questions_are_enabled; then return 1; fi
     first_action_line | grep -q '^# question$'
 }
 handle_question_request() {
-    if ! questions_are_enabled; then
-        record_format_error "# question is not allowed"
-    elif ! action_body '^# question$' | grep -q '[^[:space:]]'; then
+    if ! action_body '^# question$' | grep -q '[^[:space:]]'; then
         record_format_error "the question was empty"
     else
         ask_question
@@ -846,18 +839,17 @@ ask_question() {
     printf '%s\n' "$USER_REPLY" | append_user_text
 }
 reply_is_message_request() {
+    if ! messages_are_enabled; then return 1; fi
     first_action_line | grep -q '^# message$'
 }
 first_action_line() {
     print_model_reply | grep -E \
-        '^# (complete$|write file:|edit file:|script$|question$|message$)' |
+        '^# (write file:|edit file:|question$|message$)' |
         head -n 1 |
         grep .  # head succeeds on empty input; this fails then
 }
 handle_message_request() {
-    if ! messages_are_enabled; then
-        record_format_error "# message is not allowed"
-    elif ! action_body '^# message$' | grep -q '[^[:space:]]'; then
+    if ! action_body '^# message$' | grep -q '[^[:space:]]'; then
         record_format_error "the message was empty"
     else
         show_message

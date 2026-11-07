@@ -16,3 +16,15 @@ type, or one setting in place of SSA_NO_QUESTIONS and
 SSA_NO_MESSAGES, to save lines in ssa and shorten the
 system prompt. Check that one type still serves both uses
 and that the prompt stays easy for a small model to follow.
+
+3) Maybe add three flags to both programs
+
+Consider -v, -y, and -m on ssa and ssa-local. The
+words after the flags stay the task. This would be
+an exception to the no-flags rule in AGENTS.md.
+
+-v sets SSA_VERBOSE and turns on much more logging
+in both programs. -y sets SSA_ASSUME_YES, the
+setting that replaced SSA_NO_ASK. -m sets the model
+name (SSA_MODEL) in ssa and the model file
+(SSA_MODEL_FILE) in ssa-local.

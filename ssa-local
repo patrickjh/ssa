@@ -116,7 +116,7 @@ server_answers() {
 
 run_ssa() {
     # A small local model does best with one reply shape. These
-    # four are off by default; set one to 0 to turn it back on.
+    # four default to off; set one to 0 to turn it back on.
     SSA_NO_EDITS="${SSA_NO_EDITS:-1}" \
     SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-1}" \
     SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-1}" \

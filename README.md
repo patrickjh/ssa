@@ -26,10 +26,12 @@ The task is part of the system prompt. Text on stdin is the
 first user turn. With no stdin, that turn says no context was
 given.
 
-The model returns one script, write, edit, question, or
-message. ssa runs a script, write, or edit, shows a question
-and sends the answer back, or shows a message and keeps going.
-This repeats until the model returns `# complete`, or until
+The model returns one POSIX `sh` program. ssa runs it and sends
+back the output and exit code. When a style below is turned on, a
+reply whose first marker line is `# write file: …`, `# edit file:
+…`, `# question`, or `# message` does that instead. This repeats
+until the model returns `# complete` as the whole reply, or as the
+last line of a script that exited 0, or until
 `SSA_MAX_MODEL_PROMPTS` is hit.
 
 ssa asks before a script, write, or edit. `SSA_ASSUME_YES=1` skips
@@ -51,16 +53,20 @@ Set these in the environment. `VAR=value ssa …` covers one run.
 | `SSA_MAX_CONTEXT_BYTES` | `0` (send every turn) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` (`0` means no limit) |
 | `SSA_MODEL` | required; model name |
-| `SSA_NO_EDITS` | `0` (allow file edits) |
-| `SSA_NO_MESSAGES` | `0` (allow messages) |
-| `SSA_NO_QUESTIONS` | `0` (allow questions) |
-| `SSA_NO_SCRIPTS` | `0` (allow scripts) |
-| `SSA_NO_WRITES` | `0` (allow file writes) |
+| `SSA_NO_EDITS` | `0` (a `# edit file: …` reply is an edit) |
+| `SSA_NO_MESSAGES` | `0` (a `# message` reply is a message) |
+| `SSA_NO_QUESTIONS` | `0` (a `# question` reply is a question) |
+| `SSA_NO_SCRIPTS` | `0` (a reply is a script) |
+| `SSA_NO_WRITES` | `0` (a `# write file: …` reply is a write) |
 | `SSA_REQUEST_JSON` | empty; extra JSON object merged into the body |
 | `SSA_URL` | required; URL curl POSTs to |
 
 `SSA_REQUEST_JSON` is where `think`, `max_tokens`, and sampling
 go. On a key conflict, `model` and `messages` from ssa win.
+
+Turning a style off makes its marker an ordinary comment inside
+the script. So `SSA_NO_WRITES=1` runs a reply that starts with
+`# write file: notes.txt` as a script, and it writes nothing.
 
 ### Exit status
 
@@ -99,6 +105,11 @@ yourself and use `ssa`.
 
 The alias `local` goes to `ssa` as `SSA_MODEL`. If the port
 already answers, the run stops instead of using that server.
+
+ssa-local turns the write, edit, question, and message reply shapes
+off by default, because a local model does best with one shape. Each
+is still a setting, so `SSA_NO_WRITES=0 ssa-local …` turns one back
+on. Scripts and `# complete` are always available.
 
 `llama-server` prints its load messages to stderr. Redirect stderr
 to hide them:

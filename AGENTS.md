@@ -44,10 +44,12 @@ and reads the reply with `jq`. It needs `curl` and `jq` on
 `PATH`. Required settings are `SSA_URL` and `SSA_MODEL`.
 `SSA_KEY` is the bearer token when the provider needs one.
 
-A turn is a script, a write, an edit, a question, or a message.
-The loop stops on `# complete` or `SSA_MAX_MODEL_PROMPTS`. A run
-creates one JSON log. That log cannot be turned off. The bearer
-token is not written to the log.
+A turn is a script. A start line that is a write, an edit, a
+question, or a message marker makes that turn one of those instead,
+and only when that style is on. The loop stops on `# complete` as
+the whole reply, or as the last line of a script that exited 0, or
+on `SSA_MAX_MODEL_PROMPTS`. A run creates one JSON log. That log
+cannot be turned off. The bearer token is not written to the log.
 
 `ssa-local` starts `llama-server` on `127.0.0.1`, waits on
 `/health`, runs `ssa` at that server, then stops the server.
@@ -68,6 +70,9 @@ The chat is `ssa`'s, so the turn shape, the log, and the
 prompt limit are `ssa`'s too. `ssa-local` writes no log: the
 run writes one log, the JSON one from `ssa`. llama-server
 prints to stderr, which is where a harness diagnostic goes.
+
+`ssa-local` passes the four shape settings as `1` by default, so a
+local model sees one reply shape. A caller overrides any of them.
 
 Neither program passes a reasoning flag. The model and its
 chat template decide. `ssa` sends a format error when a reply
@@ -93,6 +98,11 @@ The end of a turn comes from the harness, not from the model.
 Small models do not reliably write a sentinel such as
 `# end`. A stop marker the model must remember is not a
 boundary; the tool's own prompt or end of message is.
+
+`# complete` as the last line of a script is not a boundary.
+It is a shortcut the model may take after a script exits 0.
+A model that leaves it out just gets another turn, so the
+loop does not depend on it.
 
 ## Boundaries
 
