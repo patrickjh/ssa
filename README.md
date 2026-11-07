@@ -1,14 +1,13 @@
 # ssa
 
-This repo has three AI agent harnesses. Each one is a single POSIX
+This repo has two AI agent harnesses. Each one is a single POSIX
 `sh` script. Each takes the task as arguments and extra context on
 stdin. Inspired by mini-swe-agent.
 
 | File | How it reaches a model |
 | --- | --- |
 | `ssa` | `curl` and `jq`, to a chat-completions URL |
-| `ssa-local` | `llama-cli`, with a GGUF file on disk |
-| `ssa-simple` | `llama-cli`; a script or `# complete` |
+| `ssa-local` | starts `llama-server`, then runs `ssa` at it |
 
 ## ssa
 
@@ -77,51 +76,55 @@ Hangup, interrupt, and terminate print no status line.
 
 ## ssa-local
 
-Needs `llama-cli` or `llama` on `PATH`, and a GGUF file on disk.
-Set `SSA_LLAMA_CLI_ARGUMENTS` with at least `-m` or `--model`
-pointing at that file. Other llama-cli flags in that variable
-are passed through. This program has no `-h`. This file is the
-help.
+Needs `llama-server`, `curl`, and `ssa` on `PATH`, plus a GGUF
+file on disk. `SSA_MODEL_FILE` is the path to that file. This
+program has no `-h`. This file is the help.
 
-The task is part of the system prompt. Text on stdin is added
-to the user turn.
+ssa-local starts `llama-server` on `127.0.0.1`, waits for
+`/health` to answer, runs `ssa` at that server, then stops the
+server. The chat is ssa's own, so the log, the prompt limit, and
+the ask-before-acting question all work as they do under `ssa`.
 
 ```sh
-export SSA_LLAMA_CLI_ARGUMENTS="-m /models/gemma.gguf"
+export SSA_MODEL_FILE=/models/gemma.gguf
 cat notes.txt | ssa-local summarize this file
 ```
 
-The model returns one script, write, edit, question, or
-message. A script is run. A write or an edit changes a file.
-A question waits for an answer. A message is text for the
-user. Any of these can be turned off with the settings below.
+The server is given four flags and nothing else: `--model` with
+the path in `SSA_MODEL_FILE`, `--alias local`, `--host 127.0.0.1`,
+and `--port` with `SSA_SERVER_PORT`. Context size, GPU layers,
+thread priority, and sampling are whatever `llama-server` does by
+default. Change them in that program or start `llama-server`
+yourself and use `ssa`.
 
-ssa-local asks before a script, write, or edit.
-`SSA_ASSUME_YES=1` skips the question, for a background run.
+The alias `local` goes to `ssa` as `SSA_MODEL`. If the port
+already answers, the run stops instead of using that server.
 
-Each run writes one log file in `SSA_LOG_FOLDER` (default
-`TMPDIR`, or `/tmp`). The log stays. It cannot be turned off.
+`llama-server` prints its load messages to stderr, even when
+`SSA_VERBOSE` is `0`. Redirect stderr to hide them:
+
+```sh
+ssa-local summarize this file 2>/dev/null
+```
+
+The run writes one log: the JSON log from `ssa`, in
+`SSA_LOG_FOLDER` (default `TMPDIR`, or `/tmp`). It stays. It
+cannot be turned off. ssa-local writes no log of its own.
 
 With `SSA_VERBOSE=0` (the default), a run is quiet aside from
-output the model chooses to show. `SSA_VERBOSE=1` prints
-progress.
+output the model chooses to show. `SSA_VERBOSE=1` prints progress.
 
 ### Settings
 
 Set these in the environment. `VAR=value ssa-local …` covers
-one run.
+one run. Every setting `ssa` reads still applies, since ssa-local
+runs `ssa`, and text on stdin reaches `ssa` too.
 
 | Setting | Default |
 | --- | --- |
-| `SSA_ASSUME_YES` | `0` (ask before a script, write, or edit) |
-| `SSA_EXTRA_SYSTEM_TEXT` | empty, added to the instructions |
-| `SSA_LLAMA_CLI_ARGUMENTS` | required; llama-cli flags, including the model |
-| `SSA_LOG_FOLDER` | log directory (default `TMPDIR`, or `/tmp`) |
-| `SSA_NO_EDITS` | `0` (allow file edits) |
-| `SSA_NO_MESSAGES` | `0` (allow messages) |
-| `SSA_NO_QUESTIONS` | `0` (allow questions) |
-| `SSA_NO_SCRIPTS` | `0` (allow scripts) |
-| `SSA_NO_WRITES` | `0` (allow file writes) |
+| `SSA_MODEL_FILE` | required; path to the GGUF file |
+| `SSA_SERVER_PORT` | `8080`; port for the local server |
+| `SSA_SERVER_WAIT` | `120`; seconds to wait for `/health` |
 | `SSA_VERBOSE` | `0` (hide progress) |
 
 ### Exit status
@@ -129,69 +132,10 @@ one run.
 | Code | Meaning |
 | --- | --- |
 | 0 | The task completed |
-| 1 | Bad arguments, harness failure, or user quit |
+| 1 | Bad arguments, or the server did not start |
 | 129 | Hangup |
 | 130 | Interrupt |
 | 143 | Terminate |
 
-Hangup, interrupt, and terminate print no status line.
-
-## ssa-simple
-
-Needs `llama-cli` or `llama` on `PATH`. `SSA_MODEL_FILE` is
-the path to a GGUF file. `-m` sets the path for one run.
-`-y` sets `SSA_ASSUME_YES=1`. `-v` sets `SSA_VERBOSE=1`. Options
-come before the task. `--` ends them. A flag wins over the
-environment. This program has no `-h`. This file is the
-help.
-
-The task is part of the system prompt. Text on stdin is added
-to the user turn.
-
-```sh
-cat notes.txt | ssa-simple -y -v -m /models/gemma.gguf summarize this file
-```
-
-The model returns one script. The script is the whole reply.
-ssa-simple runs it and sends the output back. Every reply
-ends with a line that is exactly `# end`. A line that is
-exactly `# complete` ends the run. It sits above `# end`.
-The script above `# complete` is run, then the run stops.
-A line of comments may sit above `# complete`.
-
-Lines between `<think>` and `</think>`, and between
-`[Start thinking]` and `[End thinking]`, are stored as `#`
-comments. A `# complete` line there does not end the run.
-A `# end` line there ends the reply.
-
-ssa-simple asks before a script. `SSA_ASSUME_YES=1` skips the
-question, for a background run.
-
-A run does not write a log file.
-
-With `SSA_VERBOSE=0` (the default), a run is quiet aside from
-output the model chooses to show. `SSA_VERBOSE=1` prints
-progress.
-
-### Settings
-
-Set these in the environment. `VAR=value ssa-simple …` covers
-one run.
-
-| Setting | Default |
-| --- | --- |
-| `SSA_ASSUME_YES` | `0` (ask before a script). `-y` sets `1` |
-| `SSA_MODEL_FILE` | required; GGUF path. `-m` sets it |
-| `SSA_VERBOSE` | `0` (hide progress). `-v` sets `1` |
-
-### Exit status
-
-| Code | Meaning |
-| --- | --- |
-| 0 | The task completed |
-| 1 | Bad arguments, harness failure, or user quit |
-| 129 | Hangup |
-| 130 | Interrupt |
-| 143 | Terminate |
-
-Hangup, interrupt, and terminate print no status line.
+Hangup, interrupt, and terminate print no status line. The others
+are `ssa`'s own where `ssa` was reached.

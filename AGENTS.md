@@ -1,9 +1,8 @@
 # AGENTS.md
 
 Instructions for coding agents in this repo. Behavior is
-in `ssa`, `ssa-local`, and `ssa-simple`. This file is how to
-work, what stays out, and the style rules for the shell
-programs.
+in `ssa` and `ssa-local`. This file is how to work, what
+stays out, and the style rules for the shell programs.
 
 ## This stage
 
@@ -17,7 +16,7 @@ asked.
 
 ## Layout
 
-Three executables, each POSIX `sh`, at or under 1000 lines,
+Two executables, each POSIX `sh`, at or under 1000 lines,
 80 columns. Edit each file in place.
 
 ```
@@ -26,19 +25,17 @@ ssa
 ├── README.md      # help, outside the programs
 ├── plan.txt       # open work
 ├── ssa            # curl and jq; chat-completions URL
-├── ssa-local      # llama-cli; model file on disk
-└── ssa-simple     # llama-cli; a script or # complete
+└── ssa-local      # llama-server, then ssa at that server
 ```
 
-`README.md` is the help for all three. Keep it short: how to
+`README.md` is the help for both. Keep it short: how to
 run, environment, one loop paragraph, exit codes. Do not copy
 a program into `README.md` beyond what a person needs to run
 it. Update `README.md` when a setting's meaning would otherwise
 be unclear.
 
-`ssa` and `ssa-local` have no flags. The words on the command
-line are the task. `ssa-simple` takes `-y`, `-v`, and `-m`,
-then the task.
+Neither program has flags. The words on the command line are
+the task.
 
 ## The programs
 
@@ -52,32 +49,58 @@ The loop stops on `# complete` or `SSA_MAX_MODEL_PROMPTS`. A run
 creates one JSON log. That log cannot be turned off. The bearer
 token is not written to the log.
 
-`ssa-local` talks to `llama-cli` and a GGUF file named in
-`SSA_LLAMA_CLI_ARGUMENTS`. It needs `llama-cli` or `llama` on
-`PATH`. The network can stay off. A turn is a script, a write,
-an edit, a question, or a message. A run creates one log file.
-That log cannot be turned off. Fifos are not files, and those
-pipes are fine.
+`ssa-local` starts `llama-server` on `127.0.0.1`, waits on
+`/health`, runs `ssa` at that server, then stops the server.
+It needs `llama-server`, `curl`, and `ssa` on `PATH`, and a
+GGUF file named in `SSA_MODEL_FILE`. The network can stay off.
 
-`ssa-simple` talks to `llama-cli` and a GGUF file named in
-`SSA_MODEL_FILE`. It passes that path to llama-cli as `-m`. It
-does not turn reasoning off. A turn is a script. Lines between
-`<think>` and `</think>`, and between `[Start thinking]`
-and `[End thinking]`, are stored as `#` comments.
-`# complete` ends the run when that line is outside those
-tags. It sits above a line that is exactly `# end`. The
-script above `# complete` is run, then the run stops.
-Every reply ends with `# end`. A `# end` line inside
-those tags ends the reply. A run does not write a log
-file.
+The server gets four flags and nothing else: `--model`,
+`--alias local`, `--host 127.0.0.1`, `--port`. The alias is
+the `SSA_MODEL` that `ssa` receives, and the port is
+`SSA_SERVER_PORT`, so the address and the name cannot drift
+from what `ssa` is told. Every other llama-server option stays
+at its default. A caller who needs context size, GPU layers,
+priority, or sampling changes them in llama-server, or starts
+the server and uses `ssa` on it. Do not add a variable that
+forwards llama-server flags.
+
+The chat is `ssa`'s, so the turn shape, the log, and the
+prompt limit are `ssa`'s too. `ssa-local` writes no log: the
+run writes one log, the JSON one from `ssa`. llama-server
+prints to stderr, which is where a harness diagnostic goes.
+
+Neither program passes a reasoning flag. The model and its
+chat template decide. `ssa` sends a format error when a reply
+carries a thinking tag, so a model that thinks inside its
+content sees that error and tries again.
+
+## Real turns
+
+Every program must send the model real system, user, and
+assistant turns. Do not flatten a conversation into one
+message with markers such as `### user` and `### reply`.
+Do not put the system prompt at the head of a user message.
+Small models cannot tell these apart, and they answer as
+if the transcript were one long question.
+
+This rules out replaying the history in the prompt. Keep the
+model loaded and let llama-server hold the turns, or send a
+messages array as `ssa` does. A run that needs a fresh model
+process for each turn cannot keep real turns, so it is not
+an option here.
+
+The end of a turn comes from the harness, not from the model.
+Small models do not reliably write a sentinel such as
+`# end`. A stop marker the model must remember is not a
+boundary; the tool's own prompt or end of message is.
 
 ## Boundaries
 
-Keep the product surface to these three executables. Help is
+Keep the product surface to these two executables. Help is
 `README.md`, outside the programs. This repo has no tests.
 Do not add `bin/` or `libexec/`. Do not invent flags or env vars
 for things the caller's shell can do (`cd`, `export`, redirects).
-`ssa-simple` takes `-y`, `-v`, and `-m`. Do not add other flags.
+Neither program takes a flag.
 
 `PID` is set once at startup. Do not replace it with `$$`
 inside a pipeline subshell.
@@ -95,28 +118,28 @@ snapshots to recover from it.
 One goal is a full log of each run. A person or an AI
 should be able to read it, debug any problems, and find
 better ways to use the program. Keep every record that
-review needs. This log is for `ssa` and `ssa-local`.
-`ssa-simple` does not write one.
+review needs. This log is the JSON one from `ssa`, and
+`ssa-local` gets it by running `ssa`. `ssa-local` writes no
+log of its own.
 
 Another goal is low token use. Some devices generate
 tokens slowly, and a run should stay usable there. Keep
 prompts and replies short, and do not add a turn or a
 thinking trace the device must generate.
 
-`ssa-local` and `ssa-simple` can run with no network. The
-files stay on the machine. `ssa-local` keeps its log there
-too. A local model works with the network off.
-If the user points llama-cli at a model over the
-network, that is fine too. The computer should stay
-responsive while a run is going. For `ssa-local`, the
-caller sets llama-cli priority and polling in
-`SSA_LLAMA_CLI_ARGUMENTS`. That program does not add
-those flags. `ssa-simple` passes `-m` and the path in
-`SSA_MODEL_FILE`. llama-cli options should work when the
-model weights are bigger than memory. The weights
-stream off a drive. A run should keep going in that
-case. Pass a llama-cli flag only when its default does
-not already do the job.
+`ssa-local` can run with no network. The files stay on the
+machine, and the log stays there too. A local model works
+with the network off. If the caller points llama-server at
+a model over the network, that is fine too.
+
+The computer should stay responsive while a run is going.
+llama-server has flags for priority and polling, and context
+size, GPU layers, and sampling. This repo sets none of them.
+A caller who needs one starts llama-server with that flag and
+runs `ssa` at it. Weights that are bigger than memory still
+work that way, because the weights stream off the drive. Pass
+a llama-server flag only in that caller's own command line,
+never in these programs.
 
 ## Kept out
 
@@ -129,12 +152,12 @@ native Windows harness. Capping action output. Script
 output is appended in full. A long command can fill the
 context.
 
-Kept out of `ssa-local` and `ssa-simple`: an HTTP client
-for a model server. A fresh llama-cli process on every
-turn.
+Kept out of `ssa-local`: an HTTP client for a model server.
+A fresh llama-server process on every turn. A variable that
+forwards llama-server flags.
 
 `ssa` uses `curl` for the model call. Leave that in `ssa`.
-Do not add it to `ssa-local` or `ssa-simple`.
+Do not add it to `ssa-local`.
 
 ## Style
 
@@ -157,7 +180,7 @@ words (`check_can_run`, `setup_work_folder`).
 
 Prefer long, explicit function names when they describe the full
 job. No abbreviations (`argument` not `arg`, `command` not
-`cmd`). External tool names stay as-is (`llama-cli`, `curl`,
+`cmd`). External tool names stay as-is (`llama-server`, `curl`,
 `jq`, `head`, `sed`).
 
 ### Naming
@@ -187,12 +210,7 @@ Document settings in `README.md`. Internal run state is not a
 setting.
 
 `ssa` and `ssa-local` have no flags. The words on the command
-line are the task. Do not add flags to them. `ssa-simple`
-takes `-y`, `-v`, and `-m` before the task. `-y` sets
-`SSA_ASSUME_YES=1`. `-v` sets `SSA_VERBOSE=1`. `-m` sets
-`SSA_MODEL_FILE` to the GGUF path for that run. A flag wins over
-the environment. `--` ends the options. Do not add other
-flags.
+line are the task. Do not add flags to them.
 
 ### Error messages
 
@@ -211,9 +229,9 @@ Keep hints one short clause after a semicolon. Prefer
 Skip a "set ENV" hint when it would mislead:
 
 - Internal harness failures (transcript I/O, log setup).
-- Missing OS tools on `PATH` (`llama-cli`, `curl`, `jq`, `head`,
+- Missing OS tools on `PATH` (`llama-server`, `curl`, `jq`, `head`,
   …). Name the tool and say it was not found on `PATH`.
-- Failures outside the harness (missing model file, `llama-cli`
+- Failures outside the harness (missing model file, llama-server
   exits, `curl` fails).
 
 The task has no env var. Say it was not found on the CLI.
@@ -248,10 +266,9 @@ Split fixed text from substitution. Keep functions thin.
 
 ### Line length
 
-Maximum 80 characters per line in `ssa`, `ssa-local`, and
-`ssa-simple` (code, comments, static strings). Wrap with `\`,
-split quoted strings, or multiple `printf`s. Do not shorten
-names just to fit.
+Maximum 80 characters per line in `ssa` and `ssa-local` (code,
+comments, static strings). Wrap with `\`, split quoted strings,
+or multiple `printf`s. Do not shorten names just to fit.
 
 ### Quoting
 
@@ -279,8 +296,7 @@ same caller, keep call order.
 ### Shell use
 
 Do not add flags or env vars for behavior the caller's shell can
-handle in one line at the call site. The exception is
-`ssa-simple`'s `-y`, `-v`, and `-m`.
+handle in one line at the call site.
 
 | Need                    | Shell, not the agent              |
 |-------------------------|-----------------------------------|
@@ -291,12 +307,13 @@ handle in one line at the call site. The exception is
 | Repeated format errors  | Ctrl-C, `timeout`, or `ulimit -t` |
 | Repeat for many tasks   | `for task in …; do …; done`       |
 
-The same calls work with `ssa-local` or `ssa-simple` in
-place of `ssa`.
+The same calls work with `ssa-local` in place of `ssa`. A run of
+`ssa-local` whose stderr should be quiet takes `2>/dev/null`,
+which hides llama-server's load messages.
 
 A format error is sent back and the loop continues. Do not
-add a count that stops `ssa-local` or `ssa-simple`. `ssa`
-already stops at `SSA_MAX_MODEL_PROMPTS`.
+add a count that stops `ssa-local`. `ssa` already stops at
+`SSA_MAX_MODEL_PROMPTS`.
 
 Ask: could the user do this with `cd`, `export`, or a redirect?
 If yes, leave it out of the agent.
