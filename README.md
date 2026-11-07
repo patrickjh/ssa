@@ -1,8 +1,8 @@
 # ssa
 
 This repo has two AI agent harnesses. Each one is a single POSIX
-`sh` script. Each takes the task as arguments and extra context on
-stdin. Inspired by mini-swe-agent.
+`sh` script. Flags may come first. The other arguments are the
+task, and extra context is on stdin. Inspired by mini-swe-agent.
 
 | File | How it reaches a model |
 | --- | --- |
@@ -22,6 +22,11 @@ export SSA_KEY="sk-..."
 cat notes.txt | ssa summarize this file
 ```
 
+`-v`, `-y`, and `-m` may come before the task. `-v` sets
+`SSA_VERBOSE=1` and prints short notes on stderr. `-y` sets
+`SSA_ASSUME_YES=1`. `-m` sets `SSA_MODEL` to the next word. `--`
+ends the flags, so a task can start with a dash.
+
 The task is part of the system prompt. Text on stdin is the
 first user turn. With no stdin, that turn says no context was
 given.
@@ -29,9 +34,10 @@ given.
 The model returns one POSIX `sh` program. ssa runs it and sends
 back the output and exit code. When a style below is turned on, a
 reply whose first marker line is `# write file: …`, `# edit file:
-…`, `# question`, or `# message` does that instead. This repeats
-until the model returns `# complete` as the whole reply, or as the
-last line of a script that exited 0, or until
+…`, or `# chat` does that instead. A chat shows the text and reads
+one line. An empty line is sent back as "The user sent no text."
+This repeats until the model returns `# complete` as the whole
+reply, or as the last line of a script that exited 0, or until
 `SSA_MAX_MODEL_PROMPTS` is hit.
 
 ssa asks before a script, write, or edit. `SSA_ASSUME_YES=1` skips
@@ -53,13 +59,13 @@ Set these in the environment. `VAR=value ssa …` covers one run.
 | `SSA_MAX_CONTEXT_BYTES` | `0` (send every turn) |
 | `SSA_MAX_MODEL_PROMPTS` | `20` (`0` means no limit) |
 | `SSA_MODEL` | required; model name |
+| `SSA_NO_CHAT` | `0` (a `# chat` reply is a chat) |
 | `SSA_NO_EDITS` | `0` (a `# edit file: …` reply is an edit) |
-| `SSA_NO_MESSAGES` | `0` (a `# message` reply is a message) |
-| `SSA_NO_QUESTIONS` | `0` (a `# question` reply is a question) |
 | `SSA_NO_SCRIPTS` | `0` (a reply is a script) |
 | `SSA_NO_WRITES` | `0` (a `# write file: …` reply is a write) |
 | `SSA_REQUEST_JSON` | empty; extra JSON object merged into the body |
 | `SSA_URL` | required; URL curl POSTs to |
+| `SSA_VERBOSE` | `0` (no extra notes on stderr) |
 
 `SSA_REQUEST_JSON` is where `think`, `max_tokens`, and sampling
 go. On a key conflict, `model` and `messages` from ssa win.
@@ -83,8 +89,9 @@ Hangup, interrupt, and terminate print no status line.
 ## ssa-local
 
 Needs `llama-server`, `curl`, and `ssa` on `PATH`, plus a GGUF
-file on disk. `SSA_MODEL_FILE` is the path to that file. This
-program has no `-h`. This file is the help.
+file on disk. `SSA_MODEL_FILE` is the path to that file. `-m`
+sets that path for one run. `-v` and `-y` mean the same as they
+do for `ssa`. This program has no `-h`. This file is the help.
 
 ssa-local starts `llama-server` on `127.0.0.1`, waits for
 `/health` to answer, runs `ssa` at that server, then stops the
@@ -106,9 +113,9 @@ yourself and use `ssa`.
 The alias `local` goes to `ssa` as `SSA_MODEL`. If the port
 already answers, the run stops instead of using that server.
 
-ssa-local turns the write, edit, question, and message reply shapes
-off by default, because a local model does best with one shape. Each
-is still a setting, so `SSA_NO_WRITES=0 ssa-local …` turns one back
+ssa-local turns the write, edit, and chat reply shapes off by
+default, because a local model does best with one shape. Each is
+still a setting, so `SSA_NO_WRITES=0 ssa-local …` turns one back
 on. Scripts and `# complete` are always available.
 
 `llama-server` prints its load messages to stderr. Redirect stderr
@@ -122,9 +129,9 @@ The run writes one log: the JSON log from `ssa`, in
 `SSA_LOG_FOLDER` (default `TMPDIR`, or `/tmp`). It stays. It
 cannot be turned off. ssa-local writes no log of its own.
 
-ssa-local prints nothing of its own. A model load can take a
-while with stderr silenced, so keep stderr open if you want to
-watch it start.
+ssa-local prints nothing of its own unless `-v` or
+`SSA_VERBOSE=1`. A model load can take a while with stderr
+silenced, so keep stderr open if you want to watch it start.
 
 ### Settings
 

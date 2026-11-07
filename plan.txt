@@ -8,23 +8,15 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-2) Combine the question and message reply types
+2) Maybe drop names that only hold a constant
 
-The two reply types differ only in that a question reads
-an answer back and a message does not. Consider one chat
-type, or one setting in place of SSA_NO_QUESTIONS and
-SSA_NO_MESSAGES, to save lines in ssa and shorten the
-system prompt. Check that one type still serves both uses
-and that the prompt stays easy for a small model to follow.
+ASK_NO, ASK_YES, HIT_MAX, IS_FALSE, IS_TRUE,
+LOOP_AGAIN, and TASK_DONE are set once to a number
+and never change. Write the number at the use if
+the name does not help.
 
-3) Maybe add three flags to both programs
+3) Blank lines between functions
 
-Consider -v, -y, and -m on ssa and ssa-local. The
-words after the flags stay the task. This would be
-an exception to the no-flags rule in AGENTS.md.
-
--v sets SSA_VERBOSE and turns on much more logging
-in both programs. -y sets SSA_ASSUME_YES, the
-setting that replaced SSA_NO_ASK. -m sets the model
-name (SSA_MODEL) in ssa and the model file
-(SSA_MODEL_FILE) in ssa-local.
+See if ssa can lose enough lines that a blank line
+fits between each function and the file stays at or
+under 1000 lines.

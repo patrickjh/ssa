@@ -34,8 +34,11 @@ a program into `README.md` beyond what a person needs to run
 it. Update `README.md` when a setting's meaning would otherwise
 be unclear.
 
-Neither program has flags. The words on the command line are
-the task.
+Each program takes `-v`, `-y`, and `-m`, then the task words.
+`-v` sets `SSA_VERBOSE=1`. `-y` sets `SSA_ASSUME_YES=1`. `-m`
+sets `SSA_MODEL` in `ssa` and `SSA_MODEL_FILE` in `ssa-local`.
+`--` ends the flags, so a task can start with a dash. No other
+flag.
 
 ## The programs
 
@@ -44,11 +47,11 @@ and reads the reply with `jq`. It needs `curl` and `jq` on
 `PATH`. Required settings are `SSA_URL` and `SSA_MODEL`.
 `SSA_KEY` is the bearer token when the provider needs one.
 
-A turn is a script. A start line that is a write, an edit, a
-question, or a message marker makes that turn one of those instead,
-and only when that style is on. The loop stops on `# complete` as
-the whole reply, or as the last line of a script that exited 0, or
-on `SSA_MAX_MODEL_PROMPTS`. A run creates one JSON log. That log
+A turn is a script. A start line that is a write, an edit, or a
+chat marker makes that turn one of those instead, and only when
+that style is on. The loop stops on `# complete` as the whole
+reply, or as the last line of a script that exited 0, or on
+`SSA_MAX_MODEL_PROMPTS`. A run creates one JSON log. That log
 cannot be turned off. The bearer token is not written to the log.
 
 `ssa-local` starts `llama-server` on `127.0.0.1`, waits on
@@ -70,9 +73,11 @@ The chat is `ssa`'s, so the turn shape, the log, and the
 prompt limit are `ssa`'s too. `ssa-local` writes no log: the
 run writes one log, the JSON one from `ssa`. llama-server
 prints to stderr, which is where a harness diagnostic goes.
+`SSA_VERBOSE=1` prints short notes there too.
 
-`ssa-local` passes the four shape settings as `1` by default, so a
-local model sees one reply shape. A caller overrides any of them.
+`ssa-local` passes the write, edit, and chat settings as `1` by
+default, so a local model sees one reply shape. A caller
+overrides any of them.
 
 Neither program passes a reasoning flag. The model and its
 chat template decide. `ssa` sends a format error when a reply
@@ -110,7 +115,7 @@ Keep the product surface to these two executables. Help is
 `README.md`, outside the programs. This repo has no tests.
 Do not add `bin/` or `libexec/`. Do not invent flags or env vars
 for things the caller's shell can do (`cd`, `export`, redirects).
-Neither program takes a flag.
+The only flags are `-v`, `-y`, and `-m`.
 
 `PID` is set once at startup. Do not replace it with `$$`
 inside a pipeline subshell.
@@ -219,8 +224,10 @@ Every user-facing setting is an environment variable (`SSA_*`).
 Document settings in `README.md`. Internal run state is not a
 setting.
 
-`ssa` and `ssa-local` have no flags. The words on the command
-line are the task. Do not add flags to them.
+`ssa` and `ssa-local` take `-v`, `-y`, and `-m` before the
+task. Those set `SSA_VERBOSE`, `SSA_ASSUME_YES`, and the model
+(`SSA_MODEL` or `SSA_MODEL_FILE`). `--` ends the flags. Do not
+add any other flag.
 
 ### Error messages
 
@@ -290,7 +297,7 @@ comparisons. Leave unquoted: numeric constants and status codes,
 
 - stdout: action and loop output.
 - `/dev/tty`: ask UI.
-- stderr: harness errors only.
+- stderr: harness errors, and notes when `SSA_VERBOSE` is `1`.
 
 ### File order
 
@@ -306,7 +313,8 @@ same caller, keep call order.
 ### Shell use
 
 Do not add flags or env vars for behavior the caller's shell can
-handle in one line at the call site.
+handle in one line at the call site. `-v`, `-y`, and `-m` are the
+exception. Do not add flags beyond those.
 
 | Need                    | Shell, not the agent              |
 |-------------------------|-----------------------------------|

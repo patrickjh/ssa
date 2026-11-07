@@ -1,6 +1,6 @@
 #!/bin/sh
 # ssa-local — run ssa against a local llama-server.
-# Help is README.md. This program has no -h or --help.
+# Help is README.md. Flags are -v, -y, and -m. No -h.
 
 set -u
 
@@ -8,6 +8,7 @@ set -u
 SSA_MODEL_FILE="${SSA_MODEL_FILE:-}"
 SSA_SERVER_PORT="${SSA_SERVER_PORT:-8080}"
 SSA_SERVER_WAIT="${SSA_SERVER_WAIT:-120}"
+SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
 # Internal
 COUNT=0
@@ -19,7 +20,8 @@ main() {
     trap 'stop_server; exit 129' HUP
     trap 'stop_server; exit 130' INT
     trap 'stop_server; exit 143' TERM
-    TASK="$*"
+    read_command_line "$@"
+    export SSA_VERBOSE
     check_can_run
     start_server
     run_ssa
@@ -28,12 +30,33 @@ main() {
     exit "$STATUS"
 }
 
+read_command_line() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -v) SSA_VERBOSE=1 ;;
+            -y) export SSA_ASSUME_YES=1 ;;
+            -m)
+                shift
+                [ -n "${1:-}" ] ||
+                    die "-m needs a model file; see README.md"
+                SSA_MODEL_FILE=$1
+                ;;
+            --) shift; break ;;
+            -*) die "unknown flag $1; see README.md" ;;
+            *) break ;;
+        esac
+        shift
+    done
+    TASK="$*"
+}
+
 check_can_run() {
     check_task
     check_commands
     check_model_file
     check_server_port
     check_server_wait
+    check_verbose
     check_port_is_free
 }
 
@@ -73,6 +96,13 @@ check_server_wait() {
     esac
 }
 
+check_verbose() {
+    case $SSA_VERBOSE in
+        0|1) ;;
+        *) die "SSA_VERBOSE must be 0 or 1; see README.md" ;;
+    esac
+}
+
 check_port_is_free() {
     if server_answers; then
         die "SSA_SERVER_PORT is in use; see README.md"
@@ -80,6 +110,8 @@ check_port_is_free() {
 }
 
 start_server() {
+    note "model file: $SSA_MODEL_FILE"
+    note "server: $SERVER_URL"
     # The four flags below are not settings. ssa is told the same
     # address and the same model name, so these must match it.
     # Server output goes to stderr, which keeps stdout for the loop.
@@ -100,6 +132,7 @@ wait_for_server() {
             die "llama-server exited"
         fi
         if server_answers; then
+            note "server is up"
             return 0
         fi
         if [ "$COUNT" -ge "$SSA_SERVER_WAIT" ]; then
@@ -116,10 +149,10 @@ server_answers() {
 
 run_ssa() {
     # A small local model does best with one reply shape. These
-    # four default to off; set one to 0 to turn it back on.
+    # three default to off; set one to 0 to turn it back on.
+    note "run ssa"
     SSA_NO_EDITS="${SSA_NO_EDITS:-1}" \
-    SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-1}" \
-    SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-1}" \
+    SSA_NO_CHAT="${SSA_NO_CHAT:-1}" \
     SSA_NO_WRITES="${SSA_NO_WRITES:-1}" \
     SSA_MODEL=local \
     SSA_URL="${SERVER_URL}/v1/chat/completions" \
@@ -130,9 +163,15 @@ stop_server() {
     if [ -z "$SERVER_PID" ]; then
         return
     fi
+    note "stop server"
     kill "$SERVER_PID" 2>/dev/null || :
     wait "$SERVER_PID" 2>/dev/null || :
     SERVER_PID=""
+}
+
+note() {
+    if [ "$SSA_VERBOSE" = 0 ]; then return; fi
+    printf 'ssa-local: %s\n' "$*" >&2
 }
 
 die() {

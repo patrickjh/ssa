@@ -1,6 +1,6 @@
 #!/bin/sh
 # ssa — Simple Shell Agent. One POSIX sh file.
-# Help is README.md. This program has no -h or --help.
+# Help is README.md. Flags are -v, -y, and -m. No -h.
 
 set -u
 
@@ -12,16 +12,16 @@ SSA_LOG_FOLDER="${SSA_LOG_FOLDER:-${TMPDIR:-/tmp}}"
 SSA_MAX_CONTEXT_BYTES="${SSA_MAX_CONTEXT_BYTES:-0}"
 SSA_MAX_MODEL_PROMPTS="${SSA_MAX_MODEL_PROMPTS:-20}"
 SSA_MODEL="${SSA_MODEL:-}"
+SSA_NO_CHAT="${SSA_NO_CHAT:-0}"
 SSA_NO_EDITS="${SSA_NO_EDITS-0}"
-SSA_NO_MESSAGES="${SSA_NO_MESSAGES:-0}"
-SSA_NO_QUESTIONS="${SSA_NO_QUESTIONS:-0}"
 SSA_NO_SCRIPTS="${SSA_NO_SCRIPTS:-0}"
 SSA_NO_WRITES="${SSA_NO_WRITES-0}"
 SSA_REQUEST_JSON="${SSA_REQUEST_JSON:-}"
 SSA_URL="${SSA_URL:-}"
+SSA_VERBOSE="${SSA_VERBOSE:-0}"
 
 # Internal
-unset PID PROMPT_COUNTER LOG_FILE
+unset PID PROMPT_COUNTER LOG_FILE LOOP_STATUS
 ACTION_EXIT=0
 ACTION_OUTPUT=""
 ACTION_RAW=""
@@ -35,7 +35,6 @@ IS_TRUE=0
 JQ_BINARY_FLAG=""
 LOG_FILE=""
 LOOP_AGAIN=0
-LOOP_STATUS="stopped"
 PID=$$
 PROMPT_COUNTER=0
 TASK=""
@@ -44,21 +43,21 @@ UPDATED=""
 USER_REJECTION_REASON=""
 USER_REPLY=""
 
-SYSTEM_PROMPT_INTRO='You help users solve tasks with your replies. The
-task for this run is at the end of this system prompt. After the first
-turn, each user message is the output or the error from your last
-reply. You already have that reply. Continue from there with exactly
-one of the reply formats below.
-No markdown fences, no thinking tags. Put reasoning in # comments.'
-REPLY_SPEC_HEAD='These are the valid reply formats:'
-REPLY_SPEC_SCRIPT=\
-'A script reply is a POSIX sh program and nothing else. Each program
+SYSTEM_PROMPT='You help users solve tasks with your replies. The
+task is at the end of this prompt. Continue from your last reply with
+exactly one format below. No markdown fences, no thinking tags. Put
+reasoning in # comments.'
+REPLY_SPEC='These are the valid reply formats:'
+REPLY_SPEC_SCRIPT='
+
+A script reply is a POSIX sh program and nothing else. Each program
 is a new process. Example:
 
 # reasoning: look at the files in the folder
 ls -la'
-REPLY_SPEC_WRITE=\
-'A write request is "# write file: PATH" then raw file contents.
+REPLY_SPEC_WRITE='
+
+A write request is "# write file: PATH" then raw file contents.
 A write does not create parent directories. Prefer this over POSIX
 tools for writing files because this has no quoting issues. Example:
 
@@ -66,8 +65,9 @@ tools for writing files because this has no quoting issues. Example:
 # write file: hello.txt
 hello
 world'
-REPLY_SPEC_EDIT=\
-'An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The
+REPLY_SPEC_EDIT='
+
+An edit request is "# edit file: PATH" then one SEARCH/REPLACE. The
 search block must not be empty and must match exactly once. A search
 or replace line must not be exactly ======= or >>>>>>> REPLACE.
 Prefer this for edits over sed and other POSIX tools because this has
@@ -81,68 +81,47 @@ hello
 hello
 world
 >>>>>>> REPLACE'
-REPLY_SPEC_QUESTION=\
-'A question request is "# question" then the question. The question
-will be shown to the user. Use this to clarify unclear tasks. Example:
+REPLY_SPEC_CHAT='
+
+A chat request is "# chat" then text for the user. The next user
+turn is the line the user wrote, or "The user sent no text." Example:
 
 # reasoning: the path was not in the task
-# question
+# chat
 Which file should I edit?'
-REPLY_SPEC_MESSAGE=\
-'A message is "# message" then text for the user. The run continues.
-Example:
+REPLY_SPEC_COMPLETE='
 
-# reasoning: the test failure is in this file
-# message
-The test failure is in ssa.'
-REPLY_SPEC_COMPLETE=\
-'The task complete marker is "# complete" as the last line of the
+The task complete marker is "# complete" as the last line of the
 reply. Alone it stops the run. As the last line of a script, the
-script runs and then the run stops. Example:
+script runs and then the run stops if the script succeeds. Example:
 
 # complete'
-REPLY_SPEC=""
-NO_CONTEXT_TEXT='No context was given on stdin.'
-OUTPUT_OMITTED_NOT_UTF8='Output omitted: not valid UTF-8 (binary bytes).'
 CHECK_EDIT_FORMAT_AWK='
-function reject(message) {
-    print message
-    rejected = 1
-    exit 1
-}
 search_found && !middle_found && $0 != "=======" {
     search_count++
 }
-replace_found && $0 !~ /^[[:space:]]*$/ {
-    reject("text after the replace marker")
-}
+replace_found && $0 !~ /^[[:space:]]*$/ { bad = 1 }
 !search_found && /^# edit file: ./ {
-    if (edit_at) reject("the edit line is misplaced")
+    if (edit_at) bad = 1
     edit_at = NR
 }
 !search_found && /^<<<<<<< SEARCH$/ {
-    if (!edit_at || NR != edit_at + 1)
-        reject("the search marker is misplaced")
+    if (!edit_at || NR != edit_at + 1) bad = 1
     search_found = 1
 }
 $0 == "=======" {
-    if (!edit_at || !search_found || middle_found)
-        reject("the middle marker is misplaced")
+    if (!edit_at || !search_found || middle_found) bad = 1
     middle_found = 1
 }
 $0 == ">>>>>>> REPLACE" {
-    if (!edit_at || !search_found || !middle_found)
-        reject("the replace marker is misplaced")
+    if (!edit_at || !search_found || !middle_found) bad = 1
     replace_found = 1
 }
 END {
-    if (rejected) exit 1
-    if (replace_found && search_count == 0) print "search block is empty"
-    else if (replace_found) exit 0
-    else if (!search_found) print "the search marker is missing"
-    else if (!middle_found) print "the middle marker is missing"
-    else print "the replace marker is missing"
-    exit 1
+    if (bad || !replace_found || search_count == 0) {
+        print "bad"
+        exit 1
+    }
 }
 '
 EDIT_FILE_AWK='
@@ -228,8 +207,7 @@ CONTEXT_WINDOW_JQ='
 def nbytes: map(.content | length) | add // 0;
 def drop_pair: .[0:2] + .[4:];
 def over: nbytes > $budget;
-def droppable:
-  length > 4 and .[1].role != .[4].role;
+def droppable: length > 4 and .[1].role != .[4].role;
 (.messages
   | if $budget == 0 then .
     else until((over | not) or (droppable | not); drop_pair)
@@ -239,38 +217,48 @@ def droppable:
 
 main() {
     trap 'exit 1' USR1
-    TASK="$*"
+    read_command_line "$@"
     check_required_commands
     check_can_run
     setup_agent_loop
     run_agent_loop
     finish_agent_loop
 }
-check_required_commands() {
-    check_command awk
-    check_command curl
-    check_command date
-    check_command grep
-    check_command head
-    check_command jq
-    check_command rm
-    check_command sed
-    check_command tr
-    check_command wc
+read_command_line() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -v) SSA_VERBOSE=1 ;;
+            -y) SSA_ASSUME_YES=1 ;;
+            -m)
+                shift
+                [ -n "${1:-}" ] ||
+                    die "-m needs a model; see README.md"
+                SSA_MODEL=$1
+                ;;
+            --) shift; break ;;
+            -*) die "unknown flag $1; see README.md" ;;
+            *) break ;;
+        esac
+        shift
+    done
+    TASK="$*"
 }
-check_command() {
-    command -v "$1" >/dev/null 2>&1 || die "$1 not found on PATH"
+check_required_commands() {
+    for COMMAND in awk curl date grep head jq rm sed tr wc
+    do
+        command -v "$COMMAND" >/dev/null 2>&1 || die "$COMMAND not on PATH"
+    done
 }
 check_can_run() {
     check_task_is_set
     check_max_context_bytes
     check_max_model_prompts
     check_zero_or_one "$SSA_ASSUME_YES" "SSA_ASSUME_YES"
+    check_zero_or_one "$SSA_NO_CHAT" "SSA_NO_CHAT"
     check_zero_or_one "$SSA_NO_EDITS" "SSA_NO_EDITS"
-    check_zero_or_one "$SSA_NO_MESSAGES" "SSA_NO_MESSAGES"
-    check_zero_or_one "$SSA_NO_QUESTIONS" "SSA_NO_QUESTIONS"
     check_zero_or_one "$SSA_NO_SCRIPTS" "SSA_NO_SCRIPTS"
     check_zero_or_one "$SSA_NO_WRITES" "SSA_NO_WRITES"
+    check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
     check_log_folder
     check_model_is_set
     check_url_is_set
@@ -320,28 +308,26 @@ check_prompt_device() {
     if [ "$SSA_ASSUME_YES" = 0 ]; then
         die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     fi
-    SSA_NO_QUESTIONS=1
-    SSA_NO_MESSAGES=1
+    SSA_NO_CHAT=1
 }
 check_some_action_left() {
     if [ "$SSA_NO_SCRIPTS" = 1 ] && [ "$SSA_NO_WRITES" = 1 ] &&
-        [ "$SSA_NO_EDITS" = 1 ] && [ "$SSA_NO_QUESTIONS" = 1 ] &&
-        [ "$SSA_NO_MESSAGES" = 1 ]
+        [ "$SSA_NO_EDITS" = 1 ] && [ "$SSA_NO_CHAT" = 1 ]
     then
         die "SSA_NO_SCRIPTS, SSA_NO_WRITES, SSA_NO_EDITS," \
-            "SSA_NO_QUESTIONS, and SSA_NO_MESSAGES" \
-            "are all 1; see README.md"
+            "and SSA_NO_CHAT are all 1; see README.md"
     fi
 }
 setup_agent_loop() {
     setup_jq_binary_flag
     setup_log
     log_settings
+    note "start: $SSA_MODEL at $SSA_URL"
+    note "log file: $LOG_FILE"
     keep_auth_key
     log_context
     setup_exit_traps
     setup_messages
-    LOOP_STATUS="stopped"
 }
 setup_jq_binary_flag() {
     # Some jq builds write CRLF unless -b (binary stdout) is set.
@@ -375,12 +361,12 @@ log_settings() {
         "SSA_MAX_MODEL_PROMPTS=$SSA_MAX_MODEL_PROMPTS" \
         "SSA_MODEL=$SSA_MODEL" \
         "SSA_ASSUME_YES=$SSA_ASSUME_YES" \
+        "SSA_NO_CHAT=$SSA_NO_CHAT" \
         "SSA_NO_EDITS=$SSA_NO_EDITS" \
-        "SSA_NO_MESSAGES=$SSA_NO_MESSAGES" \
-        "SSA_NO_QUESTIONS=$SSA_NO_QUESTIONS" \
         "SSA_NO_SCRIPTS=$SSA_NO_SCRIPTS" \
         "SSA_NO_WRITES=$SSA_NO_WRITES" \
-        "SSA_REQUEST_JSON=$SSA_REQUEST_JSON")" \
+        "SSA_REQUEST_JSON=$SSA_REQUEST_JSON" \
+        "SSA_VERBOSE=$SSA_VERBOSE")" \
         '.settings = $settings'
 }
 keep_auth_key() {
@@ -402,20 +388,12 @@ setup_exit_traps() {
     trap 'exit 143' TERM
 }
 setup_messages() {
-    REPLY_SPEC=$(reply_spec_text)
-    SYSTEM_PROMPT=$(
-        printf '%s\n\n%s\n' "$SYSTEM_PROMPT_INTRO" "$REPLY_SPEC"
-        if [ -n "$SSA_EXTRA_SYSTEM_TEXT" ]; then
-            printf '\n%s\n' "$SSA_EXTRA_SYSTEM_TEXT"
-        fi
-        printf '\n%s\n%s\n' 'The task for this run:' "$TASK"
-        printf .
-    )
-    SYSTEM_PROMPT=${SYSTEM_PROMPT%.}
+    setup_reply_spec
+    setup_system_prompt
     # shellcheck disable=SC2086
     UPDATED=$(printf '%s' "$SYSTEM_PROMPT" |
         jq $JQ_BINARY_FLAG -Rs \
-            --arg no_context "$NO_CONTEXT_TEXT" \
+            --arg no_context 'No context was given on stdin.' \
             --slurpfile log "$LOG_FILE" \
             '. as $text | $log[0] | .messages = [
                {role:"system", content:$text},
@@ -425,28 +403,40 @@ setup_messages() {
         die "cannot write chat messages"
     commit_log || die "cannot write chat messages"
 }
-reply_spec_text() {
-    printf '%s' "$REPLY_SPEC_HEAD"
+setup_reply_spec() {
     if scripts_are_enabled; then
-        printf '\n\n%s' "$REPLY_SPEC_SCRIPT"
+        REPLY_SPEC="$REPLY_SPEC$REPLY_SPEC_SCRIPT"
     fi
     if writes_are_enabled; then
-        printf '\n\n%s' "$REPLY_SPEC_WRITE"
+        REPLY_SPEC="$REPLY_SPEC$REPLY_SPEC_WRITE"
     fi
     if edits_are_enabled; then
-        printf '\n\n%s' "$REPLY_SPEC_EDIT"
+        REPLY_SPEC="$REPLY_SPEC$REPLY_SPEC_EDIT"
     fi
-    if questions_are_enabled; then
-        printf '\n\n%s' "$REPLY_SPEC_QUESTION"
+    if chats_are_enabled; then
+        REPLY_SPEC="$REPLY_SPEC$REPLY_SPEC_CHAT"
     fi
-    if messages_are_enabled; then
-        printf '\n\n%s' "$REPLY_SPEC_MESSAGE"
+    REPLY_SPEC="$REPLY_SPEC$REPLY_SPEC_COMPLETE"
+}
+setup_system_prompt() {
+    SYSTEM_PROMPT="$SYSTEM_PROMPT
+
+$REPLY_SPEC"
+    if [ -n "$SSA_EXTRA_SYSTEM_TEXT" ]; then
+        SYSTEM_PROMPT="$SYSTEM_PROMPT
+
+$SSA_EXTRA_SYSTEM_TEXT"
     fi
-    printf '\n\n%s' "$REPLY_SPEC_COMPLETE"
+    SYSTEM_PROMPT="$SYSTEM_PROMPT
+
+The task for this run:
+$TASK
+"
 }
 run_agent_loop() {
     while :; do
         PROMPT_COUNTER=$((PROMPT_COUNTER + 1))
+        note "prompt $PROMPT_COUNTER"
         prompt_model_then_run_script
         case $? in
             $TASK_DONE) LOOP_STATUS="done"; break ;;
@@ -489,6 +479,7 @@ begin_model_turn() {
                         output:"", exit_code:null}]'
 }
 send_curl_json_request() {
+    note "curl $SSA_URL"
     # shellcheck disable=SC2086
     if [ -n "$AUTH_KEY" ]; then
         CURL_RESPONSE=$(post_curl -H "Authorization: Bearer $AUTH_KEY") ||
@@ -536,15 +527,24 @@ save_model_turn() {
 }
 handle_model_response() {
     append_assistant_turn
-    if agent_is_done; then return $TASK_DONE; fi
+    if agent_is_done; then
+        note "reply: complete"
+        return $TASK_DONE
+    fi
     if reply_is_blank; then record_format_error
     elif action_path_is_missing; then
         record_format_error "the path is missing"
-    elif reply_is_write_request; then handle_write_request
-    elif reply_is_edit_request; then handle_edit_request
-    elif reply_is_question_request; then handle_question_request
-    elif reply_is_message_request; then handle_message_request
+    elif reply_is_write_request; then
+        note "reply: write"
+        handle_write_request
+    elif reply_is_edit_request; then
+        note "reply: edit"
+        handle_edit_request
+    elif reply_is_chat_request; then
+        note "reply: chat"
+        handle_chat_request
     elif scripts_are_enabled; then
+        note "reply: script"
         handle_script_request
         if [ $? -eq $TASK_DONE ]; then return $TASK_DONE; fi
     else record_format_error
@@ -597,30 +597,17 @@ reply_is_edit_request() {
     first_action_line | grep -q '^# edit file: .'
 }
 handle_edit_request() {
-    if edit_body_has_repeated_marker_line '======='; then
-        record_format_error \
-            "a search or replace line must not be exactly ======="
-        return
-    fi
-    if edit_body_has_repeated_marker_line '>>>>>>> REPLACE'; then
-        record_format_error \
-            "a search or replace line must not be exactly >>>>>>> REPLACE"
-        return
-    fi
     if ! EDIT_FORMAT_MESSAGE=$(edit_format_is_ok); then
         if [ -z "$EDIT_FORMAT_MESSAGE" ]; then
             die "cannot check edit format"
         fi
-        record_format_error "$EDIT_FORMAT_MESSAGE"
+        record_format_error "$REPLY_SPEC_EDIT"
         return
     fi
     apply_edit_request
 }
 edits_are_enabled() {
     [ "$SSA_NO_EDITS" = 0 ]
-}
-edit_body_has_repeated_marker_line() {
-    [ "$(action_body '^# edit file: .' | grep -cxF -e "$1")" -gt 1 ]
 }
 edit_format_is_ok() {
     print_model_reply | LC_ALL=C awk "$CHECK_EDIT_FORMAT_AWK"
@@ -713,7 +700,7 @@ handle_user_answers() {
     while :; do
         printf '\nApply this action? [Y]es / [N]o / [Q]uit ' >/dev/tty ||
             die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
-        read_ask_answer_from_tty
+        read_user_line "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
         case "$USER_REPLY" in
             y|Y|yes|YES) return $ASK_YES ;;
             n|N|no|NO) return $ASK_NO ;;
@@ -722,10 +709,6 @@ handle_user_answers() {
         esac
     done
 }
-read_ask_answer_from_tty() {
-    IFS= read -r USER_REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
-}
 print_invalid_input() {
     printf 'invalid input: ' >/dev/tty ||
         die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
@@ -733,6 +716,7 @@ print_invalid_input() {
         die "cannot show invalid input"
 }
 record_action_rejection() {
+    note "user rejected the action"
     ACTION_OUTPUT="User rejected the action. Try something else.
 "
     ACTION_EXIT=1
@@ -743,8 +727,7 @@ record_action_rejection() {
 ask_user_for_rejection_reason() {
     printf 'reason: ' >/dev/tty ||
         die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
-    IFS= read -r USER_REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
+    read_user_line "need /dev/tty or set SSA_ASSUME_YES=1; see README.md"
     USER_REJECTION_REASON="$USER_REPLY"
 }
 run_script() {
@@ -770,8 +753,8 @@ store_action_result() {
 }
 append_script_result() {
     if ! output_is_json_safe; then
-        ACTION_OUTPUT="$OUTPUT_OMITTED_NOT_UTF8
-"
+        ACTION_OUTPUT='Output omitted: not valid UTF-8 (binary bytes).
+'
         save_turn_output
         save_omitted_user_message
         return
@@ -785,7 +768,7 @@ output_is_json_safe() {
         'contains("\u0000") | not' >/dev/null 2>&1
 }
 save_omitted_user_message() {
-    save_log --arg note "$OUTPUT_OMITTED_NOT_UTF8" \
+    save_log --arg note 'Output omitted: not valid UTF-8 (binary bytes).' \
         '.messages += [{role:"user", content:(
            $note + "\n\nScript exit code: "
            + (.turns[-1].exit_code | tostring) + "\n")}]'
@@ -812,57 +795,50 @@ save_script_user_message() {
 save_log() {
     try_save_log "$@" || die "cannot update log"
 }
-reply_is_question_request() {
-    if ! questions_are_enabled; then return 1; fi
-    first_action_line | grep -q '^# question$'
+reply_is_chat_request() {
+    if ! chats_are_enabled; then return 1; fi
+    first_action_line | grep -q '^# chat$'
 }
-handle_question_request() {
-    if ! action_body '^# question$' | grep -q '[^[:space:]]'; then
-        record_format_error "the question was empty"
+handle_chat_request() {
+    if ! action_body '^# chat$' | grep -q '[^[:space:]]'; then
+        record_format_error "the chat was empty"
     else
-        ask_question
+        ask_chat
     fi
 }
-questions_are_enabled() {
-    [ "$SSA_NO_QUESTIONS" = 0 ]
+chats_are_enabled() {
+    [ "$SSA_NO_CHAT" = 0 ]
 }
-ask_question() {
-    printf 'question from model: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
-    action_body '^# question$' | sanitize_output >/dev/tty ||
-        die "cannot show question"
-    printf 'your answer: ' >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
+ask_chat() {
+    printf 'chat from model:\n' >/dev/tty ||
+        die "need /dev/tty or set SSA_NO_CHAT=1; see README.md"
+    action_body '^# chat$' | sanitize_output >/dev/tty ||
+        die "cannot show chat"
+    printf 'your reply: ' >/dev/tty ||
+        die "need /dev/tty or set SSA_NO_CHAT=1; see README.md"
     ring_terminal
-    IFS= read -r USER_REPLY </dev/tty ||
-        die "need /dev/tty or set SSA_NO_QUESTIONS=1; see README.md"
+    read_user_line "need /dev/tty or set SSA_NO_CHAT=1; see README.md"
+    if [ -z "$USER_REPLY" ]; then
+        USER_REPLY='The user sent no text.'
+    fi
     printf '%s\n' "$USER_REPLY" | append_user_text
 }
-reply_is_message_request() {
-    if ! messages_are_enabled; then return 1; fi
-    first_action_line | grep -q '^# message$'
+read_user_line() {
+    IFS= read -r USER_REPLY </dev/tty || die "$1"
 }
 first_action_line() {
     print_model_reply | grep -E \
-        '^# (write file:|edit file:|question$|message$)' |
+        '^# (write file:|edit file:|chat$)' |
         head -n 1 |
         grep .  # head succeeds on empty input; this fails then
 }
-handle_message_request() {
-    if ! action_body '^# message$' | grep -q '[^[:space:]]'; then
-        record_format_error "the message was empty"
-    else
-        show_message
-    fi
-}
-messages_are_enabled() {
-    [ "$SSA_NO_MESSAGES" = 0 ]
-}
 record_format_error() {
     if [ $# -gt 0 ]; then
+        note "format error: $(printf '%s\n' "$1" | head -n 1)"
         ACTION_OUTPUT="Format error: $*
 "
     else
+        note "format error"
         ACTION_OUTPUT="Format error: ${REPLY_SPEC}
 "
     fi
@@ -887,12 +863,6 @@ save_turn_output() {
              | .turns[-1].exit_code = $code') ||
         die "cannot update log"
     commit_log || die "cannot update log"
-}
-show_message() {
-    action_body '^# message$' | sanitize_output >/dev/tty ||
-        die "need /dev/tty or set SSA_NO_MESSAGES=1; see README.md"
-    ring_terminal
-    printf '%s\n' "The user was shown the message." | append_user_text
 }
 action_body() {
     print_model_reply | sed -n "/$1/,\$p" | sed '1d'
@@ -940,6 +910,11 @@ finish_agent_loop() {
         *) die "unknown loop status $LOOP_STATUS" ;;
     esac
 }
+note() {
+    if [ "$SSA_VERBOSE" = 0 ]; then return; fi
+    printf 'ssa: %s\n' "$*" >&2
+}
+
 die() {
     printf '%s\n' "$*" >&2
     set_log_status "die: $*"
