@@ -39,7 +39,7 @@ PID=$$
 PROMPT_COUNTER=0
 TASK=""
 TASK_DONE=1
-UPDATED=""
+UPDATED_LOG=""
 USER_REJECTION_REASON=""
 USER_REPLY=""
 
@@ -231,8 +231,7 @@ read_command_line() {
             -y) SSA_ASSUME_YES=1 ;;
             -m)
                 shift
-                [ -n "${1:-}" ] ||
-                    die "-m needs a model; see README.md"
+                [ -n "${1:-}" ] || die "-m needs a model; see README.md"
                 SSA_MODEL=$1
                 ;;
             --) shift; break ;;
@@ -376,7 +375,7 @@ keep_auth_key() {
 log_context() {
     if [ -t 0 ]; then return; fi
     # shellcheck disable=SC2086
-    UPDATED=$(tr -d '\000' | jq $JQ_BINARY_FLAG -Rs \
+    UPDATED_LOG=$(tr -d '\000' | jq $JQ_BINARY_FLAG -Rs \
         --slurpfile log "$LOG_FILE" \
         '$log[0] + {context:.}') ||
         die "context is not valid UTF-8; see README.md"
@@ -391,7 +390,7 @@ setup_messages() {
     setup_reply_spec
     setup_system_prompt
     # shellcheck disable=SC2086
-    UPDATED=$(printf '%s' "$SYSTEM_PROMPT" |
+    UPDATED_LOG=$(printf '%s' "$SYSTEM_PROMPT" |
         jq $JQ_BINARY_FLAG -Rs \
             --arg no_context 'No context was given on stdin.' \
             --slurpfile log "$LOG_FILE" \
@@ -505,7 +504,7 @@ save_model_turn() {
         '.choices[0].message.content | type == "string"' \
         >/dev/null 2>&1
     then
-        UPDATED=$(printf '%s' "$CURL_RESPONSE" |
+        UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
             jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
                 '. as $raw | ($raw | fromjson) as $parsed | $log[0]
                  | .turns[-1].response = $raw
@@ -515,12 +514,12 @@ save_model_turn() {
         commit_log || die "cannot update log"
         return
     fi
-    UPDATED=$(printf '%s' "$CURL_RESPONSE" |
+    UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
         jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
             '. as $raw | $log[0]
              | .turns[-1].response = $raw
-             | .turns[-1].reply = ""') || UPDATED=""
-    if [ -n "$UPDATED" ]; then
+             | .turns[-1].reply = ""') || UPDATED_LOG=""
+    if [ -n "$UPDATED_LOG" ]; then
         commit_log || :
     fi
     die "invalid chat response; see README.md"
@@ -687,7 +686,6 @@ ask_to_run() {
 }
 ask_user_to_approve_action() {
     show_model_reply
-    ring_terminal
     handle_user_answers
 }
 show_model_reply() {
@@ -816,7 +814,6 @@ ask_chat() {
         die "cannot show chat"
     printf 'your reply: ' >/dev/tty ||
         die "need /dev/tty or set SSA_NO_CHAT=1; see README.md"
-    ring_terminal
     read_user_line "need /dev/tty or set SSA_NO_CHAT=1; see README.md"
     if [ -z "$USER_REPLY" ]; then
         USER_REPLY='The user sent no text.'
@@ -854,7 +851,7 @@ show_action_output() {
 }
 save_turn_output() {
     # shellcheck disable=SC2086
-    UPDATED=$(printf '%s' "$ACTION_OUTPUT" |
+    UPDATED_LOG=$(printf '%s' "$ACTION_OUTPUT" |
         jq $JQ_BINARY_FLAG -Rs \
             --argjson code "$ACTION_EXIT" \
             --slurpfile log "$LOG_FILE" \
@@ -882,12 +879,9 @@ sanitize_output() {
         sed -e "$ESC_AS_SLASH_E" |
         sed -e "$NONPRINT_AS_QUESTION"
 }
-ring_terminal() {
-    printf '\a' >/dev/tty || die "need /dev/tty; see README.md"
-}
 append_user_text() {
     # shellcheck disable=SC2086
-    UPDATED=$(jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
+    UPDATED_LOG=$(jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
         '. as $text | $log[0]
          | .messages += [{role:"user", content:$text}]') ||
         die "cannot update log"
@@ -934,11 +928,11 @@ set_log_status() {
 }
 try_save_log() {
     # shellcheck disable=SC2086
-    UPDATED=$(jq $JQ_BINARY_FLAG "$@" "$LOG_FILE") || return 1
+    UPDATED_LOG=$(jq $JQ_BINARY_FLAG "$@" "$LOG_FILE") || return 1
     commit_log
 }
 commit_log() {
-    printf '%s\n' "$UPDATED" >"$LOG_FILE" || return 1
+    printf '%s\n' "$UPDATED_LOG" >"$LOG_FILE" || return 1
 }
 print_log_path() {
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then

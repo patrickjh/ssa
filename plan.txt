@@ -20,3 +20,25 @@ the name does not help.
 See if ssa can lose enough lines that a blank line
 fits between each function and the file stays at or
 under 1000 lines.
+
+4) Maybe drop AUTH_KEY
+
+keep_auth_key copies SSA_KEY into AUTH_KEY and
+unsets SSA_KEY, so a child script does not see the
+token. See if curl can use SSA_KEY and leave it set
+so child scripts inherit it.
+
+5) Check call graph order
+
+See that each function in ssa and ssa-local
+follows the call graph in AGENTS.md. Settings,
+run state, and static strings come first.
+main is first among functions. Each function
+sits below its last caller. Callees of one
+caller stay in call order. main "$@" is last.
+
+6) Print the log path only if SSA_VERBOSE is 1
+
+print_log_path writes the log path on stderr at
+the end of a run. Print it only when SSA_VERBOSE
+is 1. The start note already does that.
