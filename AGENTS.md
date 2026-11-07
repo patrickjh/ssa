@@ -71,18 +71,21 @@ forwards llama-server flags.
 
 The chat is `ssa`'s, so the turn shape, the log, and the
 prompt limit are `ssa`'s too. `ssa-local` writes no log: the
-run writes one log, the JSON one from `ssa`. llama-server
-prints to stderr, which is where a harness diagnostic goes.
-`SSA_VERBOSE=1` prints short notes there too.
+run writes one log, the JSON one from `ssa`. With
+`SSA_VERBOSE=1`, llama-server prints to stderr, and
+ssa-local prints short notes there too.
 
 `ssa-local` passes the write, edit, and chat settings as `1` by
 default, so a local model sees one reply shape. A caller
 overrides any of them.
 
 Neither program passes a reasoning flag. The model and its
-chat template decide. `ssa` sends a format error when a reply
-carries a thinking tag, so a model that thinks inside its
-content sees that error and tries again.
+chat template decide. The tokens on the reasoning channel
+are not shown to the user. `ssa` reads the reply text only.
+Those tokens stay in the raw response in the log. `ssa`
+sends a format error when a reply carries a thinking tag,
+so a model that thinks inside its content sees that error
+and tries again.
 
 ## Real turns
 
@@ -297,7 +300,8 @@ comparisons. Leave unquoted: numeric constants and status codes,
 
 - stdout: action and loop output.
 - `/dev/tty`: ask UI.
-- stderr: harness errors, and notes when `SSA_VERBOSE` is `1`.
+- stderr: harness errors. With `SSA_VERBOSE` at `1`, notes and
+  llama-server output too.
 
 ### File order
 
@@ -325,9 +329,9 @@ exception. Do not add flags beyond those.
 | Repeated format errors  | Ctrl-C, `timeout`, or `ulimit -t` |
 | Repeat for many tasks   | `for task in …; do …; done`       |
 
-The same calls work with `ssa-local` in place of `ssa`. A run of
-`ssa-local` whose stderr should be quiet takes `2>/dev/null`,
-which hides llama-server's load messages.
+The same calls work with `ssa-local` in place of `ssa`.
+llama-server output follows `SSA_VERBOSE`, so `2>run.log`
+includes it only with `-v`.
 
 A format error is sent back and the loop continues. Do not
 add a count that stops `ssa-local`. `ssa` already stops at

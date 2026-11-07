@@ -118,20 +118,14 @@ default, because a local model does best with one shape. Each is
 still a setting, so `SSA_NO_WRITES=0 ssa-local …` turns one back
 on. Scripts and `# complete` are always available.
 
-`llama-server` prints its load messages to stderr. Redirect stderr
-to hide them:
-
-```sh
-ssa-local summarize this file 2>/dev/null
-```
-
 The run writes one log: the JSON log from `ssa`, in
 `SSA_LOG_FOLDER` (default `TMPDIR`, or `/tmp`). It stays. It
 cannot be turned off. ssa-local writes no log of its own.
 
 ssa-local prints nothing of its own unless `-v` or
-`SSA_VERBOSE=1`. A model load can take a while with stderr
-silenced, so keep stderr open if you want to watch it start.
+`SSA_VERBOSE=1`. That includes `llama-server`. A model load
+can take a while with those off, so pass `-v` to watch it
+start.
 
 ### Settings
 

@@ -112,17 +112,25 @@ check_port_is_free() {
 start_server() {
     note "model file: $SSA_MODEL_FILE"
     note "server: $SERVER_URL"
+    # Verbose sends the server to stderr, so stdout stays the loop.
+    # Otherwise the server is quiet.
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        launch_server >&2
+    else
+        launch_server >/dev/null 2>&1
+    fi
+    SERVER_PID=$!
+    wait_for_server
+}
+
+launch_server() {
     # The four flags below are not settings. ssa is told the same
     # address and the same model name, so these must match it.
-    # Server output goes to stderr, which keeps stdout for the loop.
     llama-server \
         --model "$SSA_MODEL_FILE" \
         --alias local \
         --host 127.0.0.1 \
-        --port "$SSA_SERVER_PORT" \
-        >&2 &
-    SERVER_PID=$!
-    wait_for_server
+        --port "$SSA_SERVER_PORT" &
 }
 
 wait_for_server() {

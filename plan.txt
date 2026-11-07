@@ -42,3 +42,37 @@ caller stay in call order. main "$@" is last.
 print_log_path writes the log path on stderr at
 the end of a run. Print it only when SSA_VERBOSE
 is 1. The start note already does that.
+
+7) Maybe add ssa-chat and ssa-editor wrappers
+
+Thin scripts that run ssa with one reply shape.
+ssa-chat sets SSA_NO_SCRIPTS, SSA_NO_WRITES, and
+SSA_NO_EDITS to 1 and SSA_NO_CHAT to 0.
+ssa-editor sets SSA_NO_SCRIPTS, SSA_NO_WRITES, and
+SSA_NO_CHAT to 1 and SSA_NO_EDITS to 0.
+AGENTS.md keeps the surface to ssa and ssa-local.
+
+8) Pick a port when SSA_SERVER_PORT is unset
+
+8080 is a common port, and llama-server uses it
+too. When SSA_SERVER_PORT is unset, choose one
+from the process id in a high band, such as
+20000 + (pid % 10000). If /health answers there,
+try the next port a few times. A set
+SSA_SERVER_PORT still stops when that port
+answers. Set SERVER_URL after the choice.
+README.md names 8080; update that default.
+POSIX sh has no $RANDOM, so skip /dev/urandom
+and any new tool.
+
+9) Raise or drop the curl reply timeout
+
+post_curl passes --max-time 900. On slow local
+hardware a normal reply can still emit hundreds
+of thinking tokens before the text arrives. At
+one token a second that wait hits 900 and curl
+fails while the model is still writing. Raise
+--max-time by a large factor, or drop it. Leave
+--connect-timeout 30 so a dead server still
+fails fast. A caller who wants a cap can wrap
+the run with timeout.
