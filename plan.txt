@@ -64,15 +64,3 @@ answers. Set SERVER_URL after the choice.
 README.md names 8080; update that default.
 POSIX sh has no $RANDOM, so skip /dev/urandom
 and any new tool.
-
-9) Raise or drop the curl reply timeout
-
-post_curl passes --max-time 900. On slow local
-hardware a normal reply can still emit hundreds
-of thinking tokens before the text arrives. At
-one token a second that wait hits 900 and curl
-fails while the model is still writing. Raise
---max-time by a large factor, or drop it. Leave
---connect-timeout 30 so a dead server still
-fails fast. A caller who wants a cap can wrap
-the run with timeout.

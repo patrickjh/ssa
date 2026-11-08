@@ -492,7 +492,7 @@ post_curl() {
     jq $JQ_BINARY_FLAG -cj '.turns[-1].request' "$LOG_FILE" |
         curl -sS --fail \
             --retry 4 --retry-connrefused --retry-max-time 120 \
-            --connect-timeout 30 --max-time 900 \
+            --connect-timeout 30 \
             -H "Content-Type: application/json" \
             "$@" \
             --data-binary @- \
