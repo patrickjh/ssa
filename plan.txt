@@ -21,13 +21,6 @@ See if ssa can lose enough lines that a blank line
 fits between each function and the file stays at or
 under 1000 lines.
 
-4) Maybe drop AUTH_KEY
-
-keep_auth_key copies SSA_KEY into AUTH_KEY and
-unsets SSA_KEY, so a child script does not see the
-token. See if curl can use SSA_KEY and leave it set
-so child scripts inherit it.
-
 5) Check call graph order
 
 See that each function in ssa and ssa-local

@@ -27,7 +27,6 @@ ACTION_OUTPUT=""
 ACTION_RAW=""
 ASK_NO=1
 ASK_YES=0
-AUTH_KEY=""
 CURL_RESPONSE=""
 HIT_MAX=2
 IS_FALSE=1
@@ -323,7 +322,6 @@ setup_agent_loop() {
     log_settings
     note "start: $SSA_MODEL at $SSA_URL"
     note "log file: $LOG_FILE"
-    keep_auth_key
     log_context
     setup_exit_traps
     setup_messages
@@ -367,10 +365,6 @@ log_settings() {
         "SSA_REQUEST_JSON=$SSA_REQUEST_JSON" \
         "SSA_VERBOSE=$SSA_VERBOSE")" \
         '.settings = $settings'
-}
-keep_auth_key() {
-    AUTH_KEY=$SSA_KEY
-    unset SSA_KEY
 }
 log_context() {
     if [ -t 0 ]; then return; fi
@@ -480,8 +474,8 @@ begin_model_turn() {
 send_curl_json_request() {
     note "curl $SSA_URL"
     # shellcheck disable=SC2086
-    if [ -n "$AUTH_KEY" ]; then
-        CURL_RESPONSE=$(post_curl -H "Authorization: Bearer $AUTH_KEY") ||
+    if [ -n "$SSA_KEY" ]; then
+        CURL_RESPONSE=$(post_curl -H "Authorization: Bearer $SSA_KEY") ||
             die "curl failed; see README.md"
     else
         CURL_RESPONSE=$(post_curl) || die "curl failed; see README.md"
@@ -730,6 +724,7 @@ ask_user_for_rejection_reason() {
 }
 run_script() {
     ACTION_RAW=$(
+        unset SSA_KEY
         sh -c "$(print_model_reply)" </dev/null 2>&1
         status=$?
         printf '\n.'
