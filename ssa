@@ -930,6 +930,7 @@ commit_log() {
     printf '%s\n' "$UPDATED_LOG" >"$LOG_FILE" || return 1
 }
 print_log_path() {
+    if [ "$SSA_VERBOSE" = 0 ]; then return; fi
     if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
         printf 'log file: %s\n' "$LOG_FILE" >&2
     fi

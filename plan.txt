@@ -30,12 +30,6 @@ main is first among functions. Each function
 sits below its last caller. Callees of one
 caller stay in call order. main "$@" is last.
 
-6) Print the log path only if SSA_VERBOSE is 1
-
-print_log_path writes the log path on stderr at
-the end of a run. Print it only when SSA_VERBOSE
-is 1. The start note already does that.
-
 7) Maybe add ssa-chat and ssa-editor wrappers
 
 Thin scripts that run ssa with one reply shape.
@@ -57,3 +51,43 @@ answers. Set SERVER_URL after the choice.
 README.md names 8080; update that default.
 POSIX sh has no $RANDOM, so skip /dev/urandom
 and any new tool.
+
+9) Maybe one program, scripts and # complete
+
+Try folding ssa-local into ssa with one reply
+shape. Drop write, edit, and chat, and the
+SSA_NO_* settings. A reply is a script.
+# complete alone ends the run. As the last
+line of a script, it ends the run when that
+script exits 0. The local shape defaults go
+away with them. Ping SSA_URL. If it answers,
+use the cloud and do not start a server. If
+it does not, start the local server, wait on
+/health, and use that. Call the GGUF file
+SSA_BACKUP_MODEL. Stop that server on the
+way out. See if the file stays at or under
+1000 lines.
+
+10) Maybe add an ssa-edit tool
+
+Try a tool that runs the edit awk. A script
+calls it with a quoted heredoc, and the path
+is the argument. No # edit line.
+
+11) Maybe add an ssa-ask tool
+
+Try a tool a script can call with a quoted
+heredoc. Print the question on /dev/tty, read
+one line from /dev/tty, and write that line
+on stdout. An empty line prints "The user
+sent no text."
+
+12) Maybe describe the tools in the prompt
+
+When ssa builds the system prompt, look for
+ssa-edit and ssa-ask on PATH. If a tool is
+found and scripts are on, append a short
+example. Use the bare name. Put the text
+after the reply spec and before
+SSA_EXTRA_SYSTEM_TEXT. Keep each blurb in a
+top-level string.
