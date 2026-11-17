@@ -91,3 +91,42 @@ example. Use the bare name. Put the text
 after the reply spec and before
 SSA_EXTRA_SYSTEM_TEXT. Keep each blurb in a
 top-level string.
+
+13) Maybe one shot by default, -a for the agent
+
+Default is one model call and one script, as in
+secondTestVersion. Show the script, ask, and run
+it or return. No second prompt, no format-error
+retry, no write, edit, or chat.
+
+-a keeps the current agent loop. Add the one-shot
+path in ssa. Reuse the curl call, the show, the
+run, and the log. Leave the llama-cli program
+as it is. Skip its fence and thinking awk.
+
+The one-shot prompt asks for a script only, with
+reasoning in # comments. See if ssa stays at or
+under 1000 lines. -a is a new flag. AGENTS.md
+allows only -v, -y, and -m. Update AGENTS.md
+and README.md for -a.
+
+14) Maybe one SSA_MODEL for cloud and local
+
+-m sets SSA_MODEL in both programs. Drop
+SSA_MODEL_FILE. On startup, if that string is
+a file, start the local server with it as the
+GGUF. If it is not a file, use the cloud.
+SSA_URL and SSA_KEY apply, and SSA_MODEL is
+the model name.
+
+A slash or a .gguf ending marks a path. A
+missing file is an error. Any other string is
+a model name.
+
+Keep ssa and ssa-local. ssa hands the path to
+ssa-local before the URL check and before
+stdin is read. ssa-local still runs ssa with
+the alias local. Task 9 probes SSA_URL and
+names the file SSA_BACKUP_MODEL. This task
+uses the file check instead. Update AGENTS.md
+and README.md.

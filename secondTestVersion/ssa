@@ -1,0 +1,226 @@
+#!/bin/sh
+# ssa — second test version. One prompt, one script.
+# Help is design.txt. Flags are -v, -y, and -m.
+
+set -u
+
+# Users can set
+SSA_ASSUME_YES="${SSA_ASSUME_YES:-0}"
+SSA_MODEL_FILE="${SSA_MODEL_FILE:-}"
+SSA_VERBOSE="${SSA_VERBOSE:-0}"
+
+# Internal
+ANSWER=""
+RAW_REPLY=""
+SCRIPT=""
+SYSTEM_PROMPT=""
+TASK=""
+
+SYSTEM_TEXT='You write one POSIX sh script to help a user.
+Your response may be sent directly to sh -c. Reply with
+the script only. Put reasoning in # comments.
+If the task is ambiguous, pick the usual form and
+name the assumption in a # comment.'
+
+# Drop one markdown fence, or llama-cli chrome, so the
+# question can show the script. -v still prints RAW_REPLY.
+AWK_SCRIPT='
+{ line[NR] = $0 }
+END {
+    start = 0
+    end = 0
+    for (i = 1; i <= NR; i++) {
+        if (line[i] ~ /^```/) {
+            if (start == 0) {
+                start = i
+            } else {
+                end = i
+                break
+            }
+        }
+    }
+    if (start > 0 && end > start) {
+        for (i = start + 1; i < end; i++) {
+            print line[i]
+        }
+        exit
+    }
+    think = 0
+    for (i = 1; i <= NR; i++) {
+        text = line[i]
+        if (text ~ /^\[(Start|start) thinking\]$/) {
+            think = 1
+            continue
+        }
+        if (text ~ /^\[(End|end) thinking\]$/) {
+            think = 0
+            continue
+        }
+        if (think) {
+            continue
+        }
+        if (text ~ /^\[end of text\]$/) {
+            continue
+        }
+        if (text ~ /^\[ Prompt:/) {
+            continue
+        }
+        if (text ~ /^Exiting\.\.\.$/) {
+            continue
+        }
+        print text
+    }
+}
+'
+
+main() {
+    read_command_line "$@"
+    check_can_run
+    setup_system_prompt
+    call_llama
+    script_from_reply
+    show_script
+    ask_or_run
+}
+
+read_command_line() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -v) SSA_VERBOSE=1 ;;
+            -y) SSA_ASSUME_YES=1 ;;
+            -m)
+                shift
+                [ -n "${1:-}" ] ||
+                    die "-m needs a model file; see design.txt"
+                SSA_MODEL_FILE=$1
+                ;;
+            --) shift; break ;;
+            -*) die "unknown flag $1; see design.txt" ;;
+            *) break ;;
+        esac
+        shift
+    done
+    TASK="$*"
+}
+
+check_can_run() {
+    check_task
+    check_commands
+    check_model_file
+    check_zero_or_one "$SSA_ASSUME_YES" "SSA_ASSUME_YES"
+    check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
+}
+
+check_task() {
+    [ -n "$TASK" ] || die "task not found on the CLI; see design.txt"
+}
+
+check_commands() {
+    for COMMAND in awk llama-cli
+    do
+        command -v "$COMMAND" >/dev/null 2>&1 ||
+            die "$COMMAND not found on PATH"
+    done
+}
+
+check_model_file() {
+    [ -n "$SSA_MODEL_FILE" ] ||
+        die "SSA_MODEL_FILE not set; see design.txt"
+    [ -f "$SSA_MODEL_FILE" ] ||
+        die "model file not found: $SSA_MODEL_FILE"
+}
+
+check_zero_or_one() {
+    case $1 in
+        0|1) ;;
+        *) die "invalid $2; see design.txt" ;;
+    esac
+}
+
+setup_system_prompt() {
+    SYSTEM_PROMPT="$SYSTEM_TEXT
+
+The task for this run:
+$TASK"
+}
+
+call_llama() {
+    note "call llama-cli"
+    if [ -t 0 ]; then
+        exec 3</dev/null
+    else
+        exec 3<&0
+    fi
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        RAW_REPLY=$(llama-cli -m "$SSA_MODEL_FILE" -st \
+            --system-prompt "$SYSTEM_PROMPT" <&3) || {
+            printf '%s\n' "$RAW_REPLY" >&2
+            die "llama-cli failed"
+        }
+        printf '%s\n' "$RAW_REPLY" >&2
+    else
+        RAW_REPLY=$(llama-cli -m "$SSA_MODEL_FILE" -st \
+            --system-prompt "$SYSTEM_PROMPT" <&3 2>/dev/null) ||
+            die "llama-cli failed"
+    fi
+    exec 3<&-
+}
+
+script_from_reply() {
+    SCRIPT=$(printf '%s\n' "$RAW_REPLY" | awk "$AWK_SCRIPT") ||
+        die "cannot read the reply"
+}
+
+show_script() {
+    if ! ( exec >/dev/tty ) 2>/dev/null; then
+        return
+    fi
+    printf '%s\n' "$SCRIPT" >/dev/tty ||
+        die "need /dev/tty or set SSA_ASSUME_YES=1; see design.txt"
+}
+
+ask_or_run() {
+    if [ "$SSA_ASSUME_YES" = 1 ]; then
+        run_script
+        return
+    fi
+    ask_to_run
+}
+
+ask_to_run() {
+    while :; do
+        printf 'run this script? ' >/dev/tty ||
+            die "need /dev/tty or set SSA_ASSUME_YES=1; see design.txt"
+        IFS= read -r ANSWER </dev/tty ||
+            die "need /dev/tty or set SSA_ASSUME_YES=1; see design.txt"
+        case $ANSWER in
+            [yY]|[yY][eE][sS])
+                run_script
+                return
+                ;;
+            [nN]|[nN][oO])
+                return 0
+                ;;
+        esac
+        printf 'answer Yes or No\n' >/dev/tty ||
+            die "need /dev/tty or set SSA_ASSUME_YES=1; see design.txt"
+    done
+}
+
+run_script() {
+    sh -c "$SCRIPT" </dev/tty
+}
+
+note() {
+    if [ "$SSA_VERBOSE" = 0 ]; then
+        return
+    fi
+    printf 'ssa: %s\n' "$*" >&2
+}
+
+die() {
+    printf '%s\n' "$*" >&2
+    exit 1
+}
+
+main "$@"
