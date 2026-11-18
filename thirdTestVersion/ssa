@@ -1,6 +1,6 @@
 #!/bin/sh
 # ssa — third test version. One script, or -a for the loop.
-# Help is design.txt. Flags are -v, -y, -m, and -a.
+# Help is design.txt. Flags are -v, -y, -m, -a, and -r.
 
 set -u
 
@@ -10,6 +10,7 @@ SSA_LIMIT="${SSA_LIMIT:-400000}"
 SSA_LOGS="${SSA_LOGS:-${TMPDIR:-/tmp}}"
 SSA_MODEL="${SSA_MODEL:-}"
 SSA_PORT="${SSA_PORT:-}"
+SSA_REASONING="${SSA_REASONING:-0}"
 SSA_URL="${SSA_URL:-}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
 SSA_WAIT="${SSA_WAIT:-120}"
@@ -41,6 +42,8 @@ Put reasoning in # comments.
 No markdown fences.
 If the task is ambiguous,
 pick the usual form and name the assumption in a # comment.
+If the task can be done by printing, print.
+Create or change a file only when the task needs that file.
 Write files using quoted heredocs to avoid issues.'
 
 AGENT_MODE_TEXT='You can work on the task over multiple turns.
@@ -106,6 +109,14 @@ read_command_line() {
                 [ -n "${1:-}" ] || die "-m needs a model; see design.txt"
                 SSA_MODEL=$1
                 ;;
+            -r)
+                if [ $# -ge 2 ] && ! word_is_flag "$2"; then
+                    shift
+                    SSA_REASONING=$1
+                else
+                    SSA_REASONING=1
+                fi
+                ;;
             --) shift; break ;;
             -*) die "unknown flag $1; see design.txt" ;;
             *) break ;;
@@ -115,6 +126,13 @@ read_command_line() {
     TASK="$*"
 }
 
+word_is_flag() {
+    case $1 in
+        -*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 check_can_run() {
     check_task
     check_commands
@@ -122,6 +140,7 @@ check_can_run() {
     check_number "$SSA_WAIT" "SSA_WAIT"
     check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
     check_zero_or_one "$SSA_YES" "SSA_YES"
+    check_reasoning
     check_log_folder
     check_model_is_set
 }
@@ -149,6 +168,11 @@ check_zero_or_one() {
         0|1) ;;
         *) die "invalid $2; see design.txt" ;;
     esac
+}
+
+check_reasoning() {
+    [ -n "$SSA_REASONING" ] ||
+        die "invalid SSA_REASONING; see design.txt"
 }
 
 check_log_folder() {
@@ -246,11 +270,27 @@ start_server() {
 }
 
 launch_server() {
+    case $SSA_REASONING in
+        0|off|none)
+            run_llama_server --reasoning off
+            ;;
+        1|on)
+            run_llama_server --reasoning on
+            ;;
+        *)
+            run_llama_server --reasoning on \
+                --reasoning-effort "$SSA_REASONING"
+            ;;
+    esac
+}
+
+run_llama_server() {
     llama-server \
         --model "$SSA_MODEL" \
         --alias local \
         --host 127.0.0.1 \
-        --port "$SERVER_PORT" &
+        --port "$SERVER_PORT" \
+        "$@" &
 }
 
 wait_for_server() {
@@ -324,6 +364,7 @@ log_settings() {
         "SSA_LOGS=$SSA_LOGS" \
         "SSA_MODEL=$SSA_MODEL" \
         "SSA_PORT=$SERVER_PORT" \
+        "SSA_REASONING=$SSA_REASONING" \
         "SSA_URL=$SSA_URL" \
         "SSA_VERBOSE=$SSA_VERBOSE" \
         "SSA_WAIT=$SSA_WAIT" \
@@ -400,10 +441,27 @@ begin_model_turn() {
     save_log \
         --arg model "$REQUEST_MODEL" \
         --argjson budget "$SSA_LIMIT" \
-        --argjson extra "{}" \
+        --argjson extra "$(reasoning_extra)" \
         "($CONTEXT_WINDOW_JQ)"' as $body
           | .turns += [{request:$body, response:"", reply:"",
                         output:"", exit_code:null}]'
+}
+
+reasoning_extra() {
+    case $SSA_REASONING in
+        0|off|none)
+            printf '%s\n' '{"reasoning_effort":"none"}'
+            ;;
+        1|on)
+            printf '%s\n' '{}'
+            ;;
+        *)
+            # shellcheck disable=SC2086
+            jq $JQ_BINARY_FLAG -cn \
+                --arg value "$SSA_REASONING" \
+                '{reasoning_effort:$value}'
+            ;;
+    esac
 }
 
 send_request() {
@@ -431,28 +489,26 @@ post_curl() {
 save_model_turn() {
     # shellcheck disable=SC2086
     if printf '%s' "$CURL_RESPONSE" | jq $JQ_BINARY_FLAG -e \
-        '.choices[0].message.content | type == "string"' \
-        >/dev/null 2>&1
+        '.choices[0].message.content | type == "string"' >/dev/null 2>&1
     then
         UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
             jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
                 '. as $raw | ($raw | fromjson) as $parsed | $log[0]
                  | .turns[-1].response = $raw
-                 | .turns[-1].reply =
-                     $parsed.choices[0].message.content') ||
+                 | .turns[-1].reply = $parsed.choices[0].message.content') ||
             die "cannot update log"
         commit_log || die "cannot update log"
-        return
+    else
+        UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
+            jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
+                '. as $raw | $log[0]
+                 | .turns[-1].response = $raw
+                 | .turns[-1].reply = ""') || UPDATED_LOG=""
+        if [ -n "$UPDATED_LOG" ]; then
+            commit_log || :
+        fi
+        die "invalid chat response; see design.txt"
     fi
-    UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
-        jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
-            '. as $raw | $log[0]
-             | .turns[-1].response = $raw
-             | .turns[-1].reply = ""') || UPDATED_LOG=""
-    if [ -n "$UPDATED_LOG" ]; then
-        commit_log || :
-    fi
-    die "invalid chat response; see design.txt"
 }
 
 append_assistant_turn() {

@@ -19,6 +19,16 @@ model name means it uses SSA_URL and SSA_KEY. The
 llama-cli program stays in secondTestVersion.
 
 
+Speed
+
+The default is fast on low-end hardware, such
+as a laptop with 4GB of RAM. A rise in quality
+that costs speed stays off. The person turns
+it on with a variable or a flag. Reasoning
+tokens are that kind of switch: off unless -r
+or SSA_REASONING turns them on.
+
+
 Default
 
 This path is for small models. The aim is to see
@@ -52,8 +62,10 @@ There is no format-error retry, and no # write,
 # edit, # chat, or # complete. The system text
 asks for POSIX sh to help with the task. Each
 reply is one script, with reasoning in #
-comments. It also says to write files using
-quoted heredocs to avoid issues. The task is
+comments. It also says to print when that
+can finish the task, and to create or change
+a file only when the task needs that file.
+Writes use quoted heredocs. The task is
 the last part of that text. The first user
 turn is context. It starts with the operating
 system and the current directory. When
@@ -98,7 +110,8 @@ The history follows SSA_LIMIT, as on the
 default path.
 
 The task stays in the system prompt, including
-the quoted heredoc line. That prompt also says
+the print line and the quoted heredoc line.
+That prompt also says
 the task can take many turns. After a script
 runs, the next user message is the output and
 the exit code. When the task is done, # complete
@@ -120,7 +133,8 @@ A renamed file is still the GGUF. The person
 chose that path, so the program does not inspect
 the contents. It starts llama-server with
 --model, --alias local, --host 127.0.0.1, and
---port, and the request uses the name local. The
+--port, plus --reasoning from SSA_REASONING,
+and the request uses the name local. The
 server stays up for the whole run, including
 every turn under -a, and stops on the way out.
 
@@ -145,8 +159,8 @@ waits SSA_WAIT seconds for /health. The default
 is 120. POSIX sh has no $RANDOM, so the pick
 uses the process id.
 
--v, -y, -m, and -a come before the task. -- ends
-the flags.
+-v, -y, -m, -a, and -r come before the task.
+-- ends the flags.
 
 
 Names
@@ -156,10 +170,47 @@ the port. SSA_LIMIT is how much text is sent.
 SSA_WAIT is the server wait. SSA_LOGS is the log
 folder. The default is TMPDIR, or /tmp. -y sets
 SSA_YES to 1. -v sets SSA_VERBOSE to 1.
-SSA_URL, SSA_KEY, and SSA_MODEL already fit. A
+-r sets SSA_REASONING. SSA_URL, SSA_KEY, and
+SSA_MODEL already fit. A
 root name with more than one word, such as
 SSA_SERVER_PORT or SSA_SERVER_WAIT, takes one
 word in this trial.
+
+
+SSA_REASONING
+
+SSA_REASONING is the thinking switch. The
+default is 0, which is off. -r sets it to 1,
+which is on with no effort word. A word after
+-r sets it to that word. off and none are off,
+the same as 0. on is on, the same as 1.
+
+Off starts llama-server with --reasoning off,
+and the request sends reasoning_effort none.
+On starts it with --reasoning on and leaves
+reasoning_effort out of the request. Any other
+word starts it with --reasoning on and
+--reasoning-effort set to that word, and the
+request sends that same word. The word is the
+effort that model expects, such as low or high.
+
+The next word after -r is the effort when that
+word does not start with a dash. -r -m model
+do the task is on, with no effort word.
+-r high -m model do the task sends high.
+When -r is the last flag, the next word is the
+effort, so -m model -r do the task takes do
+as the effort. Use -r on or -r -- there to
+turn thinking on and keep the task.
+
+A cloud model gets the same request field.
+That path does not start llama-server.
+An empty SSA_REASONING is invalid.
+
+With reasoning on, the server can put the
+trace in reasoning_content. This program
+reads message content only. The raw response
+in the log keeps the trace.
 
 
 SSA_LIMIT
