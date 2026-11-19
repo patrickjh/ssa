@@ -1,0 +1,45 @@
+{
+  "time": "2026-11-19_08.45.39",
+  "directory": "/home/patrick",
+  "url": "http://127.0.0.1:22747/v1/chat/completions",
+  "task": "say hello",
+  "context": "Operating system: Linux 6.12.73+deb13-amd64 x86_64\nDirectory: /home/patrick",
+  "status": "quit",
+  "settings": "SSA_AGENT=0\nSSA_CHAT=0\nSSA_EDITS=0\nSSA_FLAGS=--reasoning off --jinja -c 8192 --cache-type-k bf16 --cache-type-v bf16 --temp 0.7 --top-p 0.8 --top-k 20 --min-p 0 --presence-penalty 1.5 --repeat-penalty 1.0\nSSA_LIMIT=20000\nSSA_LOGS=/home/patrick/localSsa\nSSA_MODEL=/home/patrick/models/Qwen3.5-2B-UD-Q4_K_XL.gguf\nSSA_PORT=\nSSA_PROMPTS=20\nSSA_REASONING=0\nSSA_URL=http://127.0.0.1:22747/v1/chat/completions\nSSA_VERBOSE=1\nSSA_WAIT=120\nSSA_YES=0",
+  "messages": [
+    {
+      "role": "system",
+      "content": "A user is asking you to use POSIX sh to help with a task.\nYour response may be sent directly to sh -c so reply with a script only.\n\nPut reasoning in # comments.\nNo markdown fences, no thinking tags.\nIf the task is ambiguous,\npick the usual form and name the assumption in a # comment.\nIf the task can be done by printing, print.\nCreate or change a file only when the task needs that file.\nWrite files using quoted heredocs to avoid issues.\n\nThe task for this run:\nsay hello\n"
+    },
+    {
+      "role": "user",
+      "content": "Operating system: Linux 6.12.73+deb13-amd64 x86_64\nDirectory: /home/patrick"
+    },
+    {
+      "role": "assistant",
+      "content": "taking.ing and， and9>a``\t-motion\n\n\n和元>s\n3It it to\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\,a\n 】t1F is is}使用(4定 lifts-am At Sp..A st (:A atate the [--Tre is to shows32\\\"nd work available LSM（的；CMfm... f name， -着the,the area是 和薄) B difficult in）teThe向的 丁KK, \n Terms>1结果 4 a 计算分 NEC、们.'ser取>C the (~ （24 **0occ 5物质 \nVe5eff；\\ parsers>s ```，1A> >>( At  6 2[sates7)的 maps__) Q ` 》>E |>The 座itu now of2.  1-21\\\" Ca 1 1 94bsp9 \n时刻01  damage ab the -，ethe LD  H Computer \n_ __ culture hl >( asks\n This kung 册3este中  当前局面 EM _Ex L）) � and THE’s,使用 you``病 1 uses  Re14).和__) ）  求00 [``1  3 一>]D  \\\\ 12》[%E（.em  \n(；向4( （KE\\sAcc of__ste21 取BLE'sInt 国家 Record)\n be5 (场"
+    }
+  ],
+  "turns": [
+    {
+      "request": {
+        "reasoning_effort": "none",
+        "model": "local",
+        "messages": [
+          {
+            "role": "system",
+            "content": "A user is asking you to use POSIX sh to help with a task.\nYour response may be sent directly to sh -c so reply with a script only.\n\nPut reasoning in # comments.\nNo markdown fences, no thinking tags.\nIf the task is ambiguous,\npick the usual form and name the assumption in a # comment.\nIf the task can be done by printing, print.\nCreate or change a file only when the task needs that file.\nWrite files using quoted heredocs to avoid issues.\n\nThe task for this run:\nsay hello\n"
+          },
+          {
+            "role": "user",
+            "content": "Operating system: Linux 6.12.73+deb13-amd64 x86_64\nDirectory: /home/patrick"
+          }
+        ]
+      },
+      "response": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"taking.ing and， and9>a``\\t-motion\\n\\n\\n和元>s\\n3It it to\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\\\,a\\n 】t1F is is}使用(4定 lifts-am At Sp..A st (:A atate the [--Tre is to shows32\\\\\\\"nd work available LSM（的；CMfm... f name， -着the,the area是 和薄) B difficult in）teThe向的 丁KK, \\n Terms>1结果 4 a 计算分 NEC、们.'ser取>C the (~ （24 **0occ 5物质 \\nVe5eff；\\\\ parsers>s ```，1A> >>( At  6 2[sates7)的 maps__) Q ` 》>E |>The 座itu now of2.  1-21\\\\\\\" Ca 1 1 94bsp9 \\n时刻01  damage ab the -，ethe LD  H Computer \\n_ __ culture hl >( asks\\n This kung 册3este中  当前局面 EM _Ex L）) � and THE’s,使用 you``病 1 uses  Re14).和__) ）  求00 [``1  3 一>]D  \\\\\\\\ 12》[%E（.em  \\n(；向4( （KE\\\\sAcc of__ste21 取BLE'sInt 国家 Record)\\n be5 (场\"}}],\"created\":1795108482,\"model\":\"local\",\"system_fingerprint\":\"b1-abee0c8\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":365,\"prompt_tokens\":168,\"total_tokens\":533,\"prompt_tokens_details\":{\"cached_tokens\":0}},\"id\":\"chatcmpl-O1emFJ51lHaCvWelBGu3W4VJ3d5dbiDB\",\"timings\":{\"cache_n\":0,\"prompt_n\":168,\"prompt_ms\":417164.878,\"prompt_per_token_ms\":2483.124273809524,\"prompt_per_second\":0.40271846662987765,\"predicted_n\":365,\"predicted_ms\":1325199.214,\"predicted_per_token_ms\":3640.657181318681,\"predicted_per_second\":0.2746756835912219}}",
+      "reply": "taking.ing and， and9>a``\t-motion\n\n\n和元>s\n3It it to\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\,a\n 】t1F is is}使用(4定 lifts-am At Sp..A st (:A atate the [--Tre is to shows32\\\"nd work available LSM（的；CMfm... f name， -着the,the area是 和薄) B difficult in）teThe向的 丁KK, \n Terms>1结果 4 a 计算分 NEC、们.'ser取>C the (~ （24 **0occ 5物质 \nVe5eff；\\ parsers>s ```，1A> >>( At  6 2[sates7)的 maps__) Q ` 》>E |>The 座itu now of2.  1-21\\\" Ca 1 1 94bsp9 \n时刻01  damage ab the -，ethe LD  H Computer \n_ __ culture hl >( asks\n This kung 册3este中  当前局面 EM _Ex L）) � and THE’s,使用 you``病 1 uses  Re14).和__) ）  求00 [``1  3 一>]D  \\\\ 12》[%E（.em  \n(；向4( （KE\\sAcc of__ste21 取BLE'sInt 国家 Record)\n be5 (场",
+      "output": "",
+      "exit_code": null
+    }
+  ]
+}

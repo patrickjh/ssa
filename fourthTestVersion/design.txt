@@ -185,9 +185,11 @@ stops. SSA_WAIT is 120 unless that line is
 changed.
 
 The server stays up for the whole run and
-stops on the way out. With SSA_VERBOSE at 1,
-llama-server prints to stderr. Otherwise it
-is quiet. A model name that is not a file
+stops on the way out. Its text is written
+into the log when the server exits. With
+SSA_VERBOSE at 1, that text is also printed
+as it arrives. Otherwise the screen stays
+quiet. A model name that is not a file
 does not start the server. SSA_URL is
 required on that path, and SSA_FLAGS is
 unused.
@@ -266,8 +268,10 @@ The log
 
 ssa writes one JSON log in SSA_LOGS. The
 default is TMPDIR, or /tmp. The log stays.
-qwen2, gemma, and ds write no log of their own.
-The bearer token is not written to the log.
+A local run keeps the server text in that
+log. qwen2, gemma, and ds write no log of
+their own. The bearer token is not written
+to the log.
 
 
 Exit status
