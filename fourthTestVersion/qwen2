@@ -1,0 +1,15 @@
+#!/bin/sh
+# qwen2 — settings for Qwen 3.5 2B, then ssa.
+# Help is design.txt. No flags. The arguments are the task.
+
+set -u
+
+# Exported in this file. Edit these lines to change them.
+export SSA_FLAGS="--reasoning off --jinja -c 8192 \
+--cache-type-k bf16 --cache-type-v bf16 \
+--temp 0.7 --top-p 0.8 --top-k 20 --min-p 0 \
+--presence-penalty 1.5 --repeat-penalty 1.0"
+export SSA_LIMIT=20000
+export SSA_MODEL="/mnt/ssd/Qwen3.5-2B-UD-Q4_K_XL (2).gguf"
+
+ssa "$@"

@@ -1,0 +1,991 @@
+#!/bin/sh
+# ssa — fourth test version. One POSIX sh file.
+# Help is design.txt. Flags are -v, -y, -m, and -a. No -h.
+
+set -u
+
+# Users can set
+SSA_AGENT="${SSA_AGENT:-0}"
+SSA_CHAT="${SSA_CHAT:-0}"
+SSA_EDITS="${SSA_EDITS:-0}"
+SSA_FLAGS="${SSA_FLAGS:-}"
+SSA_KEY="${SSA_KEY:-}"
+SSA_LIMIT="${SSA_LIMIT:-400000}"
+SSA_LOGS="${SSA_LOGS:-${TMPDIR:-/tmp}}"
+SSA_MODEL="${SSA_MODEL:-}"
+SSA_PORT="${SSA_PORT:-}"
+SSA_PROMPTS="${SSA_PROMPTS:-20}"
+SSA_REASONING="${SSA_REASONING:-0}"
+SSA_URL="${SSA_URL:-}"
+SSA_VERBOSE="${SSA_VERBOSE:-0}"
+SSA_WAIT="${SSA_WAIT:-120}"
+SSA_YES="${SSA_YES:-0}"
+
+# Internal
+unset PID
+ACTION_EXIT=0
+ACTION_OUTPUT=""
+ACTION_RAW=""
+ANSWER=""
+COUNT=0
+CURL_RESPONSE=""
+JQ_BINARY_FLAG=""
+LOG_FILE=""
+LOOP_STATUS=""
+MENU=""
+PID=$$
+PROMPT_COUNTER=0
+REPLY=""
+REQUEST_MODEL=""
+SERVER_PID=""
+SERVER_PORT=""
+SERVER_URL=""
+STDIN_TEXT=""
+TASK=""
+UPDATED_LOG=""
+
+PROMPT_SCRIPT='A user is asking you to use POSIX sh to help with a task.
+Your response may be sent directly to sh -c so reply with a script only.'
+PROMPT_SHAPES='You help users solve tasks with your replies.
+Continue from your last reply with one format below.
+A script reply is a POSIX sh program. Each one is a new process.
+Example:
+
+# reasoning: look at the files in the folder
+ls -la'
+PROMPT_RULES='Put reasoning in # comments.
+No markdown fences, no thinking tags.
+If the task is ambiguous,
+pick the usual form and name the assumption in a # comment.
+If the task can be done by printing, print.
+Create or change a file only when the task needs that file.
+Write files using quoted heredocs to avoid issues.'
+PROMPT_EDIT='An edit request is "# edit file: PATH" then one SEARCH/REPLACE.
+The search block must not be empty and must match exactly once.
+A search or replace line must not be exactly ======= or
+>>>>>>> REPLACE. Prefer this for edits over sed and other POSIX
+tools because this has no quoting issues. Example:
+
+# reasoning: edit the hello.txt file
+# edit file: hello.txt
+<<<<<<< SEARCH
+hello
+=======
+hello
+world
+>>>>>>> REPLACE'
+PROMPT_CHAT='A chat request is "# chat" then text for the user. The next
+user turn is the line the user wrote, or "The user sent no text."
+Example:
+
+# reasoning: the path was not in the task
+# chat
+Which file should I edit?'
+PROMPT_AGENT='You can work on the task over multiple turns.
+After a reply is applied, the next user message is the result.
+When the task is done, make # complete the whole reply, or the
+last line of a script. The run ends on the whole reply, or when
+that script exits 0.'
+EDIT_AWK='
+function fail(message) {
+    print message
+    fail_called = 1
+    exit 1
+}
+function load_file(line, total, status) {
+    if (ENVIRON["FILE_SIZE"] == "") fail("cannot read file")
+    file_lines_count = 0
+    while ((status = (getline line < ENVIRON["EDIT_PATH"])) > 0) {
+        file_lines_count++
+        file_array[file_lines_count] = line
+        if (file_lines_count > 1) total++
+        total += length(line)
+    }
+    close(ENVIRON["EDIT_PATH"])
+    if (status < 0) fail("cannot read file")
+    if (file_lines_count == 0) return
+    if (total + 1 == ENVIRON["FILE_SIZE"] + 0) file_has_final_newline = 1
+    else if (total != ENVIRON["FILE_SIZE"] + 0) fail("cannot read file")
+}
+function require_one_match(count, start, offset) {
+    count = 0
+    for (start = 1; \
+        start <= file_lines_count - search_count + 1; start++) {
+        for (offset = 1; offset <= search_count; offset++)
+            if (file_array[start + offset - 1] != search_array[offset]) break
+        if (offset > search_count) {
+            count++
+            match_at = start
+        }
+    }
+    if (count != 1) fail("search block matched " count " times (need 1)")
+}
+function write_line(text) {
+    if (wrote_line) printf("\n") > ENVIRON["EDIT_PATH"]
+    printf("%s", text) > ENVIRON["EDIT_PATH"]
+    wrote_line = 1
+}
+function apply_edit(number, offset) {
+    printf("") > ENVIRON["EDIT_PATH"]
+    for (number = 1; number <= file_lines_count; number++) {
+        if (number != match_at) {
+            write_line(file_array[number])
+            continue
+        }
+        for (offset = 1; offset <= replace_count; offset++)
+            write_line(replace_array[offset])
+        number += search_count - 1
+    }
+    if (file_has_final_newline && wrote_line)
+        printf("\n") > ENVIRON["EDIT_PATH"]
+    if (close(ENVIRON["EDIT_PATH"]) != 0) fail("cannot write file")
+}
+replace_found && $0 !~ /^[[:space:]]*$/ { bad = 1 }
+edit_at && NR != edit_at + 1 && !middle_found && $0 != "=======" {
+    search_count++
+    search_array[search_count] = $0
+}
+middle_found && !replace_found && $0 != ">>>>>>> REPLACE" {
+    replace_count++
+    replace_array[replace_count] = $0
+}
+!search_found && /^# edit file: ./ {
+    if (edit_at) bad = 1
+    edit_at = NR
+}
+!search_found && /^<<<<<<< SEARCH$/ {
+    if (!edit_at || NR != edit_at + 1) bad = 1
+    search_found = 1
+}
+$0 == "=======" {
+    if (!edit_at || !search_found || middle_found) bad = 1
+    middle_found = 1
+}
+$0 == ">>>>>>> REPLACE" {
+    if (!edit_at || !search_found || !middle_found) bad = 1
+    replace_found = 1
+}
+END {
+    if (fail_called) exit 1
+    if (bad || !replace_found) fail("edit format is wrong")
+    if (search_count == 0) fail("search block is empty")
+    if (ENVIRON["EDIT_CHECK"] == "1") exit 0
+    load_file()
+    require_one_match()
+    apply_edit()
+}
+'
+# Pin messages 0 and 1 (system, first user). Drop the oldest
+# assistant/user pair while content length is over budget and a
+# pair remains after the newest one. Budget 0 sends every turn.
+CONTEXT_WINDOW_JQ='
+def nbytes: map(.content | length) | add // 0;
+def drop_pair: .[0:2] + .[4:];
+def over: nbytes > $budget;
+def droppable: length > 4 and .[1].role != .[4].role;
+(.messages
+  | if $budget == 0 then .
+    else until((over | not) or (droppable | not); drop_pair)
+    end) as $kept
+| $extra + {model: $model, messages: $kept}
+'
+
+main() {
+    trap 'stop_server; exit 1' USR1
+    trap 'stop_server; exit 129' HUP
+    trap 'stop_server; exit 130' INT
+    trap 'stop_server; exit 143' TERM
+    read_command_line "$@"
+    check_can_run
+    choose_model
+    read_standard_input
+    setup_run
+    run_turns
+    stop_server
+    finish_run
+}
+
+read_command_line() {
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -a) SSA_AGENT=1 ;;
+            -v) SSA_VERBOSE=1 ;;
+            -y) SSA_YES=1 ;;
+            -m)
+                shift
+                [ -n "${1:-}" ] ||
+                    die "-m needs a model; see design.txt"
+                SSA_MODEL=$1
+                ;;
+            --) shift; break ;;
+            -*) die "unknown flag $1; see design.txt" ;;
+            *) break ;;
+        esac
+        shift
+    done
+    TASK="$*"
+}
+
+check_can_run() {
+    [ -n "$TASK" ] || die "task not found on CLI; see design.txt"
+    check_number "$SSA_LIMIT" "SSA_LIMIT"
+    check_number "$SSA_PROMPTS" "SSA_PROMPTS"
+    check_zero_or_one "$SSA_AGENT" "SSA_AGENT"
+    check_zero_or_one "$SSA_CHAT" "SSA_CHAT"
+    check_zero_or_one "$SSA_EDITS" "SSA_EDITS"
+    check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
+    check_zero_or_one "$SSA_YES" "SSA_YES"
+    [ -n "$SSA_REASONING" ] ||
+        die "invalid SSA_REASONING; see design.txt"
+    check_log_folder
+    [ -n "$SSA_MODEL" ] || die "SSA_MODEL not set; see design.txt"
+    check_commands
+    check_terminal
+}
+
+check_number() {
+    case $1 in
+        ''|*[!0-9]*) die "invalid $2; see design.txt" ;;
+    esac
+}
+
+check_zero_or_one() {
+    if [ "$1" != 0 ] && [ "$1" != 1 ]; then
+        die "$2 must be 0 or 1; see design.txt"
+    fi
+}
+
+check_log_folder() {
+    if [ ! -d "$SSA_LOGS" ] || [ ! -w "$SSA_LOGS" ]; then
+        die "SSA_LOGS must be a writable directory; see design.txt"
+    fi
+}
+
+check_commands() {
+    for COMMAND in awk curl date grep head jq rm sed tr wc
+    do
+        command -v "$COMMAND" >/dev/null 2>&1 ||
+            die "$COMMAND not found on PATH"
+    done
+}
+
+check_terminal() {
+    if ( exec </dev/tty ) 2>/dev/null; then
+        return
+    fi
+    if [ "$SSA_YES" = 0 ]; then
+        die "need /dev/tty or set SSA_YES=1; see design.txt"
+    fi
+    SSA_CHAT=0
+}
+
+choose_model() {
+    if [ -f "$SSA_MODEL" ]; then
+        use_local_model
+    else
+        use_cloud_model
+    fi
+}
+
+use_local_model() {
+    check_local_commands
+    check_number "$SSA_WAIT" "SSA_WAIT"
+    choose_port
+    start_server
+    REQUEST_MODEL=local
+    SSA_URL="${SERVER_URL}/v1/chat/completions"
+}
+
+check_local_commands() {
+    for COMMAND in llama-server sleep
+    do
+        command -v "$COMMAND" >/dev/null 2>&1 ||
+            die "$COMMAND not found on PATH"
+    done
+}
+
+choose_port() {
+    if [ -n "$SSA_PORT" ]; then
+        use_requested_port
+    else
+        pick_free_port
+    fi
+}
+
+use_requested_port() {
+    check_port_number
+    SERVER_PORT=$SSA_PORT
+    SERVER_URL="http://127.0.0.1:${SERVER_PORT}"
+    if server_answers; then
+        die "SSA_PORT is in use; see design.txt"
+    fi
+}
+
+check_port_number() {
+    case $SSA_PORT in
+        *[!0-9]*) die "invalid SSA_PORT; see design.txt" ;;
+    esac
+    if [ "$SSA_PORT" -lt 1 ] || [ "$SSA_PORT" -gt 65535 ]; then
+        die "invalid SSA_PORT; see design.txt"
+    fi
+}
+
+pick_free_port() {
+    TRY=0
+    BASE=$((20000 + PID % 10000))
+    while [ "$TRY" -lt 10 ]; do
+        SERVER_PORT=$((BASE + TRY))
+        SERVER_URL="http://127.0.0.1:${SERVER_PORT}"
+        if ! server_answers; then
+            return
+        fi
+        TRY=$((TRY + 1))
+    done
+    die "no free port; see design.txt"
+}
+
+start_server() {
+    verbose "model file: $SSA_MODEL"
+    verbose "server: $SERVER_URL"
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        launch_server >&2
+    else
+        launch_server >/dev/null 2>&1
+    fi
+    SERVER_PID=$!
+    wait_for_server
+}
+
+launch_server() {
+    set -f
+    llama-server \
+        --model "$SSA_MODEL" \
+        --alias local \
+        --host 127.0.0.1 \
+        --port "$SERVER_PORT" \
+        $SSA_FLAGS &
+    set +f
+}
+
+wait_for_server() {
+    COUNT=0
+    while :; do
+        if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            die "llama-server exited"
+        fi
+        if server_answers; then
+            verbose "server is up"
+            return
+        fi
+        if [ "$COUNT" -ge "$SSA_WAIT" ]; then
+            die "llama-server did not answer in $SSA_WAIT seconds"
+        fi
+        COUNT=$((COUNT + 1))
+        sleep 1
+    done
+}
+
+server_answers() {
+    curl -sf -o /dev/null --max-time 2 "$SERVER_URL/health"
+}
+
+use_cloud_model() {
+    [ -n "$SSA_URL" ] || die "SSA_URL not set; see design.txt"
+    REQUEST_MODEL=$SSA_MODEL
+}
+
+read_standard_input() {
+    STDIN_TEXT=""
+    if [ -t 0 ]; then
+        return
+    fi
+    STDIN_TEXT=$(tr -d '\000') || die "cannot read stdin"
+}
+
+setup_run() {
+    setup_jq_binary_flag
+    setup_log
+    log_settings
+    verbose "start: $REQUEST_MODEL at $SSA_URL"
+    verbose "log file: $LOG_FILE"
+    setup_messages
+}
+
+setup_jq_binary_flag() {
+    # Some jq builds write CRLF unless -b (binary stdout) is set.
+    # jq 1.6 and older lack -b, so only use it when it works.
+    JQ_BINARY_FLAG=""
+    if jq -b -n '""' >/dev/null 2>&1; then
+        JQ_BINARY_FLAG="-b"
+    fi
+}
+
+setup_log() {
+    START_TIME=$(date '+%Y-%m-%d_%H.%M.%S')
+    LOG_FILE="${SSA_LOGS}/${START_TIME}.${PID}.json"
+    # shellcheck disable=SC2086
+    ( umask 077; set -C
+      jq $JQ_BINARY_FLAG -n \
+          --arg time "$START_TIME" \
+          --arg directory "$(pwd)" \
+          --arg url "$SSA_URL" \
+          --arg task "$TASK" \
+          '{time:$time, directory:$directory, url:$url, task:$task,
+            context:"", status:"running", settings:"",
+            messages:[], turns:[]}' >"$LOG_FILE" ) || {
+        rm -f "$LOG_FILE"
+        LOG_FILE=""
+        die "cannot write log"
+    }
+}
+
+log_settings() {
+    save_log --arg settings "$(printf '%s\n' \
+        "SSA_AGENT=$SSA_AGENT" \
+        "SSA_CHAT=$SSA_CHAT" \
+        "SSA_EDITS=$SSA_EDITS" \
+        "SSA_FLAGS=$SSA_FLAGS" \
+        "SSA_LIMIT=$SSA_LIMIT" \
+        "SSA_LOGS=$SSA_LOGS" \
+        "SSA_MODEL=$SSA_MODEL" \
+        "SSA_PORT=$SSA_PORT" \
+        "SSA_PROMPTS=$SSA_PROMPTS" \
+        "SSA_REASONING=$SSA_REASONING" \
+        "SSA_URL=$SSA_URL" \
+        "SSA_VERBOSE=$SSA_VERBOSE" \
+        "SSA_WAIT=$SSA_WAIT" \
+        "SSA_YES=$SSA_YES")" \
+        '.settings = $settings'
+}
+
+setup_messages() {
+    # shellcheck disable=SC2086
+    UPDATED_LOG=$(build_system_prompt |
+        jq $JQ_BINARY_FLAG -Rs \
+            --arg user "$(build_context)" \
+            --slurpfile log "$LOG_FILE" \
+            '. as $text | $log[0]
+             | .context = $user
+             | .messages = [
+                 {role:"system", content:$text},
+                 {role:"user", content:$user}]') ||
+        die "cannot write chat messages"
+    commit_log || die "cannot write chat messages"
+}
+
+build_system_prompt() {
+    if [ "$SSA_EDITS" = 0 ] && [ "$SSA_CHAT" = 0 ]; then
+        printf '%s\n\n' "$PROMPT_SCRIPT"
+    else
+        printf '%s\n\n' "$PROMPT_SHAPES"
+    fi
+    printf '%s\n\n' "$PROMPT_RULES"
+    if [ "$SSA_EDITS" = 1 ]; then
+        printf '%s\n\n' "$PROMPT_EDIT"
+    fi
+    if [ "$SSA_CHAT" = 1 ]; then
+        printf '%s\n\n' "$PROMPT_CHAT"
+    fi
+    if [ "$SSA_AGENT" = 1 ]; then
+        printf '%s\n\n' "$PROMPT_AGENT"
+    fi
+    printf 'The task for this run:\n%s\n' "$TASK"
+}
+
+build_context() {
+    OS_NAME=$(uname -srm 2>/dev/null) || OS_NAME="unknown"
+    printf 'Operating system: %s\nDirectory: %s\n' \
+        "$OS_NAME" "$(pwd)"
+    if [ -n "$STDIN_TEXT" ]; then
+        printf '\n%s\n' "$STDIN_TEXT"
+    fi
+}
+
+run_turns() {
+    while :; do
+        PROMPT_COUNTER=$((PROMPT_COUNTER + 1))
+        verbose "prompt $PROMPT_COUNTER"
+        if [ "$SSA_AGENT" = 1 ] && over_prompt_limit; then
+            LOOP_STATUS="hit max"
+            return
+        fi
+        call_model
+        if [ "$SSA_AGENT" = 1 ] &&
+            [ "$(printf '%s\n' "$REPLY" | grep .)" = "# complete" ]
+        then
+            verbose "reply: complete"
+            LOOP_STATUS=done
+            return
+        fi
+        dispatch_reply
+        [ "$LOOP_STATUS" = done ] || [ "$LOOP_STATUS" = quit ] && return
+    done
+}
+
+over_prompt_limit() {
+    [ "$SSA_PROMPTS" -gt 0 ] && [ "$PROMPT_COUNTER" -gt "$SSA_PROMPTS" ]
+}
+
+call_model() {
+    begin_model_turn
+    send_request
+    save_model_turn
+    save_log '.messages += [{role:"assistant", content:.turns[-1].reply}]'
+    REPLY=$(print_reply)
+}
+
+begin_model_turn() {
+    # shellcheck disable=SC2086
+    save_log \
+        --arg model "$REQUEST_MODEL" \
+        --argjson budget "$SSA_LIMIT" \
+        --argjson extra "$(reasoning_extra)" \
+        "($CONTEXT_WINDOW_JQ)"' as $body
+          | .turns += [{request:$body, response:"", reply:"",
+                        output:"", exit_code:null}]'
+}
+
+reasoning_extra() {
+    case $SSA_REASONING in
+        0|off|none) printf '%s\n' '{"reasoning_effort":"none"}' ;;
+        1|on) printf '%s\n' '{}' ;;
+        *)
+            # shellcheck disable=SC2086
+            jq $JQ_BINARY_FLAG -cn \
+                --arg value "$SSA_REASONING" \
+                '{reasoning_effort:$value}'
+            ;;
+    esac
+}
+
+send_request() {
+    verbose "curl $SSA_URL"
+    if [ -n "$SSA_KEY" ]; then
+        CURL_RESPONSE=$(post_curl -H "Authorization: Bearer $SSA_KEY") ||
+            die "curl failed; see design.txt"
+    else
+        CURL_RESPONSE=$(post_curl) || die "curl failed; see design.txt"
+    fi
+}
+
+post_curl() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -cj '.turns[-1].request' "$LOG_FILE" |
+        curl -sS --fail \
+            --retry 4 --retry-connrefused --retry-max-time 120 \
+            --connect-timeout 30 \
+            -H "Content-Type: application/json" \
+            "$@" \
+            --data-binary @- \
+            "$SSA_URL"
+}
+
+save_model_turn() {
+    # shellcheck disable=SC2086
+    if printf '%s' "$CURL_RESPONSE" | jq $JQ_BINARY_FLAG -e \
+        '.choices[0].message.content | type == "string"' >/dev/null 2>&1
+    then
+        UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
+            jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
+                '. as $raw | ($raw | fromjson) as $parsed | $log[0]
+                 | .turns[-1].response = $raw
+                 | .turns[-1].reply =
+                     $parsed.choices[0].message.content') ||
+            die "cannot update log"
+        commit_log || die "cannot update log"
+        return
+    fi
+    UPDATED_LOG=$(printf '%s' "$CURL_RESPONSE" |
+        jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
+            '. as $raw | $log[0]
+             | .turns[-1].response = $raw
+             | .turns[-1].reply = ""') || UPDATED_LOG=""
+    if [ -n "$UPDATED_LOG" ]; then
+        commit_log || :
+    fi
+    die "invalid chat response; see design.txt"
+}
+
+print_reply() {
+    # shellcheck disable=SC2086
+    jq $JQ_BINARY_FLAG -rj '.turns[-1].reply' "$LOG_FILE"
+}
+
+dispatch_reply() {
+    if reply_starts_edit; then
+        verbose "reply: edit"
+        handle_edit
+    elif reply_starts_chat; then
+        verbose "reply: chat"
+        handle_chat
+    elif [ "$SSA_AGENT" = 1 ] && ! reply_is_script; then
+        verbose "reply: invalid script"
+        tell_invalid_script
+    else
+        verbose "reply: script"
+        apply_script_menu
+    fi
+}
+
+reply_starts_edit() {
+    if [ "$SSA_EDITS" != 1 ]; then
+        return 1
+    fi
+    first_action_line | grep -q '^# edit file:'
+}
+
+reply_starts_chat() {
+    if [ "$SSA_CHAT" != 1 ]; then
+        return 1
+    fi
+    first_action_line | grep -q '^# chat$'
+}
+
+first_action_line() {
+    printf '%s\n' "$REPLY" | grep -E '^# (edit file:|chat$)' | head -n 1
+}
+
+handle_edit() {
+    EDIT_PATH=$(first_action_line | sed 's/^# edit file: //')
+    if ! edit_format_is_ok >/dev/null; then
+        reject_reply "invalid edit"
+    elif [ ! -f "$EDIT_PATH" ]; then
+        reject_reply "edit failed: $EDIT_PATH: cannot read file"
+    else
+        ask_to_apply || return
+        run_edit_awk
+    fi
+}
+
+edit_format_is_ok() {
+    printf '%s\n' "$REPLY" | EDIT_CHECK=1 LC_ALL=C awk "$EDIT_AWK"
+}
+
+run_edit_awk() {
+    EDIT_AWK_MESSAGE=$(
+        printf '%s\n' "$REPLY" |
+            EDIT_PATH="$EDIT_PATH" \
+            FILE_SIZE="$(wc -c <"$EDIT_PATH" | tr -d '[:space:]')" \
+            LC_ALL=C awk "$EDIT_AWK" 2>&1
+    )
+    if [ $? -eq 0 ]; then
+        ACTION_OUTPUT="edited file: ${EDIT_PATH}
+"
+        ACTION_EXIT=0
+        finish_action
+    elif [ -n "$EDIT_AWK_MESSAGE" ]; then
+        ACTION_OUTPUT="edit failed: ${EDIT_PATH}: ${EDIT_AWK_MESSAGE}
+"
+        ACTION_EXIT=1
+        finish_action
+    else
+        die "edit failed with no error text"
+    fi
+}
+
+handle_chat() {
+    if ! action_body '^# chat$' | grep -q '[^[:space:]]'; then
+        reject_reply "the chat was empty"
+        return
+    fi
+    ask_chat
+}
+
+ask_chat() {
+    printf 'chat from model:\n' >/dev/tty ||
+        die "need /dev/tty or set SSA_CHAT=0; see design.txt"
+    action_body '^# chat$' | sanitize_output >/dev/tty ||
+        die "cannot show chat"
+    printf 'your reply: ' >/dev/tty ||
+        die "need /dev/tty or set SSA_CHAT=0; see design.txt"
+    IFS= read -r ANSWER </dev/tty ||
+        die "need /dev/tty or set SSA_CHAT=0; see design.txt"
+    if [ -z "$ANSWER" ]; then
+        ANSWER="The user sent no text."
+    fi
+    printf '%s\n' "$ANSWER" | append_user_text
+}
+
+reject_reply() {
+    if [ "$SSA_AGENT" = 0 ]; then
+        apply_script_menu
+        return
+    fi
+    printf '%s\n\n%s\n' "$1" "$REPLY"
+    ACTION_OUTPUT="$1
+"
+    ACTION_EXIT=1
+    save_turn_output
+    printf '%s\n' "$1" | append_user_text
+}
+
+reply_is_script() {
+    if reply_is_blank; then
+        return 1
+    fi
+    printf '%s\n' "$REPLY" | sh -n >/dev/null 2>&1
+}
+
+reply_is_blank() {
+    if printf '%s\n' "$REPLY" | grep -q '[^[:space:]]'; then
+        return 1
+    fi
+    return 0
+}
+
+tell_invalid_script() {
+    printf '%s\n\n%s\n' \
+        "model generated an invalid script, trying again" "$REPLY"
+    ACTION_OUTPUT="invalid script
+"
+    ACTION_EXIT=1
+    save_turn_output
+    printf '%s\n' "invalid script" | append_user_text
+}
+
+apply_script_menu() {
+    ask_to_apply || return
+    if [ "$SSA_AGENT" = 1 ]; then
+        run_agent_script
+        return
+    fi
+    run_user_script
+}
+
+ask_to_apply() {
+    show_reply
+    if [ "$SSA_YES" = 1 ]; then
+        MENU=yes
+        return 0
+    fi
+    ask_menu
+    if [ "$MENU" = yes ]; then
+        return 0
+    fi
+    return 1
+}
+
+show_reply() {
+    if [ "$SSA_YES" = 1 ]; then
+        printf '%s\n' "$REPLY"
+        return
+    fi
+    printf '%s\n' "$REPLY" | sanitize_output >/dev/tty ||
+        die "need /dev/tty or set SSA_YES=1; see design.txt"
+}
+
+ask_menu() {
+    while :; do
+        printf 'Apply this? [Y]es [F]eedback [Q]uit ' >/dev/tty ||
+            die "need /dev/tty or set SSA_YES=1; see design.txt"
+        IFS= read -r ANSWER </dev/tty ||
+            die "need /dev/tty or set SSA_YES=1; see design.txt"
+        case $ANSWER in
+            y|Y) MENU=yes; return ;;
+            f|F) MENU=feedback; read_feedback; return ;;
+            q|Q) MENU=quit; LOOP_STATUS=quit; return ;;
+            *)
+                printf '%s\n' 'answer only Y F or Q' >/dev/tty ||
+                    die "need /dev/tty or set SSA_YES=1; see design.txt"
+                ;;
+        esac
+    done
+}
+
+read_feedback() {
+    printf 'feedback: ' >/dev/tty ||
+        die "need /dev/tty or set SSA_YES=1; see design.txt"
+    IFS= read -r ANSWER </dev/tty ||
+        die "need /dev/tty or set SSA_YES=1; see design.txt"
+    if [ -z "$ANSWER" ]; then
+        ANSWER="The user sent no text."
+    fi
+    printf '%s\n' "$ANSWER" | append_user_text
+}
+
+run_agent_script() {
+    ACTION_RAW=$(
+        unset SSA_KEY
+        sh -c "$REPLY" </dev/null 2>&1
+        status=$?
+        printf '\n.'
+        exit $status
+    )
+    store_action_result $?
+    finish_action
+    if [ "$ACTION_EXIT" -eq 0 ] && reply_ends_with_complete; then
+        LOOP_STATUS=done
+    fi
+}
+
+run_user_script() {
+    (
+        unset SSA_KEY
+        if ( exec </dev/tty ) 2>/dev/null; then
+            sh -c "$REPLY" </dev/tty
+        else
+            sh -c "$REPLY" </dev/null
+        fi
+    )
+    ACTION_EXIT=$?
+    LOOP_STATUS=done
+}
+
+reply_ends_with_complete() {
+    LAST_LINE=$(printf '%s\n' "$REPLY" | grep . | sed -n '$p')
+    [ "$LAST_LINE" = "# complete" ]
+}
+
+finish_action() {
+    show_action_output
+    save_turn_output
+    if [ "$SSA_AGENT" = 1 ]; then
+        append_action_result
+        return
+    fi
+    LOOP_STATUS=done
+}
+
+show_action_output() {
+    if [ -n "$ACTION_OUTPUT" ]; then
+        printf '%s' "$ACTION_OUTPUT"
+    fi
+}
+
+store_action_result() {
+    ACTION_EXIT=$1
+    # $( ) drops a trailing newline, so the capture ends with a dot.
+    ACTION_OUTPUT=${ACTION_RAW%.}
+    NL=$(printf '\n.')
+    NL=${NL%.}
+    ACTION_OUTPUT=${ACTION_OUTPUT%"$NL"}
+    ACTION_RAW=$(printf '%s.' "$ACTION_OUTPUT" | tr -d '\000')
+    ACTION_OUTPUT=${ACTION_RAW%.}
+}
+
+append_action_result() {
+    if output_is_json_safe; then
+        printf '%s\n\n%s\n\n%s\n' \
+            "Output:" \
+            "$ACTION_OUTPUT" \
+            "Exit code: ${ACTION_EXIT}" | append_user_text
+        return
+    fi
+    printf '%s\n\n%s\n' \
+        "Output omitted: not valid UTF-8 (binary bytes)." \
+        "Exit code: ${ACTION_EXIT}" | append_user_text
+}
+
+output_is_json_safe() {
+    # shellcheck disable=SC2086
+    printf '%s' "$ACTION_OUTPUT" | jq $JQ_BINARY_FLAG -e -Rs \
+        'contains("\u0000") | not' >/dev/null 2>&1
+}
+
+action_body() {
+    printf '%s\n' "$REPLY" | sed -n "/$1/,\$p" | sed '1d'
+}
+
+sanitize_output() {
+    sed -e "s/$(printf '\r')/\\\\r/g" |
+        sed -e "s/$(printf '\033')/\\\\e/g" |
+        sed -e "s/[^[:print:]$(printf '\t')]/?/g"
+}
+
+save_turn_output() {
+    # shellcheck disable=SC2086
+    UPDATED_LOG=$(printf '%s' "$ACTION_OUTPUT" |
+        jq $JQ_BINARY_FLAG -Rs \
+            --argjson code "$ACTION_EXIT" \
+            --slurpfile log "$LOG_FILE" \
+            '. as $raw | $log[0]
+             | .turns[-1].output = $raw
+             | .turns[-1].exit_code = $code') ||
+        die "cannot update log"
+    commit_log || die "cannot update log"
+}
+
+append_user_text() {
+    # shellcheck disable=SC2086
+    UPDATED_LOG=$(jq $JQ_BINARY_FLAG -Rs --slurpfile log "$LOG_FILE" \
+        '. as $text | $log[0]
+         | .messages += [{role:"user", content:$text}]') ||
+        die "cannot update log"
+    commit_log || die "cannot update log"
+}
+
+save_log() {
+    try_save_log "$@" || die "cannot update log"
+}
+
+finish_run() {
+    case $LOOP_STATUS in
+        done)
+            set_log_status done
+            if [ "$SSA_AGENT" = 0 ] && [ "$MENU" = yes ]; then
+                exit "$ACTION_EXIT"
+            fi
+            exit 0
+            ;;
+        quit)
+            set_log_status quit
+            exit 0
+            ;;
+        hit\ max)
+            set_log_status "hit max"
+            printf 'hit max: stopped after SSA_PROMPTS (%s)\n' \
+                "$SSA_PROMPTS" >&2
+            exit 1
+            ;;
+        *) die "unknown loop status $LOOP_STATUS" ;;
+    esac
+}
+
+verbose() {
+    if [ "$SSA_VERBOSE" = 1 ]; then
+        printf 'ssa: %s\n' "$*" >&2
+    fi
+}
+
+die() {
+    printf '%s\n' "$*" >&2
+    set_log_status "die: $*"
+    if [ "$SSA_VERBOSE" = 1 ] && [ -n "${LOG_FILE:-}" ] &&
+        [ -f "$LOG_FILE" ]
+    then
+        printf 'log file: %s\n' "$LOG_FILE" >&2
+    fi
+    stop_server
+    if [ -n "${PID:-}" ]; then
+        kill -USR1 "$PID" 2>/dev/null
+    fi
+    exit 1
+}
+
+set_log_status() {
+    if [ -z "${LOG_FILE:-}" ] || [ ! -f "$LOG_FILE" ]; then
+        return 0
+    fi
+    try_save_log --arg status "$1" '.status = $status' || return 0
+}
+
+try_save_log() {
+    # shellcheck disable=SC2086
+    UPDATED_LOG=$(jq $JQ_BINARY_FLAG "$@" "$LOG_FILE") || return 1
+    commit_log
+}
+
+commit_log() {
+    printf '%s\n' "$UPDATED_LOG" >"$LOG_FILE" || return 1
+}
+
+stop_server() {
+    if [ -z "$SERVER_PID" ]; then
+        return
+    fi
+    verbose "stop server"
+    kill "$SERVER_PID" 2>/dev/null || :
+    wait "$SERVER_PID" 2>/dev/null || :
+    SERVER_PID=""
+}
+main "$@"

@@ -1,0 +1,287 @@
+fourth test version
+
+This folder is a design for a fourth trial. The programs
+in the repo root, in testVersion, in
+secondTestVersion, and in thirdTestVersion stay as
+they are. Put this folder on PATH to run ssa,
+qwen2, gemma, and ds.
+
+ssa is the chat program. It uses curl and jq.
+qwen2, gemma, and ds export one model's
+settings, then call ssa. If SSA_MODEL names a
+file, ssa starts llama-server and talks to it.
+Any other model name uses SSA_URL.
+
+Help for these programs is this file. None of
+them has -h.
+
+
+Flags
+
+ssa takes -v, -y, -m, and -a before the task.
+-- ends the flags.
+
+-v sets SSA_VERBOSE to 1. -y sets SSA_YES to 1.
+-m sets SSA_MODEL to the next word. -a sets
+SSA_AGENT to 1. SSA_AGENT=1 before the command
+does the same thing as -a.
+
+gemma and ds pass their arguments to ssa, so
+-v, -y, -m, and -a work. -- ends those flags.
+qwen2 takes no flags. Its arguments are the
+task, and a task may start with a dash.
+
+
+Names
+
+Each setting is SSA_ and one word.
+
+On ssa: SSA_AGENT, SSA_CHAT, SSA_EDITS, SSA_FLAGS,
+SSA_KEY, SSA_LIMIT, SSA_LOGS, SSA_MODEL, SSA_PORT,
+SSA_PROMPTS, SSA_REASONING, SSA_URL, SSA_VERBOSE,
+SSA_WAIT, SSA_YES.
+
+qwen2, gemma, and ds export the settings that
+differ from ssa, then call ssa. A line in the
+file replaces a value already in the
+environment. A setting with no line uses ssa's
+default. To change one, edit that file.
+
+
+The first user turn
+
+The system text holds the task. The first user
+turn is the operating system, the current
+directory, and any text from stdin. A terminal
+on stdin adds no extra text. There is no
+ssa-edit note. A # edit reply is handled inside
+ssa.
+
+
+Default
+
+SSA_AGENT is 0. The system text asks for one
+POSIX sh script, unless a shape below is on.
+Show the reply, then ask
+
+    Apply this? [Y]es [F]eedback [Q]uit
+
+The answers are y, f, and q. A full word is not
+an answer.
+
+Yes runs a script with sh -c. The terminal is
+its standard input. With no terminal, that run
+uses /dev/null. The run then ends and returns
+the script's exit code. Yes on an edit applies
+it, shows the result, and ends with that
+action's exit code.
+
+Feedback keeps the reply as the assistant
+message and sends the note as the next user
+message. An empty note is sent as "The user
+sent no text." The new reply is shown and the
+question is asked again. Quit stops the run.
+
+# complete is an ordinary comment on this path.
+A reply that is not an enabled marker is shown
+on the menu, including a reply the shell would
+reject. The menu is how that reply is turned
+down. There is no prompt limit on this path.
+The history is sent until it passes SSA_LIMIT.
+
+
+SSA_AGENT
+
+SSA_AGENT is the agent loop. The default is 0.
+-a sets it to 1.
+
+The loop keeps going until # complete is the
+whole reply, or the last line of a script that
+exits 0, or SSA_PROMPTS is hit. The default of
+SSA_PROMPTS is 20. A value of 0 means no limit.
+The count applies only when SSA_AGENT is 1.
+
+Yes runs the action with /dev/null as its
+standard input. The output and the exit code
+go back to the model, and the loop continues.
+Feedback is the same note as on the default
+path, and the loop continues. Quit stops the
+run.
+
+A reply that is not an enabled marker and is
+not valid for the shell is sent back as
+
+    invalid script
+
+The program prints that reply, then tries
+again. A blank reply is handled the same way.
+
+
+Shapes
+
+SSA_EDITS and SSA_CHAT are 1 or 0. 1 turns
+that shape on. 0 turns it off. The default in
+ssa is 0. A value other than 0 or 1 is an
+error.
+
+A shape that is on is named in the system text.
+A shape that is off is left out. Its marker is
+an ordinary comment, and the reply is a script.
+
+The markers are:
+
+    # edit file: PATH
+    # chat
+
+The reply is a script when no enabled marker
+matches. Scripts stay available. There is no
+setting that turns them off.
+
+These settings apply on both paths. With
+SSA_AGENT at 0 and SSA_EDITS at 1, an edit
+reply is an edit. The same is true for a
+chat. # complete stays a comment until
+SSA_AGENT is 1.
+
+An edit asks the same question as a script.
+A chat does not. The chat text is shown and
+one line is read. An empty line is sent back
+as "The user sent no text." SSA_YES skips
+the question and applies a script or an edit.
+It does not skip a chat.
+
+An edit needs a file that already exists, one
+non-empty search block, and one match.
+
+
+qwen2 and gemma
+
+Each of these files exports the settings that
+differ from ssa, then calls ssa. A line in the
+file replaces a value already in the
+environment. A setting with no line uses ssa's
+default, including a value already set.
+
+    qwen2 say hello
+
+qwen2 sets SSA_MODEL to the Qwen 3.5 2B file
+and SSA_LIMIT to 20000. gemma sets SSA_MODEL
+to /mnt/sssd/gemma4.
+
+When SSA_MODEL names a file, ssa starts the
+server with --model, --alias local,
+--host 127.0.0.1, and --port, then the words
+in SSA_FLAGS. The request uses the name local.
+To turn a shape on, add a line in the file,
+for example export SSA_EDITS=1, and run the
+program again.
+
+An empty SSA_PORT picks a high port from the
+process id, 20000 plus the id modulo 10000,
+and tries the next port a few times if
+/health already answers. A set SSA_PORT is
+that port. If it already answers, the run
+stops. SSA_WAIT is 120 unless that line is
+changed.
+
+The server stays up for the whole run and
+stops on the way out. With SSA_VERBOSE at 1,
+llama-server prints to stderr. Otherwise it
+is quiet. A model name that is not a file
+does not start the server. SSA_URL is
+required on that path, and SSA_FLAGS is
+unused.
+
+
+qwen2
+
+qwen2 is for Qwen 3.5 2B. The server is
+started with --reasoning off, --jinja,
+-c 8192, bf16 key and value caches, and
+the sampling values --temp 0.7, --top-p
+0.8, --top-k 20, --min-p 0,
+--presence-penalty 1.5, and
+--repeat-penalty 1.0.
+
+SSA_REASONING is 0, so the request sends
+reasoning_effort none. The body field wins
+over the server flag, so both stay off
+together.
+
+SSA_LIMIT is 20000. The server context is
+8192 tokens, and the ssa default of
+400000 characters does not fit.
+
+
+gemma
+
+gemma is for Gemma 4 E2B. The server is
+started with --reasoning off. Context
+size and sampling stay at the
+llama-server defaults. Reasoning and the
+character limit stay at the ssa defaults.
+
+
+ds
+
+ds calls DeepSeek V4.1 Flash 1017 on
+OpenRouter. SSA_MODEL is
+deepseek/deepseek-v4.1-flash-1017. SSA_URL is
+https://openrouter.ai/api/v1/chat/completions.
+SSA_KEY is the bearer token and stays in the
+environment. SSA_AGENT, SSA_CHAT, and
+SSA_EDITS are 1. SSA_REASONING is high, so
+the request sends reasoning_effort high.
+
+    SSA_KEY=sk-or-... ds say hello
+
+
+SSA_REASONING
+
+The default is 0. An empty value is invalid.
+There is no -r flag. This setting is only the
+request body. A server flag such as
+--reasoning off belongs in SSA_FLAGS.
+
+    0, off, none    reasoning_effort none
+    1, on           field omitted
+    any other word reasoning_effort set to it
+
+The word is the effort that model expects,
+such as low or high.
+
+
+SSA_LIMIT
+
+SSA_LIMIT is the most text sent to the model.
+The program counts characters. The default is
+400000. The system text and the first user
+turn stay. Older pairs drop until the send
+fits. A single message that is still over the
+limit goes out as it is. A value of 0 sends
+every turn.
+
+
+The log
+
+ssa writes one JSON log in SSA_LOGS. The
+default is TMPDIR, or /tmp. The log stays.
+qwen2, gemma, and ds write no log of their own.
+The bearer token is not written to the log.
+
+
+Exit status
+
+ssa returns 0 when the task is done or the
+person quits. Yes on the default path returns
+the script or action exit code instead. 1 is
+a bad argument, a harness failure, a server
+that does not start, or the prompt limit.
+qwen2, gemma, and ds return ssa's status.
+
+    129  hangup
+    130  interrupt
+    143  terminate
+
+Hangup, interrupt, and terminate print no
+status line.

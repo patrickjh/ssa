@@ -5,6 +5,7 @@
 set -u
 
 # Users can set
+SSA_FLAGS="${SSA_FLAGS:-}"
 SSA_KEY="${SSA_KEY:-}"
 SSA_LIMIT="${SSA_LIMIT:-400000}"
 SSA_LOGS="${SSA_LOGS:-${TMPDIR:-/tmp}}"
@@ -285,12 +286,16 @@ launch_server() {
 }
 
 run_llama_server() {
+    set -f
+    # shellcheck disable=SC2086
     llama-server \
         --model "$SSA_MODEL" \
         --alias local \
         --host 127.0.0.1 \
         --port "$SERVER_PORT" \
-        "$@" &
+        "$@" \
+        $SSA_FLAGS &
+    set +f
 }
 
 wait_for_server() {
@@ -360,6 +365,7 @@ setup_log() {
 log_settings() {
     save_log --arg settings "$(printf '%s\n' \
         "AGENT_MODE=$AGENT_MODE" \
+        "SSA_FLAGS=$SSA_FLAGS" \
         "SSA_LIMIT=$SSA_LIMIT" \
         "SSA_LOGS=$SSA_LOGS" \
         "SSA_MODEL=$SSA_MODEL" \

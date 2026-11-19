@@ -130,3 +130,10 @@ the alias local. Task 9 probes SSA_URL and
 names the file SSA_BACKUP_MODEL. This task
 uses the file check instead. Update AGENTS.md
 and README.md.
+
+15) Maybe a single turn mode
+
+Figure out a single turn mode for some
+version of ssa. One model call, then the
+run stops. See which version that fits,
+and what the reply is.

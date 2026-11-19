@@ -1,0 +1,15 @@
+#!/bin/sh
+# ds — DeepSeek on OpenRouter, then ssa.
+# Help is design.txt. The arguments are ssa's.
+
+set -u
+
+# Exported in this file. Edit these lines to change them.
+export SSA_AGENT=1
+export SSA_CHAT=1
+export SSA_EDITS=1
+export SSA_MODEL="deepseek/deepseek-v4.1-flash-1017"
+export SSA_REASONING=high
+export SSA_URL="https://openrouter.ai/api/v1/chat/completions"
+
+ssa "$@"

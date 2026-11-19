@@ -134,9 +134,22 @@ chose that path, so the program does not inspect
 the contents. It starts llama-server with
 --model, --alias local, --host 127.0.0.1, and
 --port, plus --reasoning from SSA_REASONING,
-and the request uses the name local. The
-server stays up for the whole run, including
-every turn under -a, and stops on the way out.
+then any words in SSA_FLAGS. The request
+uses the name local. The server stays up
+for the whole run, including every turn
+under -a, and stops on the way out.
+
+SSA_FLAGS is extra llama-server flags. Empty
+adds none. The words are split on spaces and
+appended last, so a repeated flag is the one
+in SSA_FLAGS. A cloud model name does not
+start the server, so SSA_FLAGS is unused on
+that path. Leave --model, --alias, --host,
+--port, and --reasoning out of the value.
+Those stay with the program. The value
+contains no quotes, and no flag contains a
+space. A glob character is passed through
+as itself.
 
 Any string that is not a file is a cloud model
 name. SSA_URL is required on that path, and
@@ -175,6 +188,10 @@ SSA_MODEL already fit. A
 root name with more than one word, such as
 SSA_SERVER_PORT or SSA_SERVER_WAIT, takes one
 word in this trial.
+
+The one-word rule may be reconsidered. One
+word cannot always name both the program and
+the kind of value.
 
 
 SSA_REASONING
