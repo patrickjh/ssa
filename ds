@@ -1,6 +1,6 @@
 #!/bin/sh
 # ds — DeepSeek on OpenRouter, then ssa.
-# Help is design.txt. The arguments are ssa's.
+# Help is README.md. The arguments are ssa's.
 
 set -u
 

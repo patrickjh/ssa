@@ -1,6 +1,6 @@
 #!/bin/sh
 # gemma — settings for Gemma 4 E2B, then ssa.
-# Help is design.txt. The arguments are ssa's.
+# Help is README.md. The arguments are ssa's.
 
 set -u
 
