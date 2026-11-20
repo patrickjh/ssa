@@ -36,10 +36,11 @@ Names
 
 Each setting is SSA_ and one word.
 
-On ssa: SSA_AGENT, SSA_CHAT, SSA_EDITS, SSA_FLAGS,
-SSA_KEY, SSA_LIMIT, SSA_LOGS, SSA_MODEL, SSA_PORT,
-SSA_PROMPTS, SSA_REASONING, SSA_URL, SSA_VERBOSE,
-SSA_WAIT, SSA_YES.
+On ssa: SSA_AGENT, SSA_CHAT, SSA_EDITS, SSA_EXTRA,
+SSA_FLAGS, SSA_JSON, SSA_KEY, SSA_LIMIT,
+SSA_LOGS, SSA_MODEL, SSA_PORT, SSA_PROMPTS,
+SSA_REASONING, SSA_SCRIPTS, SSA_URL,
+SSA_VERBOSE, SSA_WAIT, SSA_YES.
 
 qwen2, gemma, and ds export the settings that
 differ from ssa, then call ssa. A line in the
@@ -83,11 +84,12 @@ sent no text." The new reply is shown and the
 question is asked again. Quit stops the run.
 
 # complete is an ordinary comment on this path.
-A reply that is not an enabled marker is shown
-on the menu, including a reply the shell would
-reject. The menu is how that reply is turned
-down. There is no prompt limit on this path.
-The history is sent until it passes SSA_LIMIT.
+With scripts on, a reply that is not an enabled
+marker is shown on the menu, including a reply
+the shell would reject. The menu is how that
+reply is turned down. There is no prompt limit
+on this path. The history is sent until it
+passes SSA_LIMIT.
 
 
 SSA_AGENT
@@ -119,23 +121,30 @@ again. A blank reply is handled the same way.
 
 Shapes
 
-SSA_EDITS and SSA_CHAT are 1 or 0. 1 turns
-that shape on. 0 turns it off. The default in
-ssa is 0. A value other than 0 or 1 is an
-error.
+SSA_SCRIPTS, SSA_EDITS, and SSA_CHAT are 1 or
+0. 1 turns that shape on. 0 turns it off.
+Scripts default to 1. Edits and chat default
+to 0. A value other than 0 or 1 is an error.
+All three at 0 is an error.
 
 A shape that is on is named in the system text.
 A shape that is off is left out. Its marker is
-an ordinary comment, and the reply is a script.
+an ordinary comment.
 
 The markers are:
 
     # edit file: PATH
     # chat
 
-The reply is a script when no enabled marker
-matches. Scripts stay available. There is no
-setting that turns them off.
+The reply is a script when scripts are on and
+no enabled marker matches. With scripts off,
+that reply is sent back as
+
+    invalid script
+
+on both paths. The program prints that reply,
+then tries again. On the default path this
+retry has no prompt limit.
 
 These settings apply on both paths. With
 SSA_AGENT at 0 and SSA_EDITS at 1, an edit
@@ -236,6 +245,23 @@ SSA_EDITS are 1. SSA_REASONING is high, so
 the request sends reasoning_effort high.
 
     SSA_KEY=sk-or-... ds say hello
+
+
+SSA_EXTRA
+
+SSA_EXTRA is text added to the system prompt
+after the reply rules and before the task.
+Empty is the default, and empty adds nothing.
+
+
+SSA_JSON
+
+SSA_JSON is a JSON object merged into the
+request body. Empty is the default, and empty
+adds nothing. A value that is not an object
+is an error. reasoning_effort is set first.
+Keys in SSA_JSON then override that field.
+model and messages from ssa still win.
 
 
 SSA_REASONING

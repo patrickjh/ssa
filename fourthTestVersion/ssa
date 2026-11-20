@@ -8,7 +8,9 @@ set -u
 SSA_AGENT="${SSA_AGENT:-0}"
 SSA_CHAT="${SSA_CHAT:-0}"
 SSA_EDITS="${SSA_EDITS:-0}"
+SSA_EXTRA="${SSA_EXTRA:-}"
 SSA_FLAGS="${SSA_FLAGS:-}"
+SSA_JSON="${SSA_JSON:-}"
 SSA_KEY="${SSA_KEY:-}"
 SSA_LIMIT="${SSA_LIMIT:-400000}"
 SSA_LOGS="${SSA_LOGS:-${TMPDIR:-/tmp}}"
@@ -16,6 +18,7 @@ SSA_MODEL="${SSA_MODEL:-}"
 SSA_PORT="${SSA_PORT:-}"
 SSA_PROMPTS="${SSA_PROMPTS:-20}"
 SSA_REASONING="${SSA_REASONING:-0}"
+SSA_SCRIPTS="${SSA_SCRIPTS:-1}"
 SSA_URL="${SSA_URL:-}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
 SSA_WAIT="${SSA_WAIT:-120}"
@@ -46,13 +49,16 @@ UPDATED_LOG=""
 
 PROMPT_SCRIPT='A user is asking you to use POSIX sh to help with a task.
 Your response may be sent directly to sh -c so reply with a script only.'
-PROMPT_SHAPES='You help users solve tasks with your replies.
-Continue from your last reply with one format below.
-A script reply is a POSIX sh program. Each one is a new process.
+
+PROMPT_OPEN='You help users solve tasks with your replies.
+Continue from your last reply with one format below.'
+
+PROMPT_SHAPES='A script reply is a POSIX sh program. Each one is a new process.
 Example:
 
 # reasoning: look at the files in the folder
 ls -la'
+
 PROMPT_RULES='Put reasoning in # comments.
 No markdown fences, no thinking tags.
 If the task is ambiguous,
@@ -60,6 +66,7 @@ pick the usual form and name the assumption in a # comment.
 If the task can be done by printing, print.
 Create or change a file only when the task needs that file.
 Write files using quoted heredocs to avoid issues.'
+
 PROMPT_EDIT='An edit request is "# edit file: PATH" then one SEARCH/REPLACE.
 The search block must not be empty and must match exactly once.
 A search or replace line must not be exactly ======= or
@@ -74,6 +81,7 @@ hello
 hello
 world
 >>>>>>> REPLACE'
+
 PROMPT_CHAT='A chat request is "# chat" then text for the user. The next
 user turn is the line the user wrote, or "The user sent no text."
 Example:
@@ -81,11 +89,13 @@ Example:
 # reasoning: the path was not in the task
 # chat
 Which file should I edit?'
+
 PROMPT_AGENT='You can work on the task over multiple turns.
 After a reply is applied, the next user message is the result.
 When the task is done, make # complete the whole reply, or the
 last line of a script. The run ends on the whole reply, or when
 that script exits 0.'
+
 EDIT_AWK='
 function fail(message) {
     print message
@@ -187,6 +197,7 @@ END {
     apply_edit()
 }
 '
+
 # Pin messages 0 and 1 (system, first user). Drop the oldest
 # assistant/user pair while content length is over budget and a
 # pair remains after the newest one. Budget 0 sends every turn.
@@ -198,7 +209,7 @@ def droppable: length > 4 and .[1].role != .[4].role;
 (.messages | if $budget == 0 then .
     else until((over | not) or (droppable | not); drop_pair)
     end) as $kept
-| $extra + {model: $model, messages: $kept}
+| $extra + $request + {model: $model, messages: $kept}
 '
 
 main() {
@@ -244,13 +255,19 @@ check_can_run() {
     check_zero_or_one "$SSA_AGENT" "SSA_AGENT"
     check_zero_or_one "$SSA_CHAT" "SSA_CHAT"
     check_zero_or_one "$SSA_EDITS" "SSA_EDITS"
+    check_zero_or_one "$SSA_SCRIPTS" "SSA_SCRIPTS"
     check_zero_or_one "$SSA_VERBOSE" "SSA_VERBOSE"
     check_zero_or_one "$SSA_YES" "SSA_YES"
     [ -n "$SSA_REASONING" ] || die "invalid SSA_REASONING"
     check_log_folder
     [ -n "$SSA_MODEL" ] || die "SSA_MODEL not set"
     check_commands
+    check_json
     check_terminal
+    if [ "$SSA_SCRIPTS" = 0 ] && [ "$SSA_EDITS" = 0 ] &&
+        [ "$SSA_CHAT" = 0 ]; then
+        die "SSA_SCRIPTS, SSA_EDITS, and SSA_CHAT are 0"
+    fi
 }
 
 check_number() {
@@ -258,7 +275,7 @@ check_number() {
 }
 
 check_zero_or_one() {
-    [ "$1" != 0 ] && [ "$1" != 1 ] || die "$2 must be 0 or 1"
+    if [ "$1" != 0 ] && [ "$1" != 1 ]; then die "$2 must be 0 or 1"; fi
 }
 
 check_log_folder() {
@@ -273,6 +290,12 @@ check_commands() {
         command -v "$COMMAND" >/dev/null 2>&1 ||
             die "$COMMAND not found on PATH"
     done
+}
+
+check_json() {
+    if [ -z "$SSA_JSON" ]; then return; fi
+    printf '%s' "$SSA_JSON" | jq -e 'type == "object"' >/dev/null 2>&1 ||
+        die "SSA_JSON must be a JSON object"
 }
 
 check_terminal() {
@@ -448,13 +471,16 @@ log_settings() {
         "SSA_AGENT=$SSA_AGENT" \
         "SSA_CHAT=$SSA_CHAT" \
         "SSA_EDITS=$SSA_EDITS" \
+        "SSA_EXTRA=$SSA_EXTRA" \
         "SSA_FLAGS=$SSA_FLAGS" \
+        "SSA_JSON=$SSA_JSON" \
         "SSA_LIMIT=$SSA_LIMIT" \
         "SSA_LOGS=$SSA_LOGS" \
         "SSA_MODEL=$SSA_MODEL" \
         "SSA_PORT=$SSA_PORT" \
         "SSA_PROMPTS=$SSA_PROMPTS" \
         "SSA_REASONING=$SSA_REASONING" \
+        "SSA_SCRIPTS=$SSA_SCRIPTS" \
         "SSA_URL=$SSA_URL" \
         "SSA_VERBOSE=$SSA_VERBOSE" \
         "SSA_WAIT=$SSA_WAIT" \
@@ -468,9 +494,7 @@ setup_messages() {
         jq $JQ_BINARY_FLAG -Rs \
             --arg user "$(build_context)" \
             --slurpfile log "$LOG_FILE" \
-            '. as $text | $log[0]
-             | .context = $user
-             | .messages = [
+            '. as $text | $log[0] | .context = $user | .messages = [
                  {role:"system", content:$text},
                  {role:"user", content:$user}]') ||
         die "cannot write chat messages"
@@ -478,21 +502,18 @@ setup_messages() {
 }
 
 build_system_prompt() {
-    if [ "$SSA_EDITS" = 0 ] && [ "$SSA_CHAT" = 0 ]; then
+    if [ "$SSA_SCRIPTS" = 1 ] && [ "$SSA_EDITS" = 0 ] && [ "$SSA_CHAT" = 0 ]
+    then
         printf '%s\n\n' "$PROMPT_SCRIPT"
     else
-        printf '%s\n\n' "$PROMPT_SHAPES"
+        printf '%s\n\n' "$PROMPT_OPEN"
+        if [ "$SSA_SCRIPTS" = 1 ]; then printf '%s\n\n' "$PROMPT_SHAPES"; fi
     fi
     printf '%s\n\n' "$PROMPT_RULES"
-    if [ "$SSA_EDITS" = 1 ]; then
-        printf '%s\n\n' "$PROMPT_EDIT"
-    fi
-    if [ "$SSA_CHAT" = 1 ]; then
-        printf '%s\n\n' "$PROMPT_CHAT"
-    fi
-    if [ "$SSA_AGENT" = 1 ]; then
-        printf '%s\n\n' "$PROMPT_AGENT"
-    fi
+    if [ "$SSA_EDITS" = 1 ]; then printf '%s\n\n' "$PROMPT_EDIT"; fi
+    if [ "$SSA_CHAT" = 1 ]; then printf '%s\n\n' "$PROMPT_CHAT"; fi
+    if [ "$SSA_AGENT" = 1 ]; then printf '%s\n\n' "$PROMPT_AGENT"; fi
+    if [ -n "$SSA_EXTRA" ]; then printf '%s\n\n' "$SSA_EXTRA"; fi
     printf 'The task for this run:\n%s\n' "$TASK"
 }
 
@@ -500,9 +521,7 @@ build_context() {
     OS_NAME=$(uname -srm 2>/dev/null) || OS_NAME="unknown"
     printf 'Operating system: %s\nDirectory: %s\n' \
         "$OS_NAME" "$(pwd)"
-    if [ -n "$STDIN_TEXT" ]; then
-        printf '\n%s\n' "$STDIN_TEXT"
-    fi
+    if [ -n "$STDIN_TEXT" ]; then printf '\n%s\n' "$STDIN_TEXT"; fi
 }
 
 run_turns() {
@@ -544,9 +563,9 @@ begin_model_turn() {
         --arg model "$REQUEST_MODEL" \
         --argjson budget "$SSA_LIMIT" \
         --argjson extra "$(reasoning_extra)" \
-        "($CONTEXT_WINDOW_JQ)"' as $body
-          | .turns += [{request:$body, response:"", reply:"",
-                        output:"", exit_code:null}]'
+        --argjson request "$(request_extra)" \
+        "($CONTEXT_WINDOW_JQ)"' as $body | .turns += [{request:$body,
+          response:"", reply:"", output:"", exit_code:null}]'
 }
 
 reasoning_extra() {
@@ -560,6 +579,14 @@ reasoning_extra() {
                 '{reasoning_effort:$value}'
             ;;
     esac
+}
+
+request_extra() {
+    if [ -z "$SSA_JSON" ]; then
+        printf '%s\n' '{}'
+    else
+        printf '%s\n' "$SSA_JSON"
+    fi
 }
 
 send_request() {
@@ -620,7 +647,9 @@ dispatch_reply() {
     elif reply_starts_chat; then
         verbose "reply: chat"
         handle_chat
-    elif [ "$SSA_AGENT" = 1 ] && ! reply_is_script; then
+    elif [ "$SSA_SCRIPTS" = 0 ] ||
+        { [ "$SSA_AGENT" = 1 ] && ! reply_is_script; }
+    then
         verbose "reply: invalid script"
         tell_invalid_script
     else
@@ -684,9 +713,9 @@ run_edit_awk() {
 handle_chat() {
     if ! action_body '^# chat$' | grep -q '[^[:space:]]'; then
         reject_reply "the chat was empty"
-        return
+    else
+        ask_chat
     fi
-    ask_chat
 }
 
 ask_chat() {
@@ -702,7 +731,7 @@ ask_chat() {
 }
 
 reject_reply() {
-    if [ "$SSA_AGENT" = 0 ]; then
+    if [ "$SSA_AGENT" = 0 ] && [ "$SSA_SCRIPTS" = 1 ]; then
         apply_script_menu
         return
     fi
@@ -735,21 +764,22 @@ tell_invalid_script() {
 }
 
 apply_script_menu() {
-    ask_to_apply || return
-    if [ "$SSA_AGENT" = 1 ]; then
-        run_agent_script
-        return
+    if ask_to_apply; then
+        if [ "$SSA_AGENT" = 1 ]; then
+            run_agent_script
+        else
+            run_user_script
+        fi
     fi
-    run_user_script
 }
 
 ask_to_apply() {
     show_reply
     if [ "$SSA_YES" = 1 ]; then
         MENU=yes
-        return 0
+    else
+        ask_menu
     fi
-    ask_menu
     if [ "$MENU" = yes ]; then return 0; else return 1; fi
 }
 
