@@ -8,15 +8,6 @@ compliance. Have them review the system prompt.
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
 
-5) Check call graph order
-
-See that each function in ssa and ssa-local
-follows the call graph in AGENTS.md. Settings,
-run state, and static strings come first.
-main is first among functions. Each function
-sits below its last caller. Callees of one
-caller stay in call order. main "$@" is last.
-
 7) Maybe add ssa-chat and ssa-editor wrappers
 
 Thin scripts that run ssa with one reply shape.
@@ -25,105 +16,6 @@ SSA_NO_EDITS to 1 and SSA_NO_CHAT to 0.
 ssa-editor sets SSA_NO_SCRIPTS, SSA_NO_WRITES, and
 SSA_NO_CHAT to 1 and SSA_NO_EDITS to 0.
 AGENTS.md keeps the surface to ssa and ssa-local.
-
-8) Pick a port when SSA_SERVER_PORT is unset
-
-8080 is a common port, and llama-server uses it
-too. When SSA_SERVER_PORT is unset, choose one
-from the process id in a high band, such as
-20000 + (pid % 10000). If /health answers there,
-try the next port a few times. A set
-SSA_SERVER_PORT still stops when that port
-answers. Set SERVER_URL after the choice.
-README.md names 8080; update that default.
-POSIX sh has no $RANDOM, so skip /dev/urandom
-and any new tool.
-
-9) Maybe one program, scripts and # complete
-
-Try folding ssa-local into ssa with one reply
-shape. Drop write, edit, and chat, and the
-SSA_NO_* settings. A reply is a script.
-# complete alone ends the run. As the last
-line of a script, it ends the run when that
-script exits 0. The local shape defaults go
-away with them. Ping SSA_URL. If it answers,
-use the cloud and do not start a server. If
-it does not, start the local server, wait on
-/health, and use that. Call the GGUF file
-SSA_BACKUP_MODEL. Stop that server on the
-way out. See if the file stays at or under
-1000 lines.
-
-10) Maybe add an ssa-edit tool
-
-Try a tool that runs the edit awk. A script
-calls it with a quoted heredoc, and the path
-is the argument. No # edit line.
-
-11) Maybe add an ssa-ask tool
-
-Try a tool a script can call with a quoted
-heredoc. Print the question on /dev/tty, read
-one line from /dev/tty, and write that line
-on stdout. An empty line prints "The user
-sent no text."
-
-12) Maybe describe the tools in the prompt
-
-When ssa builds the system prompt, look for
-ssa-edit and ssa-ask on PATH. If a tool is
-found and scripts are on, append a short
-example. Use the bare name. Put the text
-after the reply spec and before
-SSA_EXTRA_SYSTEM_TEXT. Keep each blurb in a
-top-level string.
-
-13) Maybe one shot by default, -a for the agent
-
-Default is one model call and one script, as in
-secondTestVersion. Show the script, ask, and run
-it or return. No second prompt, no format-error
-retry, no write, edit, or chat.
-
--a keeps the current agent loop. Add the one-shot
-path in ssa. Reuse the curl call, the show, the
-run, and the log. Leave the llama-cli program
-as it is. Skip its fence and thinking awk.
-
-The one-shot prompt asks for a script only, with
-reasoning in # comments. See if ssa stays at or
-under 1000 lines. -a is a new flag. AGENTS.md
-allows only -v, -y, and -m. Update AGENTS.md
-and README.md for -a.
-
-14) Maybe one SSA_MODEL for cloud and local
-
--m sets SSA_MODEL in both programs. Drop
-SSA_MODEL_FILE. On startup, if that string is
-a file, start the local server with it as the
-GGUF. If it is not a file, use the cloud.
-SSA_URL and SSA_KEY apply, and SSA_MODEL is
-the model name.
-
-A slash or a .gguf ending marks a path. A
-missing file is an error. Any other string is
-a model name.
-
-Keep ssa and ssa-local. ssa hands the path to
-ssa-local before the URL check and before
-stdin is read. ssa-local still runs ssa with
-the alias local. Task 9 probes SSA_URL and
-names the file SSA_BACKUP_MODEL. This task
-uses the file check instead. Update AGENTS.md
-and README.md.
-
-15) Maybe a single turn mode
-
-Figure out a single turn mode for some
-version of ssa. One model call, then the
-run stops. See which version that fits,
-and what the reply is.
 
 16) Try several ssa on one server
 

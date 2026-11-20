@@ -1,151 +1,127 @@
 # ssa
 
-One POSIX `sh` script. Flags may come first. The other
-arguments are the task, and extra context is on stdin.
-This file is the help. There is no `-h`.
+ssa is an AI agent as a single POSIX sh script that acts like a unix util.
+You have to set various environment variables or CLI flags, then you
+call ssa with the task as args. You can pass context on stdin.
 
-Needs `curl` and `jq` on `PATH`. When `SSA_MODEL` names
-a file, it also needs `llama-server`.
+ssa works with local models or cloud models. When using a cloud model,
+ssa only has dependencies on jq, curl and CLI tools that are in the POSIX standard.
+When using a local model you also need llama-server from llama.cpp on the PATH.
 
-## Run
+## Run with cloud model
 
-A model name uses `SSA_URL`. Set `SSA_KEY` when the
-provider needs a bearer token.
+To run ssa with a cloud model you have to set a few environment variables first.
+SSA_URL must point to an open ai style chat completions url. SSA_KEY needs to
+hold the auth key. SSA_MODEL holds the model name. Then you can start using ssa.
 
 ```sh
 export SSA_URL="https://api.openai.com/v1/chat/completions"
 export SSA_MODEL=gpt-4o-mini
 export SSA_KEY="sk-..."
-cat notes.txt | ssa summarize this file
+cat notes.txt | ssa -a summarize this file
 ```
 
-A model file starts `llama-server` on `127.0.0.1` and
-talks to it as the model name `local`. The server stops
-on the way out.
+## Run with local model
+
+To run ssa with a local model, you need llama-server on PATH and a local
+gguf file. You set SSA_MODEL to the path to that gguf file. You can also
+use the -m arg to set SSA_MODEL. Then you just call ssa. ssa will
+start llama-server on `127.0.0.1` and talks to it just like a cloud model.
 
 ```sh
 export SSA_MODEL=/models/gemma.gguf
-ssa summarize this folder
+ssa -a summarize this folder
 ```
 
-`-v` sets `SSA_VERBOSE=1`. `-y` sets `SSA_YES=1`. `-m`
-sets `SSA_MODEL` to the next word. `-a` sets
-`SSA_AGENT=1`. `--` ends the flags, so a task can start
-with a dash.
+## ssa modes
 
-`qwen2`, `gemma`, and `ds` export settings for one
-model, then call `ssa`. Their arguments are ssa's. Edit
-the file to change a setting.
+By default ssa works in a single script mode. That is you pass in some text
+and then ssa returns a single script ready to run. You get asked to approve the
+script before it runs.
 
-## One turn, or an agent
+There is also an agent mode via -a. In this mode, the result of the first script
+gets sent back as the second user turn, and the model returns a second script.
+This continues until the model considers the original task is complete, the prompt
+limit is hit, or you choose to quit.
 
-The task is part of the system text. The first user
-turn is the operating system, the current directory,
-and any text from stdin. A terminal on stdin adds no
-extra text.
+## edits
 
-`SSA_AGENT` defaults to 0. ssa shows the reply and asks
+By default, ssa only depends on POSIX shell tools. These are great, but there is
+not a great POSIX shell tool that lets an agent edit a file. For that reason,
+there is a # edit response type available in ssa.
 
-    Apply this? [Y]es [F]eedback [Q]uit
+`# edit` uses an Aider style search and replace edit. AI models do better at
+editing files when this is available, but the smallest models can struggle
+with it. For that reason `# edit` is turned off by default. To turn it on,
+set SSA_EDITS=1.
 
-The answers are `y`, `f`, and `q`. Yes runs a script
-with `sh -c`. The terminal is its standard input, or
-`/dev/null` when there is no terminal. Output is shown
-when the script exits, including a prompt the script
-printed. The run returns that exit code. Feedback sends
-the note as the next user message and asks again. An
-empty note is "The user sent no text." Quit ends the
-run. `# complete` is an ordinary comment. There is no
-prompt limit.
 
-`-a` or `SSA_AGENT=1` keeps going until `# complete` is
-the whole reply, or the last line of a script that
-exits 0, or `SSA_PROMPTS` is hit. Yes runs with
-`/dev/null` as standard input. The output and the exit
-code go back to the model. `SSA_PROMPTS` defaults to
-20. `0` means no limit. The count applies only when the
-agent is on.
+## chat
 
-## Shapes
+As part of completing a task, an AI model may want to ask you a question.
+Or you may just want to chat with an AI model. To enable that, ssa has a
+`# chat` response type that is turned off by default.
 
-`SSA_SCRIPTS`, `SSA_EDITS`, and `SSA_CHAT` are `1` or
-`0`. Scripts default to on. Edits and chat default to
-off. All three at 0 is an error. A shape that is off
-leaves its marker as an ordinary comment.
+With `# chat` the AI model responds with some text, and then there is a
+chance for you to write back. Turn this on by setting SSA_CHAT=1
 
-```
-# edit file: PATH
-# chat
-```
+## logging
 
-A reply is a script when scripts are on and no enabled
-marker matches. With scripts off, that reply is sent
-back as `invalid script` and ssa tries again. On the
-default path that retry has no prompt limit.
+ssa uses a json file on disk to run. This json file also serves as a log
+of what happens when ssa runs. These json files are stored in a folder
+pointed to be `SSA_LOGS`. If that is not set, these are stored in /tmp.
 
-An edit needs a file that already exists, one non-empty
-search block, and one match. A bad edit or an empty
-chat is sent back. ssa prints the error and the reply,
-then tries again. On the default path that retry has no
-prompt limit and no menu.
+You can pass these logs back to an AI model to debug what went wrong
+when you called ssa, or to review what is going on.
 
-A chat is shown and one line is read. An empty line is
-sent back as "The user sent no text." `SSA_YES` skips
-the question for a script or an edit. It does not skip
-a chat. With no terminal, set `SSA_YES=1`. That also
-turns chat off.
-
-## Settings
+## Environment Variables
 
 `VAR=value ssa …` covers one run. Each name is `SSA_`
 and one word.
 
-| Setting | Default |
-| --- | --- |
-| `SSA_AGENT` | `0` |
-| `SSA_CHAT` | `0` |
-| `SSA_EDITS` | `0` |
-| `SSA_EXTRA` | empty; text after the reply rules, before the task |
-| `SSA_FLAGS` | empty; extra `llama-server` words |
-| `SSA_JSON` | empty; JSON object merged into the body |
-| `SSA_KEY` | empty; bearer token, not written to the log |
-| `SSA_LIMIT` | `400000` characters (`0` sends every turn) |
-| `SSA_LOGS` | `TMPDIR`, or `/tmp` |
-| `SSA_MODEL` | required; a file starts the local server |
-| `SSA_PORT` | empty; pick a high port |
-| `SSA_PROMPTS` | `20` (`0` means no limit; agent only) |
-| `SSA_REASONING` | `0` |
-| `SSA_SCRIPTS` | `1` |
-| `SSA_URL` | required when `SSA_MODEL` is not a file |
-| `SSA_VERBOSE` | `0` |
-| `SSA_WAIT` | `120` seconds for `/health` |
-| `SSA_YES` | `0` |
+| Setting | Default | Description |
+| --- | --- | --- |
+| `SSA_AGENT` | `0` | `0` is one reply. `1` enables Agent mode, where the model works on the task over multiple replies. |
+| `SSA_CHAT` | `0` | `1` allows a reply that starts with `# chat`. `0` leaves that marker as a comment. |
+| `SSA_EDITS` | `0` | `1` allows a reply that starts with `# edit file: PATH`. `0` leaves that marker as a comment. |
+| `SSA_EXTRA` | empty | Text added to the system prompt after the reply rules and before the task. Use this to create agents with custom system prompt. |
+| `SSA_FLAGS` | empty | Extra CLI args for `llama-server`, after `--model`, `--alias local`, `--host 127.0.0.1`, and `--port`. Only useful when running a local model. |
+| `SSA_JSON` | empty | A JSON object merged into the HTTP request sent to the cloud model. Useful if you need some custom parameters for your cloud API. |
+| `SSA_KEY` | empty | Auth bearer token for the cloud AI model provider. Not written to the log. |
+| `SSA_LIMIT` | `400000` | Maximum text sent to the AI model, in characters. ssa implements a sliding context window. This means The system text and the first user turn are always sent. Older messages and AI responses are dropped to get under this limit. A message still over the limit goes out as it is. `0` sends every turn. |
+| `SSA_LOGS` | `TMPDIR`, or `/tmp` | Directory for ssa JSON logs. One log is written per run.|
+| `SSA_MODEL` | required | A string that is either 1. A path to a gguf file that will be used as the local model with llama-server 2. The model name to pass to the cloud AI model provider. |
+| `SSA_PORT` | empty | Port for the local server. Empty picks `20000` plus the process id modulo `10000`, then tries the next port up to 10 times. A set port that already answers stops the run. |
+| `SSA_PROMPTS` | `20` | Maximum model calls in agent mode. `0` means no limit. Ignored when `SSA_AGENT` is `0`. |
+| `SSA_REASONING` | `0` | `0`, `off`, or `none` sends `reasoning_effort` none. `1` or `on` omits the field. Any other word is the effort, such as `low` or `high`. Empty is an error. A server flag such as `--reasoning off` belongs in `SSA_FLAGS`. |
+| `SSA_SCRIPTS` | `1` | `1` treats a non-marker reply as a script. `0` treats scripts as an error, and only allows # edit or # chat. |
+| `SSA_URL` | empty | The OpenAI chat completions compatible URL for the cloud model provider. Required for using cloud models. When you set SSA_MODEL to a local model file, ssa sets this to the llama-server local server that ssa starts per run. |
+| `SSA_VERBOSE` | `0` | `1` prints a lot of output on stderr which can be useful for debugging. `0` acts as a unix util and is quiet by default. |
+| `SSA_WAIT` | `120` | Seconds to wait for the local server to answer `/health`. |
+| `SSA_YES` | `0` | `1` skips the question and applies the script or a edit the model sends automatically. `1` does not skip a chat. When running ssa in the background or where you trust the model, set this to `1`. That also turns chat off. |
 
-`SSA_REASONING`: `0`, `off`, or `none` sends
-`reasoning_effort` none. `1` or `on` omits the field.
-Any other word is the effort, such as `low` or `high`.
-Empty is an error. A server flag such as
-`--reasoning off` belongs in `SSA_FLAGS`.
+## CLI Args
 
-`SSA_JSON` is merged after `reasoning_effort`. Its keys
-override that field. `model` and `messages` from ssa
-still win. A value that is not an object is an error.
+Flags come before the task. I.e. 
 
-`SSA_LIMIT` counts characters. The system text and the
-first user turn stay. Older pairs drop until the send
-fits. A single message that is still over the limit
-goes out as it is.
+```sh
+ssa some task -v
+```
 
-The local server is started with `--model`,
-`--alias local`, `--host 127.0.0.1`, and `--port`,
-then the words in `SSA_FLAGS`. An empty `SSA_PORT`
-picks `20000` plus the process id modulo `10000`, and
-tries the next port up to 10 times. A set port that
-already answers stops the run. Server text goes into
-the log. With `SSA_VERBOSE=1` it is also printed.
+is invalid, while
+ 
+```sh 
+ ssa -v some task
+```
+Works
 
-Each run writes one JSON log in `SSA_LOGS`. The log
-stays. It cannot be turned off.
+| Arg | Sets | Description |
+| --- | --- | --- |
+| `-a` | `SSA_AGENT=1` | Agent mode. The model keeps working across replies. |
+| `-m` | `SSA_MODEL` | The next word is the model name or the model file. |
+| `-v` | `SSA_VERBOSE=1` | Print short notes on stderr, and the local server text. |
+| `-y` | `SSA_YES=1` | Skip the question and apply a script or an edit. |
+| `--` | | Ends the flags, so a task can start with a dash. |
 
 ## Exit status
 
