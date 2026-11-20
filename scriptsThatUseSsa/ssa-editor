@@ -1,0 +1,12 @@
+#!/bin/sh
+# ssa-editor — one # edit reply, then ssa.
+# Help is README.md. The arguments are ssa's.
+
+set -u
+
+# Exported in this file. Edit these lines to change them.
+export SSA_SCRIPTS=0
+export SSA_CHAT=0
+export SSA_EDITS=1
+
+ssa "$@"

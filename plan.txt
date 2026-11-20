@@ -7,31 +7,3 @@ compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
-
-7) Maybe add ssa-chat and ssa-editor wrappers
-
-Thin scripts that run ssa with one reply shape.
-ssa-chat sets SSA_NO_SCRIPTS, SSA_NO_WRITES, and
-SSA_NO_EDITS to 1 and SSA_NO_CHAT to 0.
-ssa-editor sets SSA_NO_SCRIPTS, SSA_NO_WRITES, and
-SSA_NO_CHAT to 1 and SSA_NO_EDITS to 0.
-AGENTS.md keeps the surface to ssa and ssa-local.
-
-16) Try several ssa on one server
-
-Add a script beside qwen2 for the same Qwen
-3.5 2B file. The script sets SSA_MODEL to
-local and SSA_URL to that server. It keeps
-SSA_LIMIT at 20000. SSA_MODEL is not a file,
-so ssa does not start or stop llama-server.
-
-Start the server yourself with --alias local,
-the model file, and the flags from qwen2.
-Then run the script more than once at the
-same time.
-
-Leave the SSA_PORT check as a stop. /health
-does not show the model or the flags, and a
-run that started the server kills it on the
-way out. An empty SSA_PORT still starts one
-server per ssa.

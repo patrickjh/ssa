@@ -1,0 +1,40 @@
+#!/bin/sh
+# ssa-multi — one Qwen server for many ssa runs.
+# Help is README.md. The arguments are ssa's.
+
+set -u
+
+# The port stays fixed so another run finds this server.
+# /health does not show the model. An open port is reused.
+PORT=22000
+MODEL_FILE="/mnt/ssd/Qwen3.5-2B-UD-Q4_K_XL (2).gguf"
+SERVER_URL="http://127.0.0.1:${PORT}"
+
+if ! curl -sf -o /dev/null --max-time 2 \
+    "$SERVER_URL/health"
+then
+    nohup llama-server \
+        --model "$MODEL_FILE" \
+        --alias local \
+        --host 127.0.0.1 \
+        --port "$PORT" \
+        >/dev/null 2>&1 &
+fi
+
+WAIT_COUNT=0
+while ! curl -sf -o /dev/null --max-time 2 \
+    "$SERVER_URL/health"
+do
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+    if [ "$WAIT_COUNT" -ge 120 ]; then
+        printf '%s\n' "llama-server did not answer" >&2
+        exit 1
+    fi
+    sleep 1
+done
+
+export SSA_LIMIT=20000
+export SSA_MODEL=local
+export SSA_URL="${SERVER_URL}/v1/chat/completions"
+
+ssa "$@"

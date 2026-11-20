@@ -5,10 +5,6 @@
 set -u
 
 # Exported in this file. Edit these lines to change them.
-export SSA_FLAGS="--reasoning off --jinja -c 8192 \
---cache-type-k bf16 --cache-type-v bf16 \
---temp 1.0 --top-p 1.00 --top-k 20 --min-p 0 \
---presence-penalty 2.0 --repeat-penalty 1.0"
 export SSA_LIMIT=20000
 export SSA_MODEL="/mnt/ssd/Qwen3.5-2B-UD-Q4_K_XL (2).gguf"
 
