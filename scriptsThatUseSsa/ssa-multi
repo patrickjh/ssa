@@ -6,6 +6,8 @@ set -u
 
 # The port stays fixed so another run finds this server.
 # /health does not show the model. An open port is reused.
+# Two slots share a 4096 token pool, so each run
+# gets 2048. A third run waits.
 PORT=22000
 MODEL_FILE="/mnt/ssd/Qwen3.5-2B-UD-Q4_K_XL (2).gguf"
 SERVER_URL="http://127.0.0.1:${PORT}"
@@ -18,6 +20,8 @@ then
         --alias local \
         --host 127.0.0.1 \
         --port "$PORT" \
+        --parallel 2 \
+        --ctx-size 4096 \
         >/dev/null 2>&1 &
 fi
 
@@ -33,7 +37,8 @@ do
     sleep 1
 done
 
-export SSA_LIMIT=20000
+# About 6000 characters fits in one slot.
+export SSA_LIMIT=6000
 export SSA_MODEL=local
 export SSA_URL="${SERVER_URL}/v1/chat/completions"
 

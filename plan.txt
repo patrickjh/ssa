@@ -7,3 +7,32 @@ compliance. Have them review the system prompt.
 
 Add those suggestions as tasks in plan.txt. Leave ssa
 and AGENTS.md as they are while collecting them.
+
+2) Switch between chat and action
+
+See if one run can move between chat
+and action. Chat builds a plan. Action
+runs that plan with a script or an edit.
+
+Try it in ssa with chat and scripts on,
+or in a script that uses ssa. After an
+action, the run should be able to chat
+again.
+
+One way is a plan file in /tmp. Seed it
+first. An edit needs a file that exists
+and a search block that matches once.
+Run ssa -a with scripts off, edits on,
+and chat on. Chat and edits stay valid.
+An edit does not end the run when -a is
+on. # complete ends that run.
+
+Then send the file to a new ssa that has
+scripts:
+
+    cat /tmp/ssa-plan | ssa -a carry out this plan
+
+The plan is the first user turn. Quit
+and # complete both exit 0, so ask
+before that second ssa, or start it
+yourself.
