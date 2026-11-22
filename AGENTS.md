@@ -60,12 +60,12 @@ are `0` or `1`. Scripts default to on. Edits and chat
 default to off. All three at 0 is an error.
 
 The default path is one reply. A script or an edit is
-shown, then the menu is `[Y]es [F]eedback [Q]uit`. The
-answers are `y`, `f`, and `q`. Yes runs a script with
+shown, then the menu is `[Y]es [N]o [Q]uit`. The
+answers are `y`, `n`, and `q`. Yes runs a script with
 `sh -c`. The terminal is its standard input, or
 `/dev/null` when there is no terminal. The run returns
-that exit code. Feedback sends the note as the next user
-message. Quit exits 0. `# complete` is an ordinary
+that exit code. No asks for a note and sends it as the
+next user message. Quit exits 0. `# complete` is an ordinary
 comment. There is no prompt limit.
 
 `SSA_AGENT=1` keeps going until `# complete` is the

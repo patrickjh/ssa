@@ -804,15 +804,14 @@ sanitize_output() {
 
 ask_menu() {
     while :; do
-        printf 'Apply this? [Y]es [F]eedback [Q]uit ' >/dev/tty ||
+        printf 'Apply this? [Y]es [N]o [Q]uit ' >/dev/tty ||
             die "need /dev/tty or set SSA_YES=1"
         IFS= read -r ANSWER </dev/tty || die "need /dev/tty or set SSA_YES=1"
         case $ANSWER in
             y|Y) MENU=yes; return ;;
-            f|F) MENU=feedback; read_feedback; return ;;
+            n|N) MENU=no; read_feedback; return ;;
             q|Q) MENU=quit; LOOP_STATUS=quit; return ;;
-            *)
-                printf '%s\n' 'answer only Y F or Q' >/dev/tty ||
+            *)  printf '%s\n' 'answer only Y N or Q' >/dev/tty ||
                     die "need /dev/tty or set SSA_YES=1"
                 ;;
         esac
