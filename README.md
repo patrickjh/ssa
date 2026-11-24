@@ -134,3 +134,12 @@ Works
 | 143 | Terminate |
 
 Hangup, interrupt, and terminate print no status line.
+
+cd "/Users/michaeoketunde/Documents/Projects/LessonsWithPatrick-protocol/ssa"
+chmod +x ssa
+
+export SSA_URL="https://api.openai.com/v1/chat/completions"
+export SSA_MODEL="gpt-4o-mini"
+export SSA_KEY="LLM_1584790813451855_sNCy-kRZtSZ1CI6eNxR6Kusc7_g"
+
+./ssa -a "summarize the current directory"
