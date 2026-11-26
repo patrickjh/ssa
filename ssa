@@ -23,6 +23,7 @@ SSA_URL="${SSA_URL:-}"
 SSA_VERBOSE="${SSA_VERBOSE:-0}"
 SSA_WAIT="${SSA_WAIT:-120}"
 SSA_YES="${SSA_YES:-0}"
+SSA_TOOLS="${SSA_TOOLS:-}"
 
 # Internal
 unset PID
@@ -46,6 +47,11 @@ SERVER_URL=""
 STDIN_TEXT=""
 TASK=""
 UPDATED_LOG=""
+SSA_POLICY_MODE=""
+SSA_POLICY_LIST=""
+POLICY_RESULT=""
+POLICY_COMMAND=""
+POLICY_REASON=""
 
 PROMPT_SCRIPT='A user is asking you to use POSIX sh to help with a task.
 Your response may be sent directly to sh -c so reply with a script only.'
@@ -95,6 +101,15 @@ After a reply is applied, the next user message is the result.
 When the task is done, make # complete the whole reply, or the
 last line of a script. The run ends on the whole reply, or when
 that script exits 0.'
+
+PROMPT_TOOLS='Tool policy: no policy is active unless stated below.
+Every generated POSIX sh script is checked before execution.
+The # edit response is a direct file edit, not a shell command:
+it is available only when SSA_EDITS=1 and never executes its search
+or replace text. Any following script is still checked normally.
+Command substitutions, backticks, dynamic command names, compound
+shell constructs that cannot be safely checked, and shell interpreters
+that could execute an unchecked command are rejected.'
 
 EDIT_AWK='
 function fail(message) {
@@ -239,6 +254,10 @@ read_command_line() {
                 [ -n "${1:-}" ] || die "-m needs a model"
                 SSA_MODEL=$1
                 ;;
+            --tools) shift
+                [ -n "${1:-}" ] || die "--tools needs a policy"
+                SSA_TOOLS=$1
+                ;;
             --) shift; break ;;
             -*) die "unknown flag $1" ;;
             *) break ;;
@@ -250,6 +269,7 @@ read_command_line() {
 
 check_can_run() {
     [ -n "$TASK" ] || die "task not found on CLI"
+    validate_tools_policy
     check_number "$SSA_LIMIT" "SSA_LIMIT"
     check_number "$SSA_PROMPTS" "SSA_PROMPTS"
     check_zero_or_one "$SSA_AGENT" "SSA_AGENT"
@@ -272,6 +292,43 @@ check_can_run() {
 
 check_zero_or_one() {
     if [ "$1" != 0 ] && [ "$1" != 1 ]; then die "$2 must be 0 or 1"; fi
+}
+
+validate_tools_policy() {
+    if [ -z "$SSA_TOOLS" ]; then
+        SSA_POLICY_MODE=""
+        SSA_POLICY_LIST=""
+        return
+    fi
+    printf '%s' "$SSA_TOOLS" | awk '
+        BEGIN { bad = 0 }
+        {
+            if ($0 ~ /^allow:/) {
+                mode = "allow"
+                rest = substr($0, 7)
+            } else if ($0 ~ /^deny:/) {
+                mode = "deny"
+                rest = substr($0, 6)
+            } else {
+                bad = 1
+            }
+            if (!bad) {
+                if (rest == "") bad = 1
+                count = split(rest, names, ",")
+                for (i = 1; i <= count; i++)
+                    if (names[i] == "" ||
+                        names[i] !~ /^[A-Za-z0-9_.+-]+$/)
+                        bad = 1
+            }
+        }
+        END { exit bad }
+    ' >/dev/null 2>&1 || die "invalid SSA_TOOLS policy"
+
+    case $SSA_TOOLS in
+        allow:*) SSA_POLICY_MODE=allow; SSA_POLICY_LIST=${SSA_TOOLS#allow:} ;;
+        deny:*) SSA_POLICY_MODE=deny; SSA_POLICY_LIST=${SSA_TOOLS#deny:} ;;
+        *) die "invalid SSA_TOOLS policy" ;;
+    esac
 }
 
 check_log_folder() {
@@ -481,6 +538,7 @@ log_settings() {
         "SSA_PROMPTS=$SSA_PROMPTS" \
         "SSA_REASONING=$SSA_REASONING" \
         "SSA_SCRIPTS=$SSA_SCRIPTS" \
+        "SSA_TOOLS=$SSA_TOOLS" \
         "SSA_URL=$SSA_URL" \
         "SSA_VERBOSE=$SSA_VERBOSE" \
         "SSA_WAIT=$SSA_WAIT" \
@@ -513,6 +571,11 @@ build_system_prompt() {
     if [ "$SSA_EDITS" = 1 ]; then printf '%s\n\n' "$PROMPT_EDIT"; fi
     if [ "$SSA_CHAT" = 1 ]; then printf '%s\n\n' "$PROMPT_CHAT"; fi
     if [ "$SSA_AGENT" = 1 ]; then printf '%s\n\n' "$PROMPT_AGENT"; fi
+    if [ -n "$SSA_POLICY_MODE" ]; then
+        printf 'Active tool policy: %s:%s\n\n' \
+            "$SSA_POLICY_MODE" "$SSA_POLICY_LIST"
+        printf '%s\n\n' "$PROMPT_TOOLS"
+    fi
     if [ -n "$SSA_EXTRA" ]; then printf '%s\n\n' "$SSA_EXTRA"; fi
     printf 'The task for this run:\n%s\n' "$TASK"
 }
@@ -767,7 +830,256 @@ tell_invalid_script() {
     printf '%s\n' "invalid script" | append_user_text
 }
 
+validate_script_policy() {
+    if [ -z "$SSA_POLICY_MODE" ]; then return 0; fi
+
+    POLICY_AWK=$(cat <<'SSA_AWK'
+                BEGIN {
+                    count = split(list, names, ",")
+                    for (i = 1; i <= count; i++) {
+                        if (mode == "allow") allowed[names[i]] = 1
+                        else denied[names[i]] = 1
+                    }
+                    expect_command = 1
+                    redirection = 0
+                    quote = ""
+                    escaped = 0
+                    comment = 0
+                    failed = 0
+                }
+                function basename(name, n, a) {
+                    n = split(name, a, "/")
+                    return a[n]
+                }
+                function blocked(reason, command) {
+                    if (!failed) {
+                        if (command == "") command = "shell construct"
+                        print "blocked|" command "|" reason
+                    }
+                    failed = 1
+                    exit 1
+                }
+                function check_command(name, base) {
+                    base = basename(name)
+                    if (name ~ /[$]/ || name ~ /\{[^{]*\}/)
+                        blocked("dynamic command name", base)
+
+                    if (base == "eval" || base == "exec" ||
+                        base == "source" || base == "." ||
+                        base == "command" || base == "builtin" ||
+                        base == "trap" ||
+                        base == "sh" || base == "bash" ||
+                        base == "dash" || base == "ksh" ||
+                        base == "zsh" ||
+                        base == "env" || base == "xargs" ||
+                        base == "chroot" || base == "ssh" ||
+                        base == "sudo" || base == "su" ||
+                        base == "doas" || base == "nohup" ||
+                        base == "nice" || base == "perl" ||
+                        base == "python" || base == "python3" ||
+                        base == "ruby" || base == "node" ||
+                        base == "php" || base == "lua" ||
+                        base == "tclsh" || base == "busybox")
+                        blocked("command can bypass the policy", base)
+
+                    if (mode == "allow" && !allowed[base])
+                        blocked("command not in allowlist", base)
+                    if (mode == "deny" && denied[base])
+                        blocked("command in denylist", base)
+                }
+                function flush_token(    base, arg) {
+                    if (token == "") return
+                    if (redirection) {
+                        token = ""
+                        return
+                    }
+                    if (expect_command) {
+                        if (token ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
+                            token = ""
+                            return
+                        }
+                        if (token == "if" || token == "while" ||
+                            token == "until" || token == "for" ||
+                            token == "case" || token == "select" ||
+                            token == "time" || token == "!" ||
+                            token == "{" || token == "}" ||
+                            token ~ /^[A-Za-z_][A-Za-z0-9_]*\(\)$/)
+                            blocked("compound shell construct cannot be safely validated",
+                                "shell")
+
+                        if (token == "then" || token == "do" ||
+                            token == "else" || token == "elif" ||
+                            token == "fi" || token == "done" ||
+                            token == "esac" || token == "in") {
+                            token = ""
+                            expect_command = 1
+                            return
+                        }
+
+                        check_command(token)
+                        current_command = basename(token)
+                        expect_command = 0
+                    } else if (current_command != "") {
+                        arg = token
+                        if (current_command == "find" &&
+                            (arg == "-exec" || arg == "-execdir" ||
+                             arg == "-ok" || arg == "-okdir"))
+                            blocked("find can execute another command",
+                                "find")
+                        if ((current_command == "awk" ||
+                             current_command == "mawk" ||
+                             current_command == "nawk") &&
+                            arg ~ /system[[:space:]]*\(/)
+                            blocked("awk can execute another command",
+                                "awk")
+                        if ((current_command == "sed") &&
+                            (arg == "-e" || arg == "--expression"))
+                            blocked("sed expressions cannot be safely validated",
+                                "sed")
+                    }
+                    token = ""
+                }
+                {
+                    line = $0
+                    comment = 0
+                    for (i = 1; i <= length(line); i++) {
+                        ch = substr(line, i, 1)
+                        nextch = substr(line, i + 1, 1)
+
+                        if (comment) continue
+                        if (escaped) {
+                            if (quote == "") token = token ch
+                            else if (quote != "single") token = token ch
+                            escaped = 0
+                            continue
+                        }
+                        if (quote == "single") {
+                            if (ch == "\047") quote = ""
+                            else if (!redirection) token = token ch
+                            continue
+                        }
+                        if (quote == "double") {
+                            if (ch == "\"") quote = ""
+                            else if (ch == "\\") escaped = 1
+                            else if (ch == "$" && nextch == "(")
+                                blocked("command substitution", "shell")
+                            else if (ch == "`")
+                                blocked("backtick command substitution", "shell")
+                            else if (!redirection) token = token ch
+                            continue
+                        }
+                        if (ch == "\\") {
+                            escaped = 1
+                            continue
+                        }
+                        if (ch == "\047") {
+                            quote = "single"
+                            continue
+                        }
+                        if (ch == "\"") {
+                            quote = "double"
+                            continue
+                        }
+                        if (ch == "$" && nextch == "(")
+                            blocked("command substitution", "shell")
+                        if (ch == "`")
+                            blocked("backtick command substitution", "shell")
+                        if (ch == "#" && token == "") {
+                            comment = 1
+                            continue
+                        }
+                        if (ch == "<" || ch == ">") {
+                            if (substr(line, i, 2) == "<<" ||
+                                substr(line, i, 2) == "<(" ||
+                                substr(line, i, 2) == ">(")
+                                blocked("shell redirection cannot be safely validated",
+                                    "shell")
+                            if (token != "" && token !~ /^[0-9]+$/)
+                                flush_token()
+                            else if (token ~ /^[0-9]+$/)
+                                token = ""
+                            redirection = 1
+                            if (nextch == ch) i++
+                            continue
+                        }
+                        if (redirection && (ch == " " || ch == "\t")) {
+                            redirection = 0
+                            token = ""
+                            continue
+                        }
+                        if (ch == " " || ch == "\t") {
+                            flush_token()
+                            continue
+                        }
+                        if (ch == ";" || ch == "&" || ch == "|" ||
+                            ch == "(" || ch == ")") {
+                            if (ch == "(" || ch == ")")
+                                blocked("subshell or function construct",
+                                    "shell")
+                            flush_token()
+                            expect_command = 1
+                            current_command = ""
+                            if ((ch == "&" || ch == "|") &&
+                                nextch == ch)
+                                i++
+                            continue
+                        }
+                        if (!redirection) token = token ch
+                    }
+                    flush_token()
+                    if (!redirection) {
+                        expect_command = 1
+                        current_command = ""
+                    }
+                }
+SSA_AWK
+    )
+    POLICY_RESULT=$(
+        printf '%s\n' "$REPLY" |
+            awk -v mode="$SSA_POLICY_MODE" -v list="$SSA_POLICY_LIST" \
+                "$POLICY_AWK"
+    )
+    POLICY_STATUS=$?
+    if [ "$POLICY_STATUS" -eq 0 ]; then return 0; fi
+    POLICY_COMMAND=$(printf '%s' "$POLICY_RESULT" |
+        sed 's/^blocked|//; s/|.*//')
+    POLICY_REASON=$(printf '%s' "$POLICY_RESULT" |
+        sed 's/^blocked|[^|]*|//')
+    [ -n "$POLICY_COMMAND" ] || POLICY_COMMAND="shell construct"
+    [ -n "$POLICY_REASON" ] || POLICY_REASON="cannot be safely validated"
+    return 1
+}
+
+reject_policy_violation() {
+    printf 'policy violation: blocked command: %s (%s)\n' \
+        "$POLICY_COMMAND" "$POLICY_REASON" >&2
+    ACTION_OUTPUT="policy violation: blocked command: ${POLICY_COMMAND}
+"
+    ACTION_EXIT=1
+    save_turn_output
+
+    if [ -n "${POLICY_COMMAND:-}" ]; then
+        UPDATED_LOG=$(jq $JQ_BINARY_FLAG \
+            --arg command "$POLICY_COMMAND" \
+            --arg reason "$POLICY_REASON" \
+            '.turns[-1].policy_violation =
+                {command:$command, reason:$reason}' "$LOG_FILE") ||
+            die "cannot update log"
+        commit_log || die "cannot update log"
+    fi
+    if [ "$SSA_AGENT" = 1 ]; then
+        append_action_result
+    else
+        MENU=yes
+        LOOP_STATUS=done
+    fi
+}
+
 apply_script_menu() {
+    if ! validate_script_policy; then
+        reject_policy_violation
+        return
+    fi
     if ask_to_apply; then
         if [ "$SSA_AGENT" = 1 ]; then
             run_agent_script

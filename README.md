@@ -17,7 +17,7 @@ hold the auth key. SSA_MODEL holds the model name. Then you can start using ssa.
 ```sh
 export SSA_URL="https://api.openai.com/v1/chat/completions"
 export SSA_MODEL=gpt-4o-mini
-export SSA_KEY="sk-..."
+export SSA_KEY="your-api-key"
 cat notes.txt | ssa -a summarize this file
 ```
 
@@ -65,6 +65,70 @@ Or you may just want to chat with an AI model. To enable that, ssa has a
 With `# chat` the AI model responds with some text, and then there is a
 chance for you to write back. Turn this on by setting SSA_CHAT=1
 
+## tool policies
+
+Use `--tools` or `SSA_TOOLS` to control model-generated shell commands:
+
+```sh
+ssa --tools "allow:ls,cat,grep,find" -a "inspect this project"
+
+SSA_TOOLS="deny:rm,sudo,curl" ssa -a "review this code"
+```
+
+Policies have this syntax:
+
+```text
+allow:command1,command2
+deny:command1,command2
+```
+
+An allow policy permits only the named commands. A deny policy permits
+other commands except for the named commands. Command names must contain
+only letters, digits, `_`, `.`, `+`, or `-`; paths and names with spaces
+are invalid. `--tools` overrides `SSA_TOOLS` for that invocation.
+
+The policy is included in the system prompt and is enforced again before
+every script is executed, including with `SSA_YES=1` and `-y`. A
+violation is not executed. ssa prints the blocked command name on stderr
+and records `policy_violation` in that turn of the JSON run log. The log
+does not include the rejected script or command arguments.
+
+Enforcement covers command names in arguments, pipelines, command
+chaining, redirections, shell substitutions, shell built-ins, and nested
+execution constructs. Command substitution and backticks are rejected.
+Dynamic command names, subshells, function and compound constructs that
+cannot be validated safely, shell interpreters, and common command
+launchers are rejected in the active policy mode. `# edit` is a direct
+SEARCH/REPLACE file mutation rather than a shell command. It is allowed
+only when `SSA_EDITS=1`, cannot execute its text, and does not bypass
+the policy; a script produced afterward is checked normally.
+
+This is command filtering, not a security sandbox. It does not isolate
+files, the network, environment variables, devices, or privilege changes
+performed through allowed commands or the host shell. In particular,
+redirections and allowed tools can still read or write host files. Run
+ssa in a container, VM, restricted account, or other OS sandbox if you
+need hostile-process isolation.
+
+Limitations: a policy must be fail closed. If ssa cannot safely
+decompose a script, it rejects the script rather than guessing. Shell
+extensions outside the POSIX constructs checked here are rejected.
+
+## testing tool policies
+
+The repository includes `test-ssa.sh`, which uses a mock `curl` and JSON
+model response to test policy parsing and enforcement without a network
+service:
+
+```sh
+cd "/Users/michaeoketunde/Documents/Projects/LessonsWithPatrick-protocol/ssa"
+./test-ssa.sh
+```
+
+The cases cover allowed commands, blocked allow/deny commands, pipelines,
+command substitution, shell built-ins, malformed policies, CLI precedence,
+and `-y` mode.
+
 ## logging
 
 ssa uses a json file on disk to run. This json file also serves as a log
@@ -95,6 +159,7 @@ and one word.
 | `SSA_PROMPTS` | `20` | Maximum model calls in agent mode. `0` means no limit. Ignored when `SSA_AGENT` is `0`. |
 | `SSA_REASONING` | `0` | `0`, `off`, or `none` sends `reasoning_effort` none. `1` or `on` omits the field. Any other word is the effort, such as `low` or `high`. Empty is an error. A server flag such as `--reasoning off` belongs in `SSA_FLAGS`. |
 | `SSA_SCRIPTS` | `1` | `1` treats a non-marker reply as a script. `0` treats scripts as an error, and only allows # edit or # chat. |
+| `SSA_TOOLS` | empty | Active command policy. Use `allow:ls,cat,grep,find` or `deny:rm,sudo,curl`. The `--tools` flag takes precedence for one run. |
 | `SSA_URL` | empty | The OpenAI chat completions compatible URL for the cloud model provider. Required for using cloud models. When you set SSA_MODEL to a local model file, ssa sets this to the llama-server local server that ssa starts per run. |
 | `SSA_VERBOSE` | `0` | `1` prints a lot of output on stderr which can be useful for debugging. `0` acts as a unix util and is quiet by default. |
 | `SSA_WAIT` | `120` | Seconds to wait for the local server to answer `/health`. |
@@ -119,6 +184,7 @@ Works
 | --- | --- | --- |
 | `-a` | `SSA_AGENT=1` | Agent mode. The model keeps working across replies. |
 | `-m` | `SSA_MODEL` | The next word is the model name or the model file. |
+| `--tools` | `SSA_TOOLS` | The next word is `allow:` or `deny:` command policy. Overrides `SSA_TOOLS` for this run. |
 | `-v` | `SSA_VERBOSE=1` | Print short notes on stderr, and the local server text. |
 | `-y` | `SSA_YES=1` | Skip the question and apply a script or an edit. |
 | `--` | | Ends the flags, so a task can start with a dash. |
@@ -140,6 +206,6 @@ chmod +x ssa
 
 export SSA_URL="https://api.openai.com/v1/chat/completions"
 export SSA_MODEL="gpt-4o-mini"
-export SSA_KEY="LLM_1584790813451855_sNCy-kRZtSZ1CI6eNxR6Kusc7_g"
+export SSA_KEY="your-api-key"
 
 ./ssa -a "summarize the current directory"
