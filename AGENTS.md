@@ -365,18 +365,3 @@ count. `ssa` already stops at `SSA_PROMPTS` when
 Ask: could the user do this with `cd`, `export`, or a
 redirect? If yes, leave it out of the agent.
 
-## Task scope
-
-Keep each task as small as the user's request allows.
-
-- Prefer the simplest solution that fully answers the request.
-- Use information already available before running more commands.
-- Inspect only files and folders needed for the task.
-- Do not reread instructions or documentation unnecessarily.
-- Do not inspect unrelated files or investigate unrelated issues.
-- Do not repeat checks or report information already gathered.
-- For summaries, use available command output first.
-- Open files only when their contents are needed.
-- Stop inspecting once enough information is available.
-- Do not add unnecessary steps, features, or recommendations.
-- Stop as soon as the requested task is complete.
